@@ -87,12 +87,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure Docker access
+        run: |
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error::Docker socket is not accessible for $(whoami)."
+            echo "Fix on the runner host:"
+            echo "  sudo usermod -aG docker $(whoami)"
+            echo "  sudo systemctl restart 'actions.runner.*.service'"
+            echo "Then re-login / restart the runner service so the new group applies."
+            exit 1
+          fi
+          docker version
+          docker buildx version
+
       - name: Ensure buildx cache dirs
         run: |
           CACHE_ROOT="${HOME}/.cache/overvpn-buildx"
           mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web"
           echo "BUILDX_CACHE_ROOT=${CACHE_ROOT}" >> "$GITHUB_ENV"
-          docker buildx version
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

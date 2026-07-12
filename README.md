@@ -33,6 +33,14 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 sudo RUNNER_TOKEN=XXXX ./scripts/install-github-runner.sh
 ```
 
+Если раннер ставили вручную под своим пользователем — добавьте его в группу `docker` и перезапустите сервис:
+
+```bash
+sudo usermod -aG docker "$USER"
+# найти сервис: systemctl list-units 'actions.runner.*'
+sudo systemctl restart 'actions.runner.<org>-<repo>.<name>.service'
+```
+
 Workflows ждут labels: `self-hosted`, `linux`, `x64`, `overvpn`.
 
 Установщик спросит по шагам:
