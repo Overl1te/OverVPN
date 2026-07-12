@@ -4,9 +4,36 @@
 
 Интерфейс панели по умолчанию на **русском** (переключатель EN/RU в шапке).
 
+## Быстрая установка (Ubuntu / Debian)
+
+Одной командой — как Marzban: Docker, репозиторий, секреты, firewall, владелец панели.
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
+```
+
+С доменом и HTTPS (Caddy):
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --domain vpn.example.com
+```
+
+После установки:
+
+```bash
+overvpn status
+overvpn logs
+overvpn info          # URL и пароль владельца
+overvpn update
+overvpn restart
+overvpn uninstall
+```
+
+Опции `install`: `--domain`, `--email`, `--port` (по умолчанию `8000` без домена), `--branch`, `--no-caddy`, `--no-ufw`.
+
 | Компонент | Порт по умолчанию |
 |-----------|-------------------|
-| Веб-панель | `8080` (Compose) / `5173` (dev) |
+| Веб-панель | `8000` (installer) / `8080` (Compose) / `5173` (dev) |
 | API | `3000` (внутри Compose; снаружи через веб/прокси) |
 | PostgreSQL | `5432` (только localhost) |
 | Redis | `6379` (только localhost) |
@@ -23,7 +50,7 @@
 
 ---
 
-## 2. Быстрый старт (Docker)
+## 2. Быстрый старт (Docker вручную)
 
 ### Шаг 1. Конфигурация
 
