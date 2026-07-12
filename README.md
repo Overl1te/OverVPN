@@ -18,7 +18,8 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build
 ```
 
-Образы публикуются в CI на **self-hosted runner** при пуше в `master`:
+Образы публикуются одним workflow **CI** на self-hosted runner: сначала `verify`, затем `publish` в GHCR (только push в `master` / теги `v*` / ручной запуск):
+
 - `ghcr.io/overl1te/overvpn-api:latest`
 - `ghcr.io/overl1te/overvpn-web:latest`
 
@@ -56,13 +57,13 @@ overvpn restart
 overvpn uninstall
 ```
 
-| Компонент | Порт по умолчанию |
-|-----------|-------------------|
-| Веб-панель | `8000` (без домена) / `443` через Nginx / `5173` (dev) |
-| API | `3000` (внутри Compose; снаружи через веб/прокси) |
-| PostgreSQL | `5432` (только localhost) |
-| Redis | `6379` (только localhost) |
-| sing-box (UDP inbound) | `443` |
+| Компонент              | Порт по умолчанию                                      |
+| ---------------------- | ------------------------------------------------------ |
+| Веб-панель             | `8000` (без домена) / `443` через Nginx / `5173` (dev) |
+| API                    | `3000` (внутри Compose; снаружи через веб/прокси)      |
+| PostgreSQL             | `5432` (только localhost)                              |
+| Redis                  | `6379` (только localhost)                              |
+| sing-box (UDP inbound) | `443`                                                  |
 
 ---
 
@@ -98,16 +99,16 @@ openssl rand -base64 36
 
 Обязательно задайте:
 
-| Переменная | Зачем |
-|------------|--------|
-| `POSTGRES_PASSWORD` / `DATABASE_URL` | БД (пароль в URL должен совпадать) |
-| `REDIS_PASSWORD` / `REDIS_URL` | Redis |
-| `JWT_ACCESS_SECRET` | Подпись access JWT |
-| `SECRETS_MASTER_KEY` | Шифрование секретов протоколов и бэкапов |
-| `SING_BOX_CLASH_API_SECRET` | Внутренний Clash API |
-| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | Первый владелец |
-| `CORS_ORIGINS` | Точный origin панели, например `http://localhost:8080` |
-| `SUB_PUBLIC_BASE_URL` | Публичный HTTPS URL для ссылок подписки: origin (`https://sub.example.com` → `…/api/sub/{TOKEN}`) или с путём (`https://example.com/sub` → `…/sub/{TOKEN}`) |
+| Переменная                                          | Зачем                                                                                                                                                       |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD` / `DATABASE_URL`                | БД (пароль в URL должен совпадать)                                                                                                                          |
+| `REDIS_PASSWORD` / `REDIS_URL`                      | Redis                                                                                                                                                       |
+| `JWT_ACCESS_SECRET`                                 | Подпись access JWT                                                                                                                                          |
+| `SECRETS_MASTER_KEY`                                | Шифрование секретов протоколов и бэкапов                                                                                                                    |
+| `SING_BOX_CLASH_API_SECRET`                         | Внутренний Clash API                                                                                                                                        |
+| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | Первый владелец                                                                                                                                             |
+| `CORS_ORIGINS`                                      | Точный origin панели, например `http://localhost:8080`                                                                                                      |
+| `SUB_PUBLIC_BASE_URL`                               | Публичный HTTPS URL для ссылок подписки: origin (`https://sub.example.com` → `…/api/sub/{TOKEN}`) или с путём (`https://example.com/sub` → `…/sub/{TOKEN}`) |
 
 Для локального запуска можно временно:
 
@@ -180,12 +181,12 @@ pnpm compose-down
 
 Статусы пользователя:
 
-| Статус | Смысл |
-|--------|--------|
-| `ACTIVE` | Доступ разрешён |
+| Статус     | Смысл                       |
+| ---------- | --------------------------- |
+| `ACTIVE`   | Доступ разрешён             |
 | `DISABLED` | Вручную выключен (`manual`) |
-| `EXPIRED` | Истёк срок |
-| `LIMITED` | Квота / устройство / IP |
+| `EXPIRED`  | Истёк срок                  |
+| `LIMITED`  | Квота / устройство / IP     |
 
 Причина отключения показывается в UI (`statusReason`).
 
@@ -244,11 +245,11 @@ curl "$SUB_URL/info"
 
 ## 4. Роли администраторов
 
-| Роль | Права |
-|------|--------|
-| `OWNER` | Полный доступ, удаление пользователей, restore бэкапов |
-| `ADMIN` | Обычные мутации (users/inbounds/apply/backups create) |
-| `READONLY` | Только чтение; мутации в UI скрыты/заблокированы |
+| Роль       | Права                                                  |
+| ---------- | ------------------------------------------------------ |
+| `OWNER`    | Полный доступ, удаление пользователей, restore бэкапов |
+| `ADMIN`    | Обычные мутации (users/inbounds/apply/backups create)  |
+| `READONLY` | Только чтение; мутации в UI скрыты/заблокированы       |
 
 Опционально включите **TOTP 2FA** в профиле администратора (enable → confirm кодом).
 
@@ -258,11 +259,11 @@ curl "$SUB_URL/info"
 
 В панели: **Backups**.
 
-| Тип | Содержимое |
-|-----|------------|
-| `DATABASE` | `pg_dump` |
+| Тип           | Содержимое                                |
+| ------------- | ----------------------------------------- |
+| `DATABASE`    | `pg_dump`                                 |
 | `CORE_CONFIG` | текущий + last-known-good конфиг sing-box |
-| `FULL` | БД + конфиг + метаданные |
+| `FULL`        | БД + конфиг + метаданные                  |
 
 Рекомендуемый порядок:
 

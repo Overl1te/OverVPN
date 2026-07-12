@@ -8,10 +8,7 @@ export const DEFAULT_API_PORT = 3000;
  * - Origin only (`https://host`) → `https://host/api/sub/{token}`
  * - With path (`https://host/sub`) → `https://host/sub/{token}`
  */
-export function buildSubscriptionPublicUrl(
-  baseUrl: string,
-  token: string,
-): string {
+export function buildSubscriptionPublicUrl(baseUrl: string, token: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
   try {
     const url = new URL(trimmed);

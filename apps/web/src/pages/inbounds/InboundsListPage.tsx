@@ -420,7 +420,8 @@ export function InboundsListPage() {
           {
             title: t('inbounds.protocol'),
             dataIndex: 'protocol',
-            render: (protocol: string) => t(`enums.protocol.${protocol}`, { defaultValue: protocol }),
+            render: (protocol: string) =>
+              t(`enums.protocol.${protocol}`, { defaultValue: protocol }),
           },
           {
             title: t('inbounds.listen'),
@@ -441,8 +442,7 @@ export function InboundsListPage() {
           {
             title: t('inbounds.needsApply'),
             dataIndex: 'needsApply',
-            render: (value: boolean) =>
-              value ? <Tag color="orange">{t('app.yes')}</Tag> : '—',
+            render: (value: boolean) => (value ? <Tag color="orange">{t('app.yes')}</Tag> : '—'),
           },
           {
             title: t('inbounds.assignments'),

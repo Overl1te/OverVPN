@@ -125,8 +125,7 @@ export function PlansPage() {
           {
             title: t('app.status'),
             dataIndex: 'status',
-            render: (status: string) =>
-              t(`enums.planStatus.${status}`, { defaultValue: status }),
+            render: (status: string) => t(`enums.planStatus.${status}`, { defaultValue: status }),
           },
           {
             title: t('plans.defaults'),

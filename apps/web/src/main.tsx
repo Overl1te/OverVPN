@@ -23,10 +23,7 @@ const queryClient = new QueryClient({
 
 function AntdProvider({ children }: { children: ReactNode }) {
   const { i18n } = useTranslation();
-  const locale = useMemo(
-    () => (i18n.language.startsWith('ru') ? ruRU : enUS),
-    [i18n.language],
-  );
+  const locale = useMemo(() => (i18n.language.startsWith('ru') ? ruRU : enUS), [i18n.language]);
 
   return (
     <ConfigProvider theme={adminTheme} locale={locale}>
