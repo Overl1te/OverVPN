@@ -103,7 +103,7 @@ describe('SingBoxProvider', () => {
     expect(first.canonical).toBe(second.canonical);
     expect(first.hash).toBe(second.hash);
     expect(first.hash).toBe(
-      'bcca34b6858383e2137487c1e71908467d25058a06706894a9bdee2d09a0c7d6',
+      'c0a7d50ca86959be687b811f6d6941471481c3c38f2422d20b4627dd4706c1a7',
     );
     expect(first.canonical).toContain('"type": "hysteria2"');
     expect(first.canonical).toContain(
