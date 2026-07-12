@@ -29,6 +29,6 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Local database and backup artifacts
-data/
-backups/
+# Local database and backup artifacts (repo root only; do not ignore apps/*/src/backups)
+/data/
+/backups/

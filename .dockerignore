@@ -7,8 +7,8 @@
 **/dist
 **/coverage
 .turbo
-backups
-data
+/backups
+/data
 deploy/sing-box/certs/*
 !deploy/sing-box/certs/.gitkeep
 *.log
