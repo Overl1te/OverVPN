@@ -16,7 +16,6 @@ env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/overl1te/overvpn-api
   WEB_IMAGE: ghcr.io/overl1te/overvpn-web
-  BUILDX_CACHE_ROOT: /var/cache/overvpn-buildx
 
 jobs:
   verify:
@@ -90,7 +89,9 @@ jobs:
 
       - name: Ensure buildx cache dirs
         run: |
-          mkdir -p "${BUILDX_CACHE_ROOT}/api" "${BUILDX_CACHE_ROOT}/web"
+          CACHE_ROOT="${HOME}/.cache/overvpn-buildx"
+          mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web"
+          echo "BUILDX_CACHE_ROOT=${CACHE_ROOT}" >> "$GITHUB_ENV"
           docker buildx version
 
       - name: Set up Docker Buildx

@@ -17,7 +17,7 @@ REPO_URL="${OVERVPN_REPO_URL:-https://github.com/Overl1te/OverVPN}"
 RUNNER_USER="${RUNNER_USER:-github-runner}"
 RUNNER_HOME="${RUNNER_HOME:-/opt/actions-runner}"
 RUNNER_LABELS="${RUNNER_LABELS:-overvpn,linux,x64}"
-BUILDX_CACHE_DIR="${BUILDX_CACHE_DIR:-/var/cache/overvpn-buildx}"
+BUILDX_CACHE_DIR="${BUILDX_CACHE_DIR:-}" # optional legacy path; workflow uses ~/.cache
 RUNNER_VERSION="${RUNNER_VERSION:-}" # empty = latest
 
 color() {
@@ -62,9 +62,13 @@ if ! id -u "$RUNNER_USER" >/dev/null 2>&1; then
 fi
 usermod -aG docker "$RUNNER_USER"
 
-mkdir -p "$RUNNER_HOME" "$BUILDX_CACHE_DIR"
+mkdir -p "$RUNNER_HOME"
+# Optional shared cache dir (workflow prefers $HOME/.cache/overvpn-buildx)
+if [[ -n "$BUILDX_CACHE_DIR" ]]; then
+  mkdir -p "$BUILDX_CACHE_DIR"
+  chmod 1777 "$BUILDX_CACHE_DIR"
+fi
 chown -R "${RUNNER_USER}:${RUNNER_USER}" "$RUNNER_HOME"
-chmod 1777 "$BUILDX_CACHE_DIR"
 
 ARCH="$(uname -m)"
 case "$ARCH" in
@@ -132,7 +136,9 @@ color green "Self-hosted runner is up."
 color cyan "Labels: ${RUNNER_LABELS}"
 color cyan "Home:   ${RUNNER_HOME}"
 color cyan "User:   ${RUNNER_USER}"
-color cyan "Cache:  ${BUILDX_CACHE_DIR}"
+if [[ -n "$BUILDX_CACHE_DIR" ]]; then
+  color cyan "Cache:  ${BUILDX_CACHE_DIR}"
+fi
 echo
 color yellow "Check: systemctl status actions.runner.*.service"
 color yellow "Or:    ${REPO_URL}/settings/actions/runners"
