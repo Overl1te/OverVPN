@@ -20,6 +20,9 @@ REPO_URL="${OVERVPN_REPO_URL:-https://github.com/Overl1te/OverVPN.git}"
 REPO_RAW_BASE="${OVERVPN_RAW_BASE:-https://raw.githubusercontent.com/Overl1te/OverVPN}"
 DEFAULT_BRANCH="${OVERVPN_BRANCH:-master}"
 DEFAULT_WEB_PORT="8000"
+DEFAULT_IMAGE_TAG="${OVERVPN_IMAGE_TAG:-latest}"
+GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
+GHCR_WEB_IMAGE="ghcr.io/overl1te/overvpn-web"
 
 colorized_echo() {
   local color=$1
@@ -94,6 +97,19 @@ ensure_docker() {
 
 compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+
+compose_up() {
+  local do_build=${1:-false}
+  if [[ "$do_build" == "true" ]]; then
+    colorized_echo blue "Building images locally (this can take several minutes)..."
+    compose up -d --build
+  else
+    colorized_echo blue "Pulling images from GHCR..."
+    compose pull
+    colorized_echo blue "Starting containers..."
+    compose up -d --pull missing
+  fi
 }
 
 is_installed() {
@@ -583,6 +599,7 @@ fetch_repo() {
 generate_env() {
   local web_port=$1
   local with_nginx=$2
+  local image_tag=$3
   local ip
   ip="$(public_ip)"
 
@@ -610,6 +627,8 @@ generate_env() {
   set_env_var "BOOTSTRAP_ADMIN_PASSWORD" "$admin_pass"
   set_env_var "SWAGGER_ENABLED" "false"
   set_env_var "SING_BOX_UDP_PORT" "443"
+  set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
+  set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
 
   local panel_url sub_url
   if [[ "${CFG_MODE}" == "domain" ]]; then
@@ -733,10 +752,16 @@ Options:
   --vpn-host <host>        VPN public hostname
   --email <email>          Let's Encrypt email
   --port <port>            Panel port without domain (default: ${DEFAULT_WEB_PORT})
-  --branch <name>          Git branch/tag (default: ${DEFAULT_BRANCH})
+  --branch <name>          Git branch (default: ${DEFAULT_BRANCH})
+  --tag <tag>              GHCR image tag (default: ${DEFAULT_IMAGE_TAG})
+  --build                  Build images locally instead of pulling from GHCR
   --no-nginx               Skip Nginx/TLS
   --no-ufw                 Do not touch UFW
   -h, --help               Show help
+
+Default install pulls prebuilt images from:
+  ${GHCR_API_IMAGE}:${DEFAULT_IMAGE_TAG}
+  ${GHCR_WEB_IMAGE}:${DEFAULT_IMAGE_TAG}
 
 One-liner:
   sudo bash -c "\$(curl -fsSL ${REPO_RAW_BASE}/${DEFAULT_BRANCH}/install.sh)" @ install
@@ -748,6 +773,7 @@ cmd_install() {
   detect_os
 
   local web_port="$DEFAULT_WEB_PORT" branch="$DEFAULT_BRANCH"
+  local image_tag="$DEFAULT_IMAGE_TAG" do_build="false"
   local with_nginx="auto" use_ufw="true"
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
 
@@ -759,7 +785,9 @@ cmd_install() {
       --vpn-host) flag_vpn="${2:-}"; shift 2 ;;
       --email) flag_email="${2:-}"; shift 2 ;;
       --port) web_port="${2:-}"; shift 2 ;;
-      --branch|--version) branch="${2:-}"; shift 2 ;;
+      --branch) branch="${2:-}"; shift 2 ;;
+      --tag|--version) image_tag="${2:-}"; shift 2 ;;
+      --build) do_build="true"; shift ;;
       --no-nginx) with_nginx="false"; shift ;;
       --no-ufw) use_ufw="false"; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -826,14 +854,13 @@ cmd_install() {
   fi
 
   fetch_repo "$branch"
-  generate_env "$web_port" "$with_nginx"
+  generate_env "$web_port" "$with_nginx" "$image_tag"
 
   if [[ "$use_ufw" == "true" ]]; then
     configure_firewall "$with_nginx" "$web_port"
   fi
 
-  colorized_echo blue "Building and starting containers (first run may take several minutes)..."
-  compose up -d --build
+  compose_up "$do_build"
 
   local health_port
   health_port="$(get_env_var WEB_PORT)"
@@ -891,13 +918,28 @@ cmd_update() {
   check_root
   is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
 
+  local do_build="false" image_tag=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --build) do_build="true"; shift ;;
+      --tag|--version) image_tag="${2:-}"; shift 2 ;;
+      *) colorized_echo red "Unknown option: $1"; exit 1 ;;
+    esac
+  done
+
   local branch
   branch="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
 
   colorized_echo blue "Updating OverVPN (${branch})..."
   fetch_repo "$branch"
   install_cli "${APP_DIR}/install.sh"
-  compose up -d --build
+
+  if [[ -n "$image_tag" ]]; then
+    set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
+    set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
+  fi
+
+  compose_up "$do_build"
   wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
   colorized_echo green "Update complete."
 }
@@ -972,7 +1014,7 @@ main() {
     restart) cmd_restart ;;
     status|ps) cmd_status ;;
     logs) cmd_logs "$@" ;;
-    update) cmd_update ;;
+    update) cmd_update "$@" ;;
     uninstall|remove) cmd_uninstall ;;
     info) cmd_info ;;
     edit|edit-env) cmd_edit ;;

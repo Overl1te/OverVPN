@@ -1,4 +1,4 @@
-.PHONY: install dev build migrate migrate-dev bootstrap-admin test test-e2e lint typecheck format compose-up compose-down
+.PHONY: install dev build migrate migrate-dev bootstrap-admin test test-e2e lint typecheck format compose-up compose-pull compose-build compose-down
 
 install:
 	pnpm install
@@ -35,6 +35,12 @@ format:
 
 compose-up:
 	pnpm compose-up
+
+compose-pull:
+	pnpm compose-pull
+
+compose-build:
+	pnpm compose-build
 
 compose-down:
 	pnpm compose-down

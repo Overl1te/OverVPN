@@ -133,7 +133,7 @@ services:
     <<: *service-security
 
   sing-box:
-    image: overvpn/api:local
+    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
     entrypoint: ['/usr/bin/dumb-init', '--', '/usr/local/bin/sing-box-entrypoint']
@@ -180,7 +180,7 @@ services:
     <<: *service-security
 
   migrate:
-    image: overvpn/api:local
+    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: 'no'
     environment:
@@ -202,7 +202,7 @@ services:
     <<: *service-security
 
   api:
-    image: overvpn/api:local
+    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
     environment: *api-environment
@@ -230,7 +230,7 @@ services:
     <<: *service-security
 
   web:
-    image: overvpn/web:local
+    image: ${WEB_IMAGE:-ghcr.io/overl1te/overvpn-web:latest}
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
@@ -246,7 +246,7 @@ services:
 
   bootstrap-admin:
     profiles: ['tools']
-    image: overvpn/api:local
+    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-}

@@ -24,7 +24,9 @@
     "migrate": "pnpm --filter @overvpn/api prisma:migrate:deploy",
     "migrate:dev": "pnpm --filter @overvpn/api prisma:migrate:dev",
     "bootstrap:admin": "pnpm --filter @overvpn/api admin:bootstrap",
-    "compose-up": "docker compose --env-file .env -f deploy/docker-compose.yml up -d --build",
+    "compose-up": "docker compose --env-file .env -f deploy/docker-compose.yml up -d",
+    "compose-pull": "docker compose --env-file .env -f deploy/docker-compose.yml pull",
+    "compose-build": "docker compose --env-file .env -f deploy/docker-compose.yml up -d --build",
     "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml down"
   },
   "devDependencies": {

@@ -6,9 +6,33 @@
 
 ## Быстрая установка (Ubuntu / Debian)
 
+По умолчанию ставит **готовые образы из GHCR** (без долгой локальной сборки):
+
 ```bash
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
 ```
+
+Локальная сборка образов на сервере:
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build
+```
+
+Образы публикуются в CI на **self-hosted runner** при пуше в `master`:
+- `ghcr.io/overl1te/overvpn-api:latest`
+- `ghcr.io/overl1te/overvpn-web:latest`
+
+### Self-hosted runner (сборка образов)
+
+На отдельной или той же Ubuntu-машине с Docker:
+
+```bash
+# токен: Repo → Settings → Actions → Runners → New self-hosted runner
+# или: gh api -X POST repos/Overl1te/OverVPN/actions/runners/registration-token --jq .token
+sudo RUNNER_TOKEN=XXXX ./scripts/install-github-runner.sh
+```
+
+Workflows ждут labels: `self-hosted`, `linux`, `x64`, `overvpn`.
 
 Установщик спросит по шагам:
 
@@ -26,7 +50,8 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 overvpn status
 overvpn logs
 overvpn info
-overvpn update
+overvpn update              # pull новых образов из GHCR
+overvpn update --build     # пересобрать локально
 overvpn restart
 overvpn uninstall
 ```
@@ -97,8 +122,10 @@ AUTH_COOKIE_SECURE=false
 ### Шаг 2. Запуск стека
 
 ```sh
-pnpm compose-up
-# или: make compose-up
+pnpm compose-up      # подтянуть/запустить образы из GHCR
+# или локальная сборка:
+pnpm compose-build
+# или: make compose-up / make compose-build
 ```
 
 Подождите, пока поднимутся postgres, redis, migrate, sing-box, api, web.
@@ -330,7 +357,7 @@ pnpm dev
 ## 11. Полезные команды
 
 ```sh
-pnpm compose-up / compose-down
+pnpm compose-up / compose-pull / compose-build / compose-down
 pnpm migrate
 pnpm bootstrap:admin
 pnpm test
