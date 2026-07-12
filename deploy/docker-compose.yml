@@ -149,7 +149,8 @@ services:
       - singbox_config:/var/lib/sing-box:ro
       - singbox_reload:/var/lib/overvpn/reload
       - singbox_state:/var/lib/sing-box-state
-      - ./sing-box/certs:/var/lib/sing-box/certs:ro
+      # Separate mount: cannot nest under read-only singbox_config volume
+      - ./sing-box/certs:/var/lib/sing-box-certs:ro
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -216,7 +217,7 @@ services:
       - singbox_config:/var/lib/sing-box
       - singbox_reload:/var/lib/overvpn/reload
       - singbox_state:/var/lib/sing-box-state
-      - ./sing-box/certs:/var/lib/sing-box/certs:ro
+      - ./sing-box/certs:/var/lib/sing-box-certs:ro
       - backup_data:/var/lib/overvpn/backups
     read_only: true
     tmpfs:

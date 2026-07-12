@@ -140,7 +140,7 @@ pnpm compose-down
 
 1. **Inbounds** → создать (протокол: Hysteria2 / VLESS Reality / Trojan / Shadowsocks).
 2. Укажите `tag`, listen/public host и port.
-3. Для TLS-файлов положите сертификаты в `deploy/sing-box/certs` (в контейнере путь `/var/lib/sing-box/certs`).
+3. Для TLS-файлов положите сертификаты в `deploy/sing-box/certs` (в контейнере путь `/var/lib/sing-box-certs`).
 4. После сохранения панель **сразу** пытается применить конфиг sing-box (validate → write → reload → verify → rollback при ошибке).
 
 `SING_BOX_UDP_PORT` в `.env` должен совпадать с портом inbound’а, который вы публикуете наружу.

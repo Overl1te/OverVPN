@@ -91,8 +91,8 @@ function validSettings() {
     tls: {
       mode: 'FILES',
       sni: 'vpn.example.com',
-      certificatePath: '/var/lib/sing-box/certs/cert.pem',
-      keyPath: '/var/lib/sing-box/certs/key.pem',
+      certificatePath: '/var/lib/sing-box-certs/cert.pem',
+      keyPath: '/var/lib/sing-box-certs/key.pem',
     },
   };
 }
