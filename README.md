@@ -6,17 +6,13 @@
 
 ## Быстрая установка (Ubuntu / Debian)
 
-Одной командой — как Marzban: Docker, репозиторий, секреты, firewall, владелец панели.
+Одной командой: Docker, репозиторий, секреты, firewall, Nginx+TLS, владелец панели.
 
 ```bash
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
 ```
 
-С доменом и HTTPS (Caddy):
-
-```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --domain vpn.example.com
-```
+Скрипт сам спросит домен. Укажите его (A-запись на IP сервера) — поставится Nginx и Let's Encrypt. Пустой ввод — панель на `http://IP:8000` без TLS.
 
 После установки:
 
@@ -29,11 +25,11 @@ overvpn restart
 overvpn uninstall
 ```
 
-Опции `install`: `--domain`, `--email`, `--port` (по умолчанию `8000` без домена), `--branch`, `--no-caddy`, `--no-ufw`.
+Опции `install`: `--domain`, `--email`, `--port` (по умолчанию `8000` без домена), `--branch`, `--no-nginx`, `--no-ufw`.
 
 | Компонент | Порт по умолчанию |
 |-----------|-------------------|
-| Веб-панель | `8000` (installer) / `8080` (Compose) / `5173` (dev) |
+| Веб-панель | `8000` (без домена) / `443` через Nginx / `5173` (dev) |
 | API | `3000` (внутри Compose; снаружи через веб/прокси) |
 | PostgreSQL | `5432` (только localhost) |
 | Redis | `6379` (только localhost) |
@@ -46,7 +42,7 @@ overvpn uninstall
 - Docker Engine + Compose v2
 - (опционально для разработки) Node.js **24** LTS, pnpm **11**
 
-Не публикуйте в интернет PostgreSQL, Redis и API напрямую. Веб лучше повесить за Caddy/Nginx с TLS (примеры в `deploy/`).
+Не публикуйте в интернет PostgreSQL, Redis и API напрямую. Веб лучше повесить за Nginx с TLS (пример в `deploy/proxy/`).
 
 ---
 

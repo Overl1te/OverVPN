@@ -13,6 +13,8 @@ ENV_FILE="${APP_DIR}/.env"
 COMPOSE_FILE="${APP_DIR}/deploy/docker-compose.yml"
 CREDENTIALS_FILE="${APP_DIR}/.credentials"
 BIN_PATH="/usr/local/bin/${APP_NAME}"
+NGINX_SITE="/etc/nginx/sites-available/${APP_NAME}"
+NGINX_LINK="/etc/nginx/sites-enabled/${APP_NAME}"
 REPO_URL="${OVERVPN_REPO_URL:-https://github.com/Overl1te/OverVPN.git}"
 REPO_RAW_BASE="${OVERVPN_RAW_BASE:-https://raw.githubusercontent.com/Overl1te/OverVPN}"
 DEFAULT_BRANCH="${OVERVPN_BRANCH:-master}"
@@ -45,7 +47,6 @@ detect_os() {
     . /etc/os-release
     OS_ID="${ID:-unknown}"
     OS_LIKE="${ID_LIKE:-}"
-    OS_VERSION_ID="${VERSION_ID:-}"
   else
     colorized_echo red "Unsupported OS: /etc/os-release not found."
     exit 1
@@ -70,7 +71,7 @@ install_packages() {
   colorized_echo blue "Installing required packages..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
-  apt-get install -y ca-certificates curl git openssl ufw gnupg
+  apt-get install -y ca-certificates curl git openssl ufw
 }
 
 ensure_docker() {
@@ -149,9 +150,43 @@ install_cli() {
   colorized_echo green "CLI installed. Use: ${APP_NAME} <command>"
 }
 
+prompt_domain() {
+  local domain="" email=""
+  local ip
+  ip="$(public_ip)"
+
+  echo
+  colorized_echo cyan "Server IP: ${ip}"
+  colorized_echo cyan "Point your domain A-record to this IP before continuing (for HTTPS)."
+  echo
+
+  if [[ -t 0 ]]; then
+    read -r -p "Panel domain (e.g. vpn.example.com, empty = IP:${DEFAULT_WEB_PORT} without TLS): " domain
+    domain="$(printf '%s' "$domain" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    if [[ -n "$domain" ]]; then
+      read -r -p "Let's Encrypt email [admin@${domain}]: " email
+      email="$(printf '%s' "$email" | tr -d '[:space:]')"
+      if [[ -z "$email" ]]; then
+        email="admin@${domain}"
+      fi
+    fi
+  fi
+
+  PROMPT_DOMAIN="$domain"
+  PROMPT_EMAIL="$email"
+}
+
+validate_domain() {
+  local domain=$1
+  if [[ ! "$domain" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+    colorized_echo red "Invalid domain: ${domain}"
+    exit 1
+  fi
+}
+
 configure_firewall() {
-  local web_port=$1
-  local with_caddy=$2
+  local with_nginx=$1
+  local web_port=$2
 
   if ! need_cmd ufw; then
     return
@@ -161,7 +196,7 @@ configure_firewall() {
   ufw allow OpenSSH >/dev/null 2>&1 || true
   ufw allow 443/udp >/dev/null 2>&1 || true
 
-  if [[ "$with_caddy" == "true" ]]; then
+  if [[ "$with_nginx" == "true" ]]; then
     ufw allow 80/tcp >/dev/null 2>&1 || true
     ufw allow 443/tcp >/dev/null 2>&1 || true
   else
@@ -175,53 +210,147 @@ configure_firewall() {
   fi
 }
 
-install_caddy() {
+write_nginx_http_bootstrap() {
+  local domain=$1
+
+  cat >"$NGINX_SITE" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domain};
+
+    location ^~ /api/sub/ {
+        access_log off;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Request-ID \$request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Request-ID \$request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+}
+EOF
+}
+
+write_nginx_https() {
+  local domain=$1
+
+  cat >"$NGINX_SITE" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domain};
+    access_log off;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${domain};
+
+    ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location ^~ /api/sub/ {
+        access_log off;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID \$request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID \$request_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+}
+EOF
+}
+
+install_nginx() {
   local domain=$1
   local email=$2
 
-  colorized_echo blue "Installing Caddy reverse proxy for ${domain}..."
-  apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-    | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-    | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-  apt-get update -y
-  apt-get install -y caddy
+  colorized_echo blue "Installing Nginx + Certbot for ${domain}..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y nginx certbot python3-certbot-nginx
 
-  cat >/etc/caddy/Caddyfile <<EOF
-{
-	email ${email}
-	admin off
+  rm -f /etc/nginx/sites-enabled/default
+  write_nginx_http_bootstrap "$domain"
+  ln -sfn "$NGINX_SITE" "$NGINX_LINK"
+  nginx -t
+  systemctl enable --now nginx
+  systemctl reload nginx
+
+  colorized_echo blue "Requesting Let's Encrypt certificate..."
+  certbot --nginx \
+    -d "$domain" \
+    --non-interactive \
+    --agree-tos \
+    --email "$email" \
+    --redirect \
+    --no-eff-email
+
+  # Normalize to our HTTPS template (certbot may leave a mixed config)
+  if [[ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]]; then
+    write_nginx_https "$domain"
+    # options-ssl-nginx / dhparams may be missing on some certbot versions
+    if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+      sed -i '/options-ssl-nginx.conf/d' "$NGINX_SITE"
+    fi
+    if [[ ! -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
+      sed -i '/ssl-dhparams.pem/d' "$NGINX_SITE"
+    fi
+    nginx -t
+    systemctl reload nginx
+  fi
+
+  colorized_echo green "Nginx configured for https://${domain}"
 }
 
-${domain} {
-	encode zstd gzip
-
-	header {
-		-Server
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-	}
-
-	reverse_proxy 127.0.0.1:8080 {
-		health_uri /healthz
-		health_interval 30s
-		health_timeout 5s
-	}
-
-	log {
-		output stdout
-		format json
-	}
-	@publicSubscription path /api/sub/*
-	log_skip @publicSubscription
-}
-EOF
-
-  systemctl enable --now caddy
-  systemctl reload caddy
-  colorized_echo green "Caddy configured for https://${domain}"
+remove_nginx_site() {
+  rm -f "$NGINX_LINK" "$NGINX_SITE"
+  if need_cmd nginx; then
+    nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
+  fi
 }
 
 fetch_repo() {
@@ -242,7 +371,7 @@ fetch_repo() {
 generate_env() {
   local domain=$1
   local web_port=$2
-  local with_caddy=$3
+  local with_nginx=$3
   local ip
   ip="$(public_ip)"
 
@@ -277,8 +406,8 @@ generate_env() {
     set_env_var "AUTH_COOKIE_SECURE" "true"
     set_env_var "WEB_BIND_ADDRESS" "127.0.0.1"
     set_env_var "WEB_PORT" "8080"
-    if [[ "$with_caddy" == "true" ]]; then
-      # Avoid conflict with Caddy on 80/443 TCP
+    if [[ "$with_nginx" == "true" ]]; then
+      # Avoid conflict with Nginx on 80/443 TCP
       set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
       set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
     fi
@@ -321,8 +450,7 @@ wait_for_health() {
 print_success() {
   local domain=$1
   local web_port=$2
-  local ip
-  local user pass panel_url
+  local ip user pass panel_url
 
   ip="$(get_env_var PANEL_IP "$CREDENTIALS_FILE" 2>/dev/null || public_ip)"
   user="$(get_env_var BOOTSTRAP_ADMIN_USER "$CREDENTIALS_FILE")"
@@ -358,13 +486,16 @@ Usage:
   ${APP_NAME} info | edit | bootstrap | install-script
 
 Install options:
-  --domain <host>     Public domain (enables HTTPS via Caddy)
-  --email <email>     ACME email for Caddy (default: admin@<domain>)
+  --domain <host>     Skip prompt; use this domain + Nginx/HTTPS
+  --email <email>     Let's Encrypt email (default: admin@<domain>)
   --port <port>       Panel port without domain (default: ${DEFAULT_WEB_PORT})
   --branch <name>     Git branch/tag (default: ${DEFAULT_BRANCH})
-  --no-caddy          With --domain, skip Caddy (panel stays on 127.0.0.1:8080)
+  --no-nginx          With domain, skip Nginx (panel on 127.0.0.1:8080)
   --no-ufw            Do not touch UFW
   -h, --help          Show help
+
+During install the script asks for a domain interactively.
+Leave domain empty to publish the panel on http://IP:${DEFAULT_WEB_PORT}.
 
 One-liner:
   sudo bash -c "\$(curl -fsSL ${REPO_RAW_BASE}/${DEFAULT_BRANCH}/install.sh)" @ install
@@ -376,28 +507,20 @@ cmd_install() {
   detect_os
 
   local domain="" email="" web_port="$DEFAULT_WEB_PORT" branch="$DEFAULT_BRANCH"
-  local with_caddy="auto" use_ufw="true"
+  local with_nginx="auto" use_ufw="true" domain_from_flag="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --domain) domain="${2:-}"; shift 2 ;;
+      --domain) domain="${2:-}"; domain_from_flag="true"; shift 2 ;;
       --email) email="${2:-}"; shift 2 ;;
       --port) web_port="${2:-}"; shift 2 ;;
       --branch|--version) branch="${2:-}"; shift 2 ;;
-      --no-caddy) with_caddy="false"; shift ;;
+      --no-nginx) with_nginx="false"; shift ;;
       --no-ufw) use_ufw="false"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) colorized_echo red "Unknown option: $1"; usage; exit 1 ;;
     esac
   done
-
-  if [[ "$with_caddy" == "auto" ]]; then
-    if [[ -n "$domain" ]]; then
-      with_caddy="true"
-    else
-      with_caddy="false"
-    fi
-  fi
 
   if is_installed; then
     colorized_echo yellow "OverVPN already installed in ${APP_DIR}."
@@ -410,21 +533,38 @@ cmd_install() {
     exit 1
   fi
 
-  if [[ -n "$domain" && -z "$email" ]]; then
-    email="admin@${domain}"
+  if [[ "$domain_from_flag" != "true" ]]; then
+    prompt_domain
+    domain="$PROMPT_DOMAIN"
+    if [[ -z "$email" ]]; then
+      email="$PROMPT_EMAIL"
+    fi
+  fi
+
+  domain="$(printf '%s' "$domain" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+
+  if [[ -n "$domain" ]]; then
+    validate_domain "$domain"
+    if [[ -z "$email" ]]; then
+      email="admin@${domain}"
+    fi
+  fi
+
+  if [[ "$with_nginx" == "auto" ]]; then
+    if [[ -n "$domain" ]]; then
+      with_nginx="true"
+    else
+      with_nginx="false"
+    fi
   fi
 
   install_packages
   ensure_docker
   fetch_repo "$branch"
-  generate_env "$domain" "$web_port" "$with_caddy"
+  generate_env "$domain" "$web_port" "$with_nginx"
 
   if [[ "$use_ufw" == "true" ]]; then
-    configure_firewall "$web_port" "$with_caddy"
-  fi
-
-  if [[ -n "$domain" && "$with_caddy" == "true" ]]; then
-    install_caddy "$domain" "$email"
+    configure_firewall "$with_nginx" "$web_port"
   fi
 
   colorized_echo blue "Building and starting containers (first run may take several minutes)..."
@@ -433,6 +573,10 @@ cmd_install() {
   local health_port
   health_port="$(get_env_var WEB_PORT)"
   wait_for_health "http://127.0.0.1:${health_port}/api/health" || true
+
+  if [[ -n "$domain" && "$with_nginx" == "true" ]]; then
+    install_nginx "$domain" "$email"
+  fi
 
   colorized_echo blue "Creating owner account..."
   compose --profile tools run --rm bootstrap-admin
@@ -506,6 +650,7 @@ cmd_uninstall() {
   if [[ "${wipe,,}" == "y" || "${wipe,,}" == "yes" ]]; then
     compose down -v || true
   fi
+  remove_nginx_site
   rm -rf "$APP_DIR"
   rm -f "$BIN_PATH"
   colorized_echo green "OverVPN uninstalled."
@@ -553,7 +698,6 @@ cmd_install_script() {
 }
 
 main() {
-  # Support Marzban-style: bash script.sh @ install ...
   if [[ "${1:-}" == "@" ]]; then
     shift
   fi
