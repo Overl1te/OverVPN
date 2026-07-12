@@ -1,0 +1,32 @@
+import { Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
+import type { UserStatus, UserStatusReason } from '@overvpn/shared/constants';
+
+const STATUS_COLOR: Record<UserStatus, string> = {
+  ACTIVE: 'green',
+  DISABLED: 'default',
+  EXPIRED: 'orange',
+  LIMITED: 'red',
+};
+
+export function UserStatusTag({
+  status,
+  reason,
+}: {
+  status: UserStatus;
+  reason?: UserStatusReason | null;
+}) {
+  const { t } = useTranslation();
+  return (
+    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+      <Tag color={STATUS_COLOR[status]} style={{ marginInlineEnd: 0 }}>
+        {t(`enums.userStatus.${status}`)}
+      </Tag>
+      {reason ? (
+        <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+          {t(`statusReason.${reason}`)}
+        </Tag>
+      ) : null}
+    </span>
+  );
+}

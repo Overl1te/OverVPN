@@ -1,0 +1,372 @@
+import { parse as parseYaml } from 'yaml';
+import type { SecretEncryptionService } from '../auth/auth-crypto';
+import {
+  Hysteria2SubscriptionAdapter,
+  ShadowsocksSubscriptionAdapter,
+  SubscriptionProfileBuilder,
+  TrojanSubscriptionAdapter,
+  VlessRealitySubscriptionAdapter,
+  renderClashProfile,
+  renderLinkList,
+  renderSingBoxProfile,
+  type SubscriptionProfileUser,
+} from './subscription-profile';
+
+describe('SubscriptionProfileBuilder', () => {
+  let builder: SubscriptionProfileBuilder;
+  let profile: ReturnType<SubscriptionProfileBuilder['build']>;
+
+  beforeEach(() => {
+    const encryption = {
+      decrypt: jest.fn((payload: string) => {
+        if (payload === 'v1:credential-envelope') {
+          return JSON.stringify({
+            version: 1,
+            password: 'p@ssword /?# ü',
+          });
+        }
+        if (payload === 'inbound-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            obfsPassword: 'obfs &/secret',
+            privateKeyPem: 'PRIVATE KEY MUST NEVER LEAK',
+            certificatePem: 'CERTIFICATE MUST NEVER LEAK',
+          });
+        }
+        throw new Error('Unknown encrypted fixture');
+      }),
+    };
+    builder = new SubscriptionProfileBuilder(
+      new Hysteria2SubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+      new VlessRealitySubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+      new TrojanSubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+      new ShadowsocksSubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+    );
+    profile = builder.build(profileUser());
+  });
+
+  it('renders a deterministic current sing-box profile without internal secrets', () => {
+    const first = renderSingBoxProfile(profile);
+    const second = renderSingBoxProfile(profile);
+    const parsed = JSON.parse(first) as {
+      outbounds: Array<Record<string, unknown>>;
+      dns: Record<string, unknown>;
+      route: Record<string, unknown>;
+      inbounds: Array<Record<string, unknown>>;
+    };
+    const proxy = parsed.outbounds.find(
+      (outbound) => outbound.type === 'hysteria2',
+    );
+
+    expect(first).toBe(second);
+    expect(proxy).toEqual({
+      type: 'hysteria2',
+      tag: 'hy2-edge_eu',
+      server: 'vpn.example.com',
+      server_port: 8443,
+      password: 'p@ssword /?# ü',
+      up_mbps: 100,
+      down_mbps: 300,
+      obfs: {
+        type: 'salamander',
+        password: 'obfs &/secret',
+      },
+      tls: {
+        enabled: true,
+        server_name: 'vpn.example.com',
+        insecure: false,
+        alpn: ['h3'],
+      },
+    });
+    expect(parsed.outbounds[0]).toMatchObject({
+      type: 'selector',
+      tag: 'select',
+      default: 'auto',
+    });
+    expect(parsed.outbounds[1]).toMatchObject({
+      type: 'urltest',
+      tag: 'auto',
+      outbounds: ['hy2-edge_eu'],
+    });
+    expect(parsed.inbounds[0]).toMatchObject({
+      type: 'tun',
+      auto_route: true,
+      strict_route: true,
+    });
+    expect(parsed.dns).toMatchObject({ final: 'remote' });
+    expect(parsed.route).toMatchObject({
+      final: 'select',
+      auto_detect_interface: true,
+    });
+
+    expect(first).toContain('p@ssword /?# ü');
+    expect(first).toContain('obfs &/secret');
+    expect(first).not.toContain('PRIVATE KEY MUST NEVER LEAK');
+    expect(first).not.toContain('CERTIFICATE MUST NEVER LEAK');
+    expect(first).not.toContain('credential-envelope');
+    expect(first).not.toContain('assignment-id');
+    expect(first).not.toContain('inbound-id');
+    expect(first).not.toContain('credentialVersion');
+  });
+
+  it('renders the exact tested Hysteria2 share-link payload', () => {
+    expect(renderLinkList(profile)).toBe(
+      'hysteria2://p%40ssword%20%2F%3F%23%20%C3%BC@vpn.example.com:8443/?sni=vpn.example.com&insecure=0&obfs=salamander&obfs-password=obfs%20%26%2Fsecret#Alice%20%2F%20Europe%20-%20Edge_EU\n',
+    );
+  });
+
+  it('serializes parseable Mihomo YAML with HY2 fields and groups', () => {
+    const yaml = renderClashProfile(profile);
+    const parsed = parseYaml(yaml) as {
+      proxies: Array<Record<string, unknown>>;
+      'proxy-groups': Array<Record<string, unknown>>;
+      rules: string[];
+      dns: Record<string, unknown>;
+    };
+
+    expect(yaml).not.toContain('&a');
+    expect(yaml).not.toContain('*a');
+    expect(parsed.proxies).toEqual([
+      {
+        name: 'hy2-edge_eu',
+        type: 'hysteria2',
+        server: 'vpn.example.com',
+        port: 8443,
+        password: 'p@ssword /?# ü',
+        sni: 'vpn.example.com',
+        'skip-cert-verify': false,
+        alpn: ['h3'],
+        obfs: 'salamander',
+        'obfs-password': 'obfs &/secret',
+        up: '100 Mbps',
+        down: '300 Mbps',
+      },
+    ]);
+    expect(parsed['proxy-groups']).toEqual([
+      {
+        name: 'PROXY',
+        type: 'select',
+        proxies: ['AUTO', 'hy2-edge_eu', 'DIRECT'],
+      },
+      {
+        name: 'AUTO',
+        type: 'url-test',
+        proxies: ['hy2-edge_eu'],
+        url: 'https://www.gstatic.com/generate_204',
+        interval: 300,
+        tolerance: 50,
+      },
+    ]);
+    expect(parsed.rules).toEqual(['MATCH,PROXY']);
+    expect(parsed.dns).toMatchObject({
+      enable: true,
+      'enhanced-mode': 'fake-ip',
+    });
+    expect(yaml).not.toContain('PRIVATE KEY MUST NEVER LEAK');
+    expect(yaml).not.toContain('inbound-secret-envelope');
+  });
+
+  it('includes mixed protocol endpoints in subscription payloads', () => {
+    const mixedUser = profileUser();
+    mixedUser.inboundAssignments.push(
+      {
+        id: 'assignment-vless',
+        credentialEncrypted: 'v1:vless-credential',
+        inbound: {
+          id: 'inbound-vless',
+          tag: 'Edge_VLESS',
+          protocol: 'VLESS_REALITY',
+          publicHost: 'vpn.example.com',
+          publicPort: 9443,
+          listenPort: 9443,
+          config: {
+            handshakeServer: 'www.cloudflare.com',
+            handshakePort: 443,
+            serverNames: ['www.cloudflare.com'],
+            shortIds: ['0123456789abcdef'],
+            flow: 'xtls-rprx-vision',
+            transport: 'none',
+            fingerprint: 'chrome',
+            publicKeyPresent: true,
+            privateKeyPresent: true,
+          },
+          secretDataEncrypted: 'vless-secret-envelope',
+        },
+      },
+      {
+        id: 'assignment-ss',
+        credentialEncrypted: 'v1:ss-credential',
+        inbound: {
+          id: 'inbound-ss',
+          tag: 'Edge_SS',
+          protocol: 'SHADOWSOCKS',
+          publicHost: 'vpn.example.com',
+          publicPort: 8388,
+          listenPort: 8388,
+          config: {
+            method: '2022-blake3-aes-256-gcm',
+            passwordPresent: true,
+          },
+          secretDataEncrypted: 'ss-secret-envelope',
+        },
+      },
+    );
+
+    const encryption = {
+      decrypt: jest.fn((payload: string) => {
+        if (payload === 'v1:credential-envelope') {
+          return JSON.stringify({
+            version: 1,
+            password: 'p@ssword /?# ü',
+          });
+        }
+        if (payload === 'v1:vless-credential') {
+          return JSON.stringify({
+            version: 1,
+            uuid: '7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e',
+          });
+        }
+        if (payload === 'v1:ss-credential') {
+          return JSON.stringify({
+            version: 1,
+            password: Buffer.alloc(32, 7).toString('base64'),
+          });
+        }
+        if (payload === 'inbound-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            obfsPassword: 'obfs &/secret',
+          });
+        }
+        if (payload === 'vless-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            privateKey: 'PRIVATE',
+            publicKey: 'PUBLIC-KEY',
+          });
+        }
+        if (payload === 'ss-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            serverPassword: Buffer.alloc(32, 3).toString('base64'),
+          });
+        }
+        throw new Error('Unknown encrypted fixture');
+      }),
+    };
+    const mixedBuilder = new SubscriptionProfileBuilder(
+      new Hysteria2SubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+      new VlessRealitySubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+      new TrojanSubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+      new ShadowsocksSubscriptionAdapter(
+        encryption as unknown as SecretEncryptionService,
+      ),
+    );
+    const mixedProfile = mixedBuilder.build(mixedUser);
+    const links = renderLinkList(mixedProfile).trim().split('\n');
+    const yaml = renderClashProfile(mixedProfile);
+    const parsedYaml = parseYaml(yaml) as { proxies: Array<{ type: string }> };
+
+    expect(mixedProfile.endpoints).toHaveLength(3);
+    expect(links).toHaveLength(3);
+    expect(links[0]?.startsWith('hysteria2://')).toBe(true);
+    expect(links[1]?.startsWith('ss://')).toBe(true);
+    expect(links[2]?.startsWith('vless://')).toBe(true);
+    expect(parsedYaml.proxies.map((proxy) => proxy.type)).toEqual([
+      'hysteria2',
+      'ss',
+      'vless',
+    ]);
+  });
+
+  it('resolves normalized tag collisions deterministically', () => {
+    const user = profileUser();
+    user.inboundAssignments.push({
+      ...user.inboundAssignments[0],
+      id: 'assignment-id-2',
+      inbound: {
+        ...user.inboundAssignments[0].inbound,
+        id: 'inbound-id-2',
+        tag: 'edge_eu',
+      },
+    });
+
+    expect(
+      builder.build(user).endpoints.map((endpoint) => endpoint.tag),
+    ).toEqual(['hy2-edge_eu', 'hy2-edge_eu-2']);
+  });
+});
+
+function profileUser(): SubscriptionProfileUser {
+  return {
+    identity: 'Alice / Europe',
+    username: 'alice',
+    inboundAssignments: [
+      {
+        id: 'assignment-id',
+        credentialEncrypted: 'v1:credential-envelope',
+        inbound: {
+          id: 'inbound-id',
+          tag: 'Edge_EU',
+          protocol: 'HYSTERIA2',
+          publicHost: 'vpn.example.com',
+          publicPort: 8443,
+          listenPort: 443,
+          config: {
+            upMbps: 100,
+            downMbps: 300,
+            ignoreClientBandwidth: false,
+            obfs: {
+              type: 'SALAMANDER',
+              passwordPresent: true,
+            },
+            tls: {
+              mode: 'FILES',
+              sni: 'vpn.example.com',
+              alpn: ['h3'],
+              minVersion: '1.2',
+              cipherSuites: [],
+              curvePreferences: [],
+              kernelTx: false,
+              kernelRx: false,
+              clientInsecure: false,
+              certificatePath: '/cert.pem',
+              keyPath: '/key.pem',
+              certificatePemPresent: false,
+              privateKeyPemPresent: false,
+            },
+            masquerade: null,
+            bindInterface: null,
+            routingMark: null,
+            reuseAddr: false,
+            netns: null,
+            tcpFastOpen: false,
+            tcpMultiPath: false,
+            disableTcpKeepAlive: false,
+            tcpKeepAlive: null,
+            tcpKeepAliveInterval: null,
+            udpFragment: null,
+            udpTimeout: null,
+            detour: null,
+            brutalDebug: false,
+          },
+          secretDataEncrypted: 'inbound-secret-envelope',
+        },
+      },
+    ],
+  };
+}

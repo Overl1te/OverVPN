@@ -1,0 +1,503 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdminRole {
+  OWNER
+  ADMIN
+  READONLY
+}
+
+enum Locale {
+  EN @map("en")
+  RU @map("ru")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+  LIMITED
+}
+
+enum PlanStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum InboundProtocol {
+  HYSTERIA2
+  VLESS_REALITY
+  TROJAN
+  SHADOWSOCKS
+}
+
+enum ResetStrategy {
+  NO_RESET
+  DAILY
+  MONTHLY
+  YEARLY
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TrafficCheckpointSource {
+  CORE_POLL
+  RECONCILIATION
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
+enum AuditAction {
+  ADMIN_LOGIN
+  ADMIN_REFRESH
+  ADMIN_LOGOUT
+  ADMIN_TOTP_ENABLE
+  ADMIN_TOTP_CONFIRM
+  ADMIN_TOTP_DISABLE
+  ADMIN_CREATE
+  ADMIN_UPDATE
+  USER_CREATE
+  USER_UPDATE
+  USER_DELETE
+  USER_DISABLE
+  USER_ENABLE
+  USER_RESET_TRAFFIC
+  USER_EXTEND
+  USER_SET_PLAN
+  USER_ROTATE_SUB
+  PLAN_CREATE
+  PLAN_UPDATE
+  PLAN_DELETE
+  PLAN_ARCHIVE
+  INBOUND_CREATE
+  INBOUND_UPDATE
+  INBOUND_DELETE
+  INBOUND_ENABLE
+  INBOUND_DISABLE
+  INBOUND_ASSIGNMENT_ADD
+  INBOUND_ASSIGNMENT_REMOVE
+  INBOUND_CREDENTIAL_ROTATE
+  INBOUND_CREDENTIAL_REVEAL
+  SYSTEM_CONFIG_UPDATE
+  SYSTEM_USER_STATUS_CHANGE
+  SYSTEM_TRAFFIC_RESET
+  CORE_APPLY
+  BACKUP_CREATE
+  BACKUP_RESTORE
+}
+
+enum CoreApplyStatus {
+  PENDING
+  APPLYING
+  SUCCEEDED
+  FAILED
+  ROLLED_BACK
+}
+
+enum CoreApplyTrigger {
+  MANUAL
+  MUTATION
+  SYSTEM_RECONCILIATION
+  ENFORCEMENT
+}
+
+enum BackupKind {
+  DATABASE
+  CORE_CONFIG
+  FULL
+}
+
+enum BackupStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DELETED
+}
+
+model AdminUser {
+  id                         String            @id @default(uuid()) @db.Uuid
+  username                   String            @unique @db.VarChar(64)
+  passwordHash               String
+  role                       AdminRole         @default(ADMIN)
+  pendingTotpSecretEncrypted String?
+  totpSecretEncrypted        String?
+  lastLoginAt                DateTime?         @db.Timestamptz(3)
+  locale                     Locale            @default(RU)
+  active                     Boolean           @default(true)
+  createdAt                  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime          @updatedAt @db.Timestamptz(3)
+  refreshTokens              RefreshToken[]
+  auditLogs                  AuditLog[]        @relation("AuditActor")
+  systemConfigUpdates        SystemConfig[]    @relation("SystemConfigUpdater")
+  coreApplyRecords           CoreApplyRecord[] @relation("CoreApplyInitiator")
+  backupArtifacts            BackupArtifact[]  @relation("BackupCreator")
+
+  @@index([role, active])
+  @@map("admin_users")
+}
+
+model RefreshToken {
+  id                String        @id @default(uuid()) @db.Uuid
+  adminUserId       String        @db.Uuid
+  tokenHash         String        @unique
+  familyId          String        @db.Uuid
+  expiresAt         DateTime      @db.Timestamptz(3)
+  revokedAt         DateTime?     @db.Timestamptz(3)
+  revocationReason  String?       @db.VarChar(64)
+  replacedByTokenId String?       @unique @db.Uuid
+  ipAddress         String?       @db.VarChar(64)
+  userAgent         String?       @db.VarChar(512)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+  adminUser         AdminUser     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  replacedBy        RefreshToken? @relation("RefreshTokenReplacement", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replaces          RefreshToken? @relation("RefreshTokenReplacement")
+
+  @@index([adminUserId, expiresAt])
+  @@index([familyId])
+  @@index([revokedAt])
+  @@map("refresh_tokens")
+}
+
+model User {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  identity           String                  @unique @db.VarChar(128)
+  username           String                  @unique @db.VarChar(64)
+  status             UserStatus              @default(ACTIVE)
+  statusReason       String?                 @db.VarChar(32)
+  note               String?
+  tags               String[]                @default([])
+  expireAt           DateTime?               @db.Timestamptz(3)
+  dataLimitBytes     BigInt?
+  usedUploadBytes    BigInt                  @default(0)
+  usedDownloadBytes  BigInt                  @default(0)
+  accountingEpoch    Int                     @default(0)
+  trafficResetAt     DateTime?               @db.Timestamptz(3)
+  resetStrategy      ResetStrategy           @default(NO_RESET)
+  nextResetAt        DateTime?               @db.Timestamptz(3)
+  deviceLimit        Int?
+  ipLimit            Int?
+  speedLimitBps      BigInt?
+  subToken           String                  @unique @db.VarChar(64)
+  planId             String?                 @db.Uuid
+  needsApply         Boolean                 @default(true)
+  revision           Int                     @default(1)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @db.Timestamptz(3)
+  disabledAt         DateTime?               @db.Timestamptz(3)
+  deletedAt          DateTime?               @db.Timestamptz(3)
+  plan               Plan?                   @relation(fields: [planId], references: [id], onDelete: SetNull)
+  inboundAssignments UserInboundAssignment[]
+  usageDaily         UsageDaily[]
+  trafficCheckpoints TrafficCheckpoint[]
+  trafficCursors     TrafficCursor[]
+  trafficDeltas      TrafficDelta[]
+  onlineSessions     OnlineSession[]
+
+  @@index([planId, deletedAt])
+  @@index([status, expireAt])
+  @@index([tags], type: Gin)
+  @@index([deletedAt, createdAt])
+  @@map("users")
+}
+
+model Plan {
+  id                    String        @id @default(uuid()) @db.Uuid
+  name                  String        @unique @db.VarChar(100)
+  description           String?
+  status                PlanStatus    @default(ACTIVE)
+  defaultDataLimitBytes BigInt?
+  defaultExpiryDays     Int?
+  defaultDeviceLimit    Int?
+  defaultIpLimit        Int?
+  defaultSpeedLimitBps  BigInt?
+  defaultResetStrategy  ResetStrategy @default(NO_RESET)
+  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @db.Timestamptz(3)
+  archivedAt            DateTime?     @db.Timestamptz(3)
+  users                 User[]
+  planInbounds          PlanInbound[]
+
+  @@index([status])
+  @@map("plans")
+}
+
+model Inbound {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  tag                 String                  @unique @db.VarChar(100)
+  protocol            InboundProtocol
+  listenHost          String                  @default("0.0.0.0") @db.VarChar(255)
+  listenPort          Int
+  publicHost          String?                 @db.VarChar(255)
+  publicPort          Int?
+  enabled             Boolean                 @default(true)
+  config              Json
+  secretDataEncrypted String?
+  revision            Int                     @default(1)
+  needsApply          Boolean                 @default(true)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                @updatedAt @db.Timestamptz(3)
+  disabledAt          DateTime?               @db.Timestamptz(3)
+  planInbounds        PlanInbound[]
+  userAssignments     UserInboundAssignment[]
+  usageDaily          UsageDaily[]
+  trafficCheckpoints  TrafficCheckpoint[]
+  onlineSessions      OnlineSession[]
+
+  @@index([enabled, protocol])
+  @@index([listenHost, listenPort])
+  @@map("inbounds")
+}
+
+model PlanInbound {
+  planId    String   @db.Uuid
+  inboundId String   @db.Uuid
+  priority  Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  inbound   Inbound  @relation(fields: [inboundId], references: [id], onDelete: Cascade)
+
+  @@id([planId, inboundId])
+  @@index([inboundId])
+  @@index([planId, enabled, priority])
+  @@map("plan_inbounds")
+}
+
+model UserInboundAssignment {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @db.Uuid
+  inboundId           String           @db.Uuid
+  status              AssignmentStatus @default(ACTIVE)
+  credentialEncrypted String
+  credentialName      String           @db.VarChar(128)
+  credentialVersion   Int              @default(1)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+  disabledAt          DateTime?        @db.Timestamptz(3)
+  rotatedAt           DateTime?        @db.Timestamptz(3)
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inbound             Inbound          @relation(fields: [inboundId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, inboundId])
+  @@index([inboundId, status])
+  @@index([userId, status])
+  @@map("user_inbound_assignments")
+}
+
+model UsageDaily {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  inboundId     String?  @db.Uuid
+  scopeKey      String   @db.VarChar(128)
+  day           DateTime @db.Date
+  uploadBytes   BigInt   @default(0)
+  downloadBytes BigInt   @default(0)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  inbound       Inbound? @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, day, scopeKey])
+  @@index([day])
+  @@index([inboundId, day])
+  @@map("usage_daily")
+}
+
+model TrafficCursor {
+  statsKey          String   @id @db.VarChar(128)
+  userId            String   @unique @db.Uuid
+  lastUploadBytes   BigInt
+  lastDownloadBytes BigInt
+  accountingEpoch   Int
+  generation        Int      @default(0)
+  lastSampleHash    String   @db.Char(64)
+  observedAt        DateTime @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([observedAt])
+  @@map("traffic_cursors")
+}
+
+model TrafficDelta {
+  id            BigInt                  @id @default(autoincrement())
+  userId        String                  @db.Uuid
+  uploadBytes   BigInt
+  downloadBytes BigInt
+  observedAt    DateTime                @db.Timestamptz(3)
+  aggregatedAt  DateTime?               @db.Timestamptz(3)
+  source        TrafficCheckpointSource @default(CORE_POLL)
+  generation    Int
+  sampleKey     String                  @unique @db.Char(64)
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([aggregatedAt, id])
+  @@index([aggregatedAt, observedAt])
+  @@index([userId, observedAt])
+  @@map("traffic_deltas")
+}
+
+model TrafficCheckpoint {
+  id            String                  @id @default(uuid()) @db.Uuid
+  userId        String                  @db.Uuid
+  inboundId     String                  @db.Uuid
+  source        TrafficCheckpointSource @default(CORE_POLL)
+  uploadBytes   BigInt
+  downloadBytes BigInt
+  observedAt    DateTime                @db.Timestamptz(3)
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  inbound       Inbound                 @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+
+  @@index([userId, observedAt])
+  @@index([inboundId, observedAt])
+  @@map("traffic_checkpoints")
+}
+
+model OnlineSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  sessionKey     String    @unique @db.VarChar(255)
+  userId         String    @db.Uuid
+  inboundId      String    @db.Uuid
+  ipAddress      String?   @db.VarChar(64)
+  deviceId       String?   @db.VarChar(255)
+  connectedAt    DateTime  @db.Timestamptz(3)
+  lastSeenAt     DateTime  @db.Timestamptz(3)
+  disconnectedAt DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  inbound        Inbound   @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+
+  @@index([userId, disconnectedAt, lastSeenAt])
+  @@index([inboundId, disconnectedAt, lastSeenAt])
+  @@index([disconnectedAt, lastSeenAt])
+  @@index([ipAddress, disconnectedAt])
+  @@map("online_sessions")
+}
+
+model AuditLog {
+  id           BigInt       @id @default(autoincrement())
+  actorAdminId String?      @db.Uuid
+  action       AuditAction
+  outcome      AuditOutcome @default(SUCCESS)
+  resourceType String?      @db.VarChar(100)
+  resourceId   String?      @db.VarChar(255)
+  requestId    String?      @db.VarChar(128)
+  ipAddress    String?      @db.VarChar(64)
+  details      Json?
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  actorAdmin   AdminUser?   @relation("AuditActor", fields: [actorAdminId], references: [id], onDelete: Restrict)
+
+  @@index([actorAdminId, createdAt])
+  @@index([action, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([requestId])
+  @@map("audit_logs")
+}
+
+model SystemConfig {
+  key              String     @id @db.VarChar(150)
+  value            Json
+  description      String?
+  isSecret         Boolean    @default(false)
+  revision         Int        @default(1)
+  updatedByAdminId String?    @db.Uuid
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  updatedByAdmin   AdminUser? @relation("SystemConfigUpdater", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByAdminId])
+  @@map("system_config")
+}
+
+model CoreApplyRecord {
+  id                  String           @id @default(uuid()) @db.Uuid
+  status              CoreApplyStatus  @default(PENDING)
+  trigger             CoreApplyTrigger @default(MANUAL)
+  reason              String?
+  configRevision      Int?
+  configChecksum      String?          @db.Char(64)
+  desiredHash         String?          @db.Char(64)
+  previousHash        String?          @db.Char(64)
+  configPath          String?
+  diffSummary         Json?
+  resourceType        String?          @db.VarChar(100)
+  resourceId          String?          @db.VarChar(255)
+  operation           String?          @db.VarChar(100)
+  initiatedByAdminId  String?          @db.Uuid
+  startedAt           DateTime?        @db.Timestamptz(3)
+  appliedAt           DateTime?        @db.Timestamptz(3)
+  rollbackStartedAt   DateTime?        @db.Timestamptz(3)
+  rollbackCompletedAt DateTime?        @db.Timestamptz(3)
+  completedAt         DateTime?        @db.Timestamptz(3)
+  errorMessage        String?
+  rollbackOutcome     String?
+  metadata            Json?
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+  initiatedByAdmin    AdminUser?       @relation("CoreApplyInitiator", fields: [initiatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([initiatedByAdminId])
+  @@index([resourceType, resourceId, status])
+  @@map("core_apply_records")
+}
+
+model CoreState {
+  id                String    @id @default("sing-box") @db.VarChar(50)
+  desiredRevision   Int       @default(0)
+  appliedRevision   Int       @default(0)
+  appliedConfigHash String?   @db.Char(64)
+  configPath        String
+  lastApplyRecordId String?   @db.Uuid
+  appliedAt         DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@map("core_state")
+}
+
+model BackupArtifact {
+  id               String       @id @default(uuid()) @db.Uuid
+  kind             BackupKind
+  status           BackupStatus @default(PENDING)
+  storagePath      String       @unique
+  sizeBytes        BigInt?
+  checksum         String?      @db.Char(64)
+  encrypted        Boolean      @default(true)
+  meta             Json?
+  createdByAdminId String?      @db.Uuid
+  startedAt        DateTime?    @db.Timestamptz(3)
+  completedAt      DateTime?    @db.Timestamptz(3)
+  expiresAt        DateTime?    @db.Timestamptz(3)
+  errorMessage     String?
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  createdByAdmin   AdminUser?   @relation("BackupCreator", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([kind, createdAt])
+  @@index([createdByAdminId])
+  @@index([expiresAt])
+  @@map("backup_artifacts")
+}

@@ -1,0 +1,273 @@
+name: overvpn
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  HOST: 0.0.0.0
+  PORT: 3000
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+  REDIS_URL: ${REDIS_URL:?Set REDIS_URL in .env}
+  CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  TRUST_PROXY: ${TRUST_PROXY:-true}
+  SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+  JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+  JWT_ISSUER: ${JWT_ISSUER:-overvpn}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-overvpn-admin}
+  REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-2592000}
+  SECRETS_MASTER_KEY: ${SECRETS_MASTER_KEY:?Set SECRETS_MASTER_KEY in .env}
+  TOTP_ISSUER: ${TOTP_ISSUER:-OverVPN}
+  AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-overvpn_refresh}
+  AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+  AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-strict}
+  AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+  AUTH_COOKIE_PATH: ${AUTH_COOKIE_PATH:-/api/admin/auth}
+  LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-5}
+  LOGIN_THROTTLE_TTL_MS: ${LOGIN_THROTTLE_TTL_MS:-60000}
+  SUB_PUBLIC_BASE_URL: ${SUB_PUBLIC_BASE_URL:?Set SUB_PUBLIC_BASE_URL in .env}
+  SUB_PROFILE_UPDATE_INTERVAL_HOURS: ${SUB_PROFILE_UPDATE_INTERVAL_HOURS:-6}
+  SUB_RATE_LIMIT_IP_LIMIT: ${SUB_RATE_LIMIT_IP_LIMIT:-60}
+  SUB_RATE_LIMIT_TOKEN_LIMIT: ${SUB_RATE_LIMIT_TOKEN_LIMIT:-120}
+  SUB_RATE_LIMIT_WINDOW_SECONDS: ${SUB_RATE_LIMIT_WINDOW_SECONDS:-60}
+  SING_BOX_BINARY_PATH: /usr/local/bin/sing-box
+  SING_BOX_CONFIG_PATH: /var/lib/sing-box/config.json
+  SING_BOX_LAST_KNOWN_GOOD_PATH: /var/lib/sing-box/config.last-known-good.json
+  SING_BOX_RELOAD_REQUEST_PATH: /var/lib/overvpn/reload/request
+  SING_BOX_RELOAD_ACK_PATH: /var/lib/overvpn/reload/ack
+  SING_BOX_CLASH_API_URL: http://sing-box:9090
+  SING_BOX_CLASH_API_LISTEN: 0.0.0.0:9090
+  SING_BOX_CLASH_API_SECRET: ${SING_BOX_CLASH_API_SECRET:?Set SING_BOX_CLASH_API_SECRET in .env}
+  SING_BOX_V2RAY_API_LISTEN: 0.0.0.0:8080
+  SING_BOX_V2RAY_API_ADDRESS: sing-box:8080
+  SING_BOX_PROCESS_TIMEOUT_MS: ${SING_BOX_PROCESS_TIMEOUT_MS:-15000}
+  SING_BOX_RELOAD_TIMEOUT_MS: ${SING_BOX_RELOAD_TIMEOUT_MS:-20000}
+  SING_BOX_HEALTH_TIMEOUT_MS: ${SING_BOX_HEALTH_TIMEOUT_MS:-5000}
+  CORE_APPLY_LOCK_TTL_MS: ${CORE_APPLY_LOCK_TTL_MS:-60000}
+  WORKERS_ENABLED: ${WORKERS_ENABLED:-true}
+  WORKER_LOCK_TTL_MS: ${WORKER_LOCK_TTL_MS:-60000}
+  TRAFFIC_COLLECTION_INTERVAL_MS: ${TRAFFIC_COLLECTION_INTERVAL_MS:-15000}
+  TRAFFIC_AGGREGATION_INTERVAL_MS: ${TRAFFIC_AGGREGATION_INTERVAL_MS:-60000}
+  TRAFFIC_AGGREGATION_BATCH_SIZE: ${TRAFFIC_AGGREGATION_BATCH_SIZE:-1000}
+  TRAFFIC_LEDGER_RETENTION_DAYS: ${TRAFFIC_LEDGER_RETENTION_DAYS:-90}
+  ONLINE_COLLECTION_INTERVAL_MS: ${ONLINE_COLLECTION_INTERVAL_MS:-15000}
+  ONLINE_SWEEP_INTERVAL_MS: ${ONLINE_SWEEP_INTERVAL_MS:-30000}
+  ONLINE_SESSION_TIMEOUT_MS: ${ONLINE_SESSION_TIMEOUT_MS:-90000}
+  ONLINE_SESSION_RETENTION_DAYS: ${ONLINE_SESSION_RETENTION_DAYS:-30}
+  ENFORCEMENT_INTERVAL_MS: ${ENFORCEMENT_INTERVAL_MS:-30000}
+  TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+  TELEGRAM_TIMEOUT_MS: ${TELEGRAM_TIMEOUT_MS:-5000}
+  BACKUP_DIR: ${BACKUP_DIR:-/var/lib/overvpn/backups}
+  BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+  BACKUP_ENCRYPT: ${BACKUP_ENCRYPT:-true}
+  BACKUP_PROCESS_TIMEOUT_MS: ${BACKUP_PROCESS_TIMEOUT_MS:-600000}
+
+x-api-build: &api-build
+  context: ..
+  dockerfile: apps/api/Dockerfile
+
+x-service-security: &service-security
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - '${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -h 127.0.0.1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend
+    <<: *service-security
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:8-alpine}
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: ['sh', '-ec', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    volumes:
+      - redis_data:/data
+    ports:
+      - '${REDIS_BIND_ADDRESS:-127.0.0.1}:${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'test "$$(redis-cli --no-auth-warning -a "$$REDIS_PASSWORD" ping)" = PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - backend
+    <<: *service-security
+
+  sing-box-config-init:
+    image: busybox:1.37
+    restart: 'no'
+    network_mode: none
+    command:
+      [
+        'sh',
+        '-ec',
+        'mkdir -p /reload /state; if [ ! -s /shared/config.json ]; then cp /seed/config.json /shared/config.json; fi; chmod 600 /shared/config.json; chown -R 1000:1000 /shared /reload /state',
+      ]
+    volumes:
+      - ./sing-box/config.json:/seed/config.json:ro
+      - singbox_config:/shared
+      - singbox_reload:/reload
+      - singbox_state:/state
+    <<: *service-security
+
+  sing-box:
+    image: overvpn/api:local
+    build: *api-build
+    restart: unless-stopped
+    entrypoint: ['/usr/bin/dumb-init', '--', '/usr/local/bin/sing-box-entrypoint']
+    environment:
+      SING_BOX_CONFIG_PATH: /var/lib/sing-box/config.json
+      SING_BOX_RELOAD_REQUEST_PATH: /var/lib/overvpn/reload/request
+      SING_BOX_RELOAD_ACK_PATH: /var/lib/overvpn/reload/ack
+      SING_BOX_PID_PATH: /var/lib/overvpn/reload/sing-box.pid
+    depends_on:
+      sing-box-config-init:
+        condition: service_completed_successfully
+    volumes:
+      - singbox_config:/var/lib/sing-box:ro
+      - singbox_reload:/var/lib/overvpn/reload
+      - singbox_state:/var/lib/sing-box-state
+      - ./sing-box/certs:/var/lib/sing-box/certs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - '${SING_BOX_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_UDP_PORT:-443}:${SING_BOX_UDP_PORT:-443}/udp'
+      - '${SING_BOX_ACME_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_ACME_HTTP_PORT:-80}:${SING_BOX_ACME_HTTP_PORT:-80}/tcp'
+      - '${SING_BOX_ACME_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_ACME_TLS_PORT:-443}:${SING_BOX_ACME_TLS_PORT:-443}/tcp'
+    expose:
+      - '9090'
+      - '8080'
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'test -r /var/lib/overvpn/reload/sing-box.pid && kill -0 "$$(cat /var/lib/overvpn/reload/sing-box.pid)"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - core
+    <<: *service-security
+
+  migrate:
+    image: overvpn/api:local
+    build: *api-build
+    restart: 'no'
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+    command:
+      [
+        'node',
+        'apps/api/node_modules/prisma/build/index.js',
+        'migrate',
+        'deploy',
+        '--config',
+        'apps/api/prisma.config.ts',
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    <<: *service-security
+
+  api:
+    image: overvpn/api:local
+    build: *api-build
+    restart: unless-stopped
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      sing-box:
+        condition: service_healthy
+    volumes:
+      - singbox_config:/var/lib/sing-box
+      - singbox_reload:/var/lib/overvpn/reload
+      - singbox_state:/var/lib/sing-box-state
+      - ./sing-box/certs:/var/lib/sing-box/certs:ro
+      - backup_data:/var/lib/overvpn/backups
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    expose:
+      - '3000'
+    networks:
+      - backend
+      - core
+    <<: *service-security
+
+  web:
+    image: overvpn/web:local
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:80'
+    networks:
+      - backend
+    <<: *service-security
+
+  bootstrap-admin:
+    profiles: ['tools']
+    image: overvpn/api:local
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    command: ['node', 'apps/api/dist/scripts/bootstrap-admin.js']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    <<: *service-security
+
+volumes:
+  postgres_data:
+  redis_data:
+  singbox_config:
+  singbox_reload:
+  singbox_state:
+  backup_data:
+
+networks:
+  backend:
+    driver: bridge
+  core:
+    driver: bridge

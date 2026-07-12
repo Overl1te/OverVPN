@@ -1,0 +1,54 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalEnv": [
+    "NODE_ENV",
+    "HOST",
+    "PORT",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "CORS_ORIGINS",
+    "LOG_LEVEL",
+    "TRUST_PROXY",
+    "SWAGGER_ENABLED",
+    "JWT_ACCESS_SECRET",
+    "JWT_ACCESS_TTL_SECONDS",
+    "JWT_ISSUER",
+    "JWT_AUDIENCE",
+    "REFRESH_TOKEN_TTL_SECONDS",
+    "SECRETS_MASTER_KEY",
+    "TOTP_ISSUER",
+    "AUTH_COOKIE_NAME",
+    "AUTH_COOKIE_SECURE",
+    "AUTH_COOKIE_SAME_SITE",
+    "AUTH_COOKIE_DOMAIN",
+    "AUTH_COOKIE_PATH",
+    "LOGIN_THROTTLE_LIMIT",
+    "LOGIN_THROTTLE_TTL_MS"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "lint:fix": {
+      "dependsOn": ["^lint:fix"],
+      "cache": false
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}

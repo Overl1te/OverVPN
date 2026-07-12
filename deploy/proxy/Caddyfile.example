@@ -1,0 +1,28 @@
+{
+	email admin@example.com
+	admin off
+}
+
+vpn.example.com {
+	encode zstd gzip
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	reverse_proxy 127.0.0.1:8080 {
+		health_uri /healthz
+		health_interval 30s
+		health_timeout 5s
+	}
+
+	log {
+		output stdout
+		format json
+	}
+	@publicSubscription path /api/sub/*
+	log_skip @publicSubscription
+}

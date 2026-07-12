@@ -1,0 +1,35 @@
+{
+  "name": "overvpn",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single-node VPN control plane",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.12.0",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "pnpm --filter @overvpn/api test:e2e",
+    "prisma:generate": "pnpm --filter @overvpn/api prisma:generate",
+    "prisma:validate": "pnpm --filter @overvpn/api prisma:validate",
+    "migrate": "pnpm --filter @overvpn/api prisma:migrate:deploy",
+    "migrate:dev": "pnpm --filter @overvpn/api prisma:migrate:dev",
+    "bootstrap:admin": "pnpm --filter @overvpn/api admin:bootstrap",
+    "compose-up": "docker compose --env-file .env -f deploy/docker-compose.yml up -d --build",
+    "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.5",
+    "turbo": "^2.10.4",
+    "typescript": "^6.0.3"
+  }
+}

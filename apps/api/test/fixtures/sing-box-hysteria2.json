@@ -1,0 +1,89 @@
+{
+  "dns": {
+    "final": "local",
+    "servers": [
+      {
+        "prefer_go": true,
+        "tag": "local",
+        "type": "local"
+      }
+    ],
+    "strategy": "prefer_ipv4"
+  },
+  "experimental": {
+    "clash_api": {
+      "access_control_allow_origin": [],
+      "access_control_allow_private_network": false,
+      "external_controller": "127.0.0.1:9090",
+      "secret": "fixture-clash-api-secret"
+    },
+    "v2ray_api": {
+      "listen": "127.0.0.1:8080",
+      "stats": {
+        "enabled": true,
+        "inbounds": ["hy2-fixture"],
+        "outbounds": ["block", "direct"],
+        "users": ["d465128d-2cb5-431f-8843-00dcf6292a33"]
+      }
+    }
+  },
+  "inbounds": [
+    {
+      "down_mbps": 200,
+      "ignore_client_bandwidth": false,
+      "listen": "127.0.0.1",
+      "listen_port": 8443,
+      "obfs": {
+        "password": "fixture-obfs-password",
+        "type": "salamander"
+      },
+      "tag": "hy2-fixture",
+      "tls": {
+        "acme": {
+          "data_directory": "/tmp/overvpn-acme-fixture",
+          "disable_http_challenge": true,
+          "domain": ["vpn.example.com"],
+          "provider": "letsencrypt"
+        },
+        "alpn": ["h3"],
+        "enabled": true,
+        "server_name": "vpn.example.com"
+      },
+      "type": "hysteria2",
+      "udp_fragment": true,
+      "udp_timeout": "30s",
+      "up_mbps": 100,
+      "users": [
+        {
+          "name": "d465128d-2cb5-431f-8843-00dcf6292a33",
+          "password": "fixture-assignment-password"
+        }
+      ]
+    }
+  ],
+  "log": {
+    "disabled": false,
+    "level": "info",
+    "timestamp": true
+  },
+  "outbounds": [
+    {
+      "tag": "direct",
+      "type": "direct"
+    },
+    {
+      "tag": "block",
+      "type": "block"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "final": "direct",
+    "rules": [
+      {
+        "ip_is_private": true,
+        "outbound": "block"
+      }
+    ]
+  }
+}

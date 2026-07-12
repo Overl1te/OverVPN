@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build and test output
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+apps/api/src/generated/prisma/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+deploy/sing-box/certs/*
+!deploy/sing-box/certs/.gitkeep
+
+# Logs and runtime files
+*.log
+*.pid
+logs/
+
+# Editors and operating systems
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Local database and backup artifacts
+data/
+backups/
