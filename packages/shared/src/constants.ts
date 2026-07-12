@@ -3,6 +3,28 @@ export const API_PREFIX = '/api';
 export const API_VERSION = '0.1.0';
 export const DEFAULT_API_PORT = 3000;
 
+/**
+ * Build the public subscription URL from SUB_PUBLIC_BASE_URL.
+ * - Origin only (`https://host`) → `https://host/api/sub/{token}`
+ * - With path (`https://host/sub`) → `https://host/sub/{token}`
+ */
+export function buildSubscriptionPublicUrl(
+  baseUrl: string,
+  token: string,
+): string {
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  try {
+    const url = new URL(trimmed);
+    const path = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
+    if (!path) {
+      return `${url.origin}/api/sub/${token}`;
+    }
+    return `${url.origin}${path}/${token}`;
+  } catch {
+    return `${trimmed}/api/sub/${token}`;
+  }
+}
+
 export const SUPPORTED_LOCALES = ['ru', 'en'] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 

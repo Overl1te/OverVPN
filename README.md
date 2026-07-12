@@ -6,26 +6,30 @@
 
 ## Быстрая установка (Ubuntu / Debian)
 
-Одной командой: Docker, репозиторий, секреты, firewall, Nginx+TLS, владелец панели.
-
 ```bash
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
 ```
 
-Скрипт сам спросит домен. Укажите его (A-запись на IP сервера) — поставится Nginx и Let's Encrypt. Пустой ввод — панель на `http://IP:8000` без TLS.
+Установщик спросит по шагам:
+
+1. **Базовый домен** (`example.com`) — или пусто для режима `http://IP:8000`
+2. **Панель** — хост, по умолчанию `panel.example.com` (только хост, без пути)
+3. **Подписки** — хост или `хост/путь`, по умолчанию `sub.example.com` (можно `example.com/sub`)
+4. **VPN-хост** — для клиентских endpoint’ов, по умолчанию `vpn.example.com`
+5. Email для Let’s Encrypt
+
+Затем покажет **какие A-записи создать у DNS-хостера**, дождётся подтверждения, проверит резолв и выпустит сертификаты на все хосты (включая поддомены).
 
 После установки:
 
 ```bash
 overvpn status
 overvpn logs
-overvpn info          # URL и пароль владельца
+overvpn info
 overvpn update
 overvpn restart
 overvpn uninstall
 ```
-
-Опции `install`: `--domain`, `--email`, `--port` (по умолчанию `8000` без домена), `--branch`, `--no-nginx`, `--no-ufw`.
 
 | Компонент | Порт по умолчанию |
 |-----------|-------------------|
@@ -78,7 +82,7 @@ openssl rand -base64 36
 | `SING_BOX_CLASH_API_SECRET` | Внутренний Clash API |
 | `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | Первый владелец |
 | `CORS_ORIGINS` | Точный origin панели, например `http://localhost:8080` |
-| `SUB_PUBLIC_BASE_URL` | Публичный HTTPS-хост для ссылок подписки, **без** `/api` |
+| `SUB_PUBLIC_BASE_URL` | Публичный HTTPS URL для ссылок подписки: origin (`https://sub.example.com` → `…/api/sub/{TOKEN}`) или с путём (`https://example.com/sub` → `…/sub/{TOKEN}`) |
 
 Для локального запуска можно временно:
 
@@ -160,10 +164,16 @@ pnpm compose-down
 
 ### 3.3. Подписка клиента
 
-Формат URL:
+Формат URL (origin без пути):
 
 ```text
 {SUB_PUBLIC_BASE_URL}/api/sub/{TOKEN}
+```
+
+С путём в `SUB_PUBLIC_BASE_URL` (например `https://example.com/sub`):
+
+```text
+{SUB_PUBLIC_BASE_URL}/{TOKEN}
 ```
 
 Форматы:

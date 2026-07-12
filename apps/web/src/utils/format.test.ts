@@ -23,10 +23,17 @@ describe('formatBytesPerSecond', () => {
 });
 
 describe('buildSubscriptionUrl', () => {
-  it('joins origin and token', () => {
+  it('joins origin and token via /api/sub', () => {
     assert.equal(
       buildSubscriptionUrl('abc', 'https://panel.example.com'),
       'https://panel.example.com/api/sub/abc',
+    );
+  });
+
+  it('uses custom path when present', () => {
+    assert.equal(
+      buildSubscriptionUrl('abc', 'https://example.com/sub'),
+      'https://example.com/sub/abc',
     );
   });
 });

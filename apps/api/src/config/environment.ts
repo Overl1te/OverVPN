@@ -75,15 +75,16 @@ const publicBaseUrlSchema = z
   .transform((value) => value.replace(/\/+$/, ''))
   .refine((value) => {
     const url = new URL(value);
+    const path = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
     return (
       ['http:', 'https:'].includes(url.protocol) &&
       !url.username &&
       !url.password &&
       !url.search &&
       !url.hash &&
-      (url.pathname === '' || url.pathname === '/')
+      (path === '' || /^(\/[A-Za-z0-9._~-]+)+$/.test(path))
     );
-  }, 'SUB_PUBLIC_BASE_URL must be an HTTP(S) origin without credentials, path, query, or fragment');
+  }, 'SUB_PUBLIC_BASE_URL must be an HTTP(S) URL without credentials, query, or fragment (optional path allowed)');
 
 export const environmentSchema = z
   .object({

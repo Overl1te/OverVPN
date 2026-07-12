@@ -12,6 +12,7 @@ APP_DIR="${INSTALL_DIR}/${APP_NAME}"
 ENV_FILE="${APP_DIR}/.env"
 COMPOSE_FILE="${APP_DIR}/deploy/docker-compose.yml"
 CREDENTIALS_FILE="${APP_DIR}/.credentials"
+INSTALL_CONF="${APP_DIR}/.install.conf"
 BIN_PATH="/usr/local/bin/${APP_NAME}"
 NGINX_SITE="/etc/nginx/sites-available/${APP_NAME}"
 NGINX_LINK="/etc/nginx/sites-enabled/${APP_NAME}"
@@ -71,7 +72,7 @@ install_packages() {
   colorized_echo blue "Installing required packages..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
-  apt-get install -y ca-certificates curl git openssl ufw
+  apt-get install -y ca-certificates curl git openssl ufw dnsutils
 }
 
 ensure_docker() {
@@ -150,38 +151,212 @@ install_cli() {
   colorized_echo green "CLI installed. Use: ${APP_NAME} <command>"
 }
 
-prompt_domain() {
-  local domain="" email=""
-  local ip
-  ip="$(public_ip)"
-
-  echo
-  colorized_echo cyan "Server IP: ${ip}"
-  colorized_echo cyan "Point your domain A-record to this IP before continuing (for HTTPS)."
-  echo
-
-  if [[ -t 0 ]]; then
-    read -r -p "Panel domain (e.g. vpn.example.com, empty = IP:${DEFAULT_WEB_PORT} without TLS): " domain
-    domain="$(printf '%s' "$domain" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-    if [[ -n "$domain" ]]; then
-      read -r -p "Let's Encrypt email [admin@${domain}]: " email
-      email="$(printf '%s' "$email" | tr -d '[:space:]')"
-      if [[ -z "$email" ]]; then
-        email="admin@${domain}"
-      fi
-    fi
-  fi
-
-  PROMPT_DOMAIN="$domain"
-  PROMPT_EMAIL="$email"
-}
-
-validate_domain() {
-  local domain=$1
-  if [[ ! "$domain" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
-    colorized_echo red "Invalid domain: ${domain}"
+validate_hostname() {
+  local host=$1
+  if [[ ! "$host" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+    colorized_echo red "Invalid hostname: ${host}"
     exit 1
   fi
+}
+
+# Parse "host", "host/path", "https://host/path" → PARSE_HOST, PARSE_PATH ("/sub" or "")
+parse_endpoint() {
+  local raw=$1
+  local allow_path=${2:-true}
+  raw="$(printf '%s' "$raw" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  raw="${raw#http://}"
+  raw="${raw#https://}"
+  raw="${raw%%\?*}"
+  raw="${raw%%\#*}"
+  raw="${raw%/}"
+
+  local host path=""
+  if [[ "$raw" == */* ]]; then
+    host="${raw%%/*}"
+    path="/${raw#*/}"
+    path="$(printf '%s' "$path" | sed -E 's#/+#/#g; s#/$##')"
+  else
+    host="$raw"
+  fi
+
+  if [[ -z "$host" ]]; then
+    colorized_echo red "Empty host in endpoint: $1"
+    exit 1
+  fi
+  validate_hostname "$host"
+
+  if [[ -n "$path" && "$allow_path" != "true" ]]; then
+    colorized_echo red "Paths are not supported for this endpoint (use a subdomain): $1"
+    colorized_echo yellow "Example: panel.${CFG_BASE_DOMAIN:-example.com}"
+    exit 1
+  fi
+
+  if [[ -n "$path" && ! "$path" =~ ^(/[a-z0-9._~-]+)+$ ]]; then
+    colorized_echo red "Invalid path in endpoint: $1"
+    exit 1
+  fi
+
+  PARSE_HOST="$host"
+  PARSE_PATH="$path"
+}
+
+prompt_install_endpoints() {
+  local ip
+  ip="$(public_ip)"
+  CFG_BASE_DOMAIN=""
+  CFG_PANEL_HOST=""
+  CFG_SUB_HOST=""
+  CFG_SUB_PATH=""
+  CFG_VPN_HOST=""
+  CFG_EMAIL=""
+  CFG_MODE="ip"
+
+  echo
+  colorized_echo cyan "════════════════════════════════════════"
+  colorized_echo cyan " OverVPN — domain setup"
+  colorized_echo cyan "════════════════════════════════════════"
+  colorized_echo cyan "Server IP: ${ip}"
+  echo
+  colorized_echo yellow "Leave base domain empty to use http://${ip}:${DEFAULT_WEB_PORT} (no TLS)."
+  echo
+
+  if [[ ! -t 0 ]]; then
+    colorized_echo yellow "Non-interactive mode: installing without domain."
+    return
+  fi
+
+  local base panel sub vpn email
+  read -r -p "1) Base domain (e.g. example.com): " base
+  base="$(printf '%s' "$base" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  if [[ -z "$base" ]]; then
+    return
+  fi
+  validate_hostname "$base"
+  CFG_BASE_DOMAIN="$base"
+  CFG_MODE="domain"
+
+  read -r -p "2) Panel host [panel.${base}]: " panel
+  panel="$(printf '%s' "${panel:-panel.${base}}" | tr -d '[:space:]')"
+  parse_endpoint "$panel" false
+  CFG_PANEL_HOST="$PARSE_HOST"
+
+  read -r -p "3) Subscription host or host/path [sub.${base}]: " sub
+  sub="$(printf '%s' "${sub:-sub.${base}}" | tr -d '[:space:]')"
+  parse_endpoint "$sub" true
+  CFG_SUB_HOST="$PARSE_HOST"
+  CFG_SUB_PATH="$PARSE_PATH"
+
+  read -r -p "4) VPN public host [vpn.${base}]: " vpn
+  vpn="$(printf '%s' "${vpn:-vpn.${base}}" | tr -d '[:space:]')"
+  parse_endpoint "$vpn" false
+  CFG_VPN_HOST="$PARSE_HOST"
+
+  read -r -p "5) Let's Encrypt email [admin@${base}]: " email
+  CFG_EMAIL="$(printf '%s' "${email:-admin@${base}}" | tr -d '[:space:]')"
+
+  echo
+  colorized_echo green "Summary:"
+  colorized_echo cyan "  Panel:        https://${CFG_PANEL_HOST}"
+  if [[ -n "$CFG_SUB_PATH" ]]; then
+    colorized_echo cyan "  Subscription: https://${CFG_SUB_HOST}${CFG_SUB_PATH}/{TOKEN}"
+  else
+    colorized_echo cyan "  Subscription: https://${CFG_SUB_HOST}/api/sub/{TOKEN}"
+  fi
+  colorized_echo cyan "  VPN host:     ${CFG_VPN_HOST}  (A-record for client endpoints)"
+  echo
+}
+
+unique_hosts() {
+  local -A seen=()
+  local host
+  for host in "$@"; do
+    [[ -z "$host" ]] && continue
+    if [[ -z "${seen[$host]+x}" ]]; then
+      seen[$host]=1
+      printf '%s\n' "$host"
+    fi
+  done
+}
+
+show_dns_instructions() {
+  local ip=$1
+  shift
+  local hosts=("$@")
+
+  echo
+  colorized_echo yellow "════════════════════════════════════════"
+  colorized_echo yellow " DNS — create these records now"
+  colorized_echo yellow "════════════════════════════════════════"
+  colorized_echo yellow "At your DNS provider (Cloudflare, Namecheap, Reg.ru, …)"
+  colorized_echo yellow "create A records pointing to: ${ip}"
+  echo
+  local host
+  for host in "${hosts[@]}"; do
+    printf '  %-40s A    %s\n' "$host" "$ip"
+  done
+  echo
+  colorized_echo yellow "If you use Cloudflare: DNS only (grey cloud), not proxied,"
+  colorized_echo yellow "until certificates are issued — or use Full (strict) later."
+  echo
+  colorized_echo cyan "Also open UDP/443 on the firewall/security group for VPN traffic."
+  echo
+}
+
+resolve_host_ips() {
+  local host=$1
+  if need_cmd dig; then
+    dig +short A "$host" 2>/dev/null | grep -E '^[0-9.]+$' || true
+  elif need_cmd getent; then
+    getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u || true
+  else
+    python3 - <<PY 2>/dev/null || true
+import socket
+try:
+  print("\n".join(sorted({i[4][0] for i in socket.getaddrinfo("$host", None, socket.AF_INET)})))
+except Exception:
+  pass
+PY
+  fi
+}
+
+wait_for_dns() {
+  local ip=$1
+  shift
+  local hosts=("$@")
+  local host resolved attempt
+
+  show_dns_instructions "$ip" "${hosts[@]}"
+
+  if [[ ! -t 0 ]]; then
+    colorized_echo yellow "Non-interactive: skipping DNS wait."
+    return
+  fi
+
+  while true; do
+    read -r -p "Press Enter after DNS is configured (or type skip): " answer
+    if [[ "${answer,,}" == "skip" ]]; then
+      colorized_echo yellow "Skipping DNS verification (certificates may fail)."
+      return
+    fi
+
+    local all_ok=true
+    for host in "${hosts[@]}"; do
+      resolved="$(resolve_host_ips "$host" | tr '\n' ' ')"
+      if printf '%s' "$resolved" | grep -qw "$ip"; then
+        colorized_echo green "  ✓ ${host} → ${ip}"
+      else
+        all_ok=false
+        colorized_echo red "  ✗ ${host} resolves to [${resolved:-none}], expected ${ip}"
+      fi
+    done
+
+    if [[ "$all_ok" == true ]]; then
+      colorized_echo green "DNS looks good."
+      return
+    fi
+
+    colorized_echo yellow "Propagation can take a few minutes. Fix records and try again."
+  done
 }
 
 configure_firewall() {
@@ -210,140 +385,177 @@ configure_firewall() {
   fi
 }
 
-write_nginx_http_bootstrap() {
-  local domain=$1
-
-  cat >"$NGINX_SITE" <<EOF
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${domain};
-
-    location ^~ /api/sub/ {
-        access_log off;
-        proxy_pass http://127.0.0.1:8080;
+nginx_proxy_headers() {
+  local proto=$1
+  cat <<EOF
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto ${proto};
         proxy_set_header X-Request-ID \$request_id;
         proxy_connect_timeout 5s;
         proxy_read_timeout 60s;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header X-Request-ID \$request_id;
-        proxy_connect_timeout 5s;
-        proxy_read_timeout 60s;
-    }
-}
 EOF
 }
 
-write_nginx_https() {
-  local domain=$1
+# Write nginx site for listed hosts. Args: panel_host sub_host sub_path vpn_host mode(http|https)
+write_nginx_site() {
+  local panel_host=$1
+  local sub_host=$2
+  local sub_path=$3
+  local vpn_host=$4
+  local mode=$5
+  local -a hosts=()
+  mapfile -t hosts < <(unique_hosts "$panel_host" "$sub_host" "$vpn_host")
 
-  cat >"$NGINX_SITE" <<EOF
-server {
+  local conf=""
+  local host
+
+  if [[ "$mode" == "https" ]]; then
+    conf+="server {
     listen 80;
     listen [::]:80;
-    server_name ${domain};
+    server_name ${hosts[*]};
     access_log off;
     return 301 https://\$host\$request_uri;
 }
+"
+  fi
 
+  for host in "${hosts[@]}"; do
+    if [[ "$mode" == "https" ]]; then
+      conf+="
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name ${domain};
+    server_name ${host};
 
-    ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${panel_host}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${panel_host}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 1d;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+"
+      if [[ -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+        conf+="    include /etc/letsencrypt/options-ssl-nginx.conf;
+"
+      fi
+      if [[ -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
+        conf+="    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+"
+      fi
+      conf+="
+    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;
+    add_header X-Content-Type-Options \"nosniff\" always;
+    add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;
+"
+      local proto="https"
+    else
+      conf+="
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${host};
+"
+      local proto="\$scheme"
+    fi
 
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Subscription custom path rewrite on subscription host
+    if [[ "$host" == "$sub_host" && -n "$sub_path" ]]; then
+      conf+="
+    location ^~ ${sub_path}/ {
+        access_log off;
+        rewrite ^${sub_path}/(.*)\$ /api/sub/\$1 break;
+        proxy_pass http://127.0.0.1:8080;
+$(nginx_proxy_headers "$proto")
+    }
+"
+    fi
 
+    # Always expose native API subscription path on hosts that serve HTTP
+    if [[ "$host" == "$panel_host" || "$host" == "$sub_host" ]]; then
+      conf+="
     location ^~ /api/sub/ {
         access_log off;
         proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Request-ID \$request_id;
-        proxy_connect_timeout 5s;
-        proxy_read_timeout 60s;
+$(nginx_proxy_headers "$proto")
     }
+"
+    fi
 
+    if [[ "$host" == "$panel_host" ]]; then
+      conf+="
     location / {
         proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Request-ID \$request_id;
-        proxy_connect_timeout 5s;
-        proxy_read_timeout 60s;
+$(nginx_proxy_headers "$proto")
     }
-}
-EOF
+"
+    elif [[ "$host" == "$sub_host" ]]; then
+      # Subscription-only host without panel UI
+      conf+="
+    location / {
+        return 404;
+    }
+"
+    else
+      # VPN host: optional HTTPS decoy (no panel)
+      conf+="
+    location / {
+        default_type text/plain;
+        return 204;
+    }
+"
+    fi
+
+    conf+="}
+"
+  done
+
+  printf '%s\n' "$conf" >"$NGINX_SITE"
 }
 
 install_nginx() {
-  local domain=$1
-  local email=$2
+  local panel_host=$1
+  local sub_host=$2
+  local sub_path=$3
+  local vpn_host=$4
+  local email=$5
 
-  colorized_echo blue "Installing Nginx + Certbot for ${domain}..."
+  colorized_echo blue "Installing Nginx + Certbot..."
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y nginx certbot python3-certbot-nginx
 
   rm -f /etc/nginx/sites-enabled/default
-  write_nginx_http_bootstrap "$domain"
+  write_nginx_site "$panel_host" "$sub_host" "$sub_path" "$vpn_host" "http"
   ln -sfn "$NGINX_SITE" "$NGINX_LINK"
   nginx -t
   systemctl enable --now nginx
   systemctl reload nginx
 
-  colorized_echo blue "Requesting Let's Encrypt certificate..."
+  local -a hosts=()
+  local -a cert_args=()
+  mapfile -t hosts < <(unique_hosts "$panel_host" "$sub_host" "$vpn_host")
+  local host
+  for host in "${hosts[@]}"; do
+    cert_args+=(-d "$host")
+  done
+
+  colorized_echo blue "Requesting Let's Encrypt certificate for: ${hosts[*]}"
   certbot --nginx \
-    -d "$domain" \
+    "${cert_args[@]}" \
     --non-interactive \
     --agree-tos \
     --email "$email" \
     --redirect \
-    --no-eff-email
+    --no-eff-email \
+    --cert-name "$panel_host"
 
-  # Normalize to our HTTPS template (certbot may leave a mixed config)
-  if [[ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ]]; then
-    write_nginx_https "$domain"
-    # options-ssl-nginx / dhparams may be missing on some certbot versions
-    if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
-      sed -i '/options-ssl-nginx.conf/d' "$NGINX_SITE"
-    fi
-    if [[ ! -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
-      sed -i '/ssl-dhparams.pem/d' "$NGINX_SITE"
-    fi
-    nginx -t
-    systemctl reload nginx
-  fi
-
-  colorized_echo green "Nginx configured for https://${domain}"
+  write_nginx_site "$panel_host" "$sub_host" "$sub_path" "$vpn_host" "https"
+  nginx -t
+  systemctl reload nginx
+  colorized_echo green "Nginx + TLS ready for: ${hosts[*]}"
 }
 
 remove_nginx_site() {
@@ -369,9 +581,8 @@ fetch_repo() {
 }
 
 generate_env() {
-  local domain=$1
-  local web_port=$2
-  local with_nginx=$3
+  local web_port=$1
+  local with_nginx=$2
   local ip
   ip="$(public_ip)"
 
@@ -400,20 +611,28 @@ generate_env() {
   set_env_var "SWAGGER_ENABLED" "false"
   set_env_var "SING_BOX_UDP_PORT" "443"
 
-  if [[ -n "$domain" ]]; then
-    set_env_var "CORS_ORIGINS" "https://${domain}"
-    set_env_var "SUB_PUBLIC_BASE_URL" "https://${domain}"
+  local panel_url sub_url
+  if [[ "${CFG_MODE}" == "domain" ]]; then
+    panel_url="https://${CFG_PANEL_HOST}"
+    if [[ -n "${CFG_SUB_PATH}" ]]; then
+      sub_url="https://${CFG_SUB_HOST}${CFG_SUB_PATH}"
+    else
+      sub_url="https://${CFG_SUB_HOST}"
+    fi
+    set_env_var "CORS_ORIGINS" "$panel_url"
+    set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
     set_env_var "AUTH_COOKIE_SECURE" "true"
     set_env_var "WEB_BIND_ADDRESS" "127.0.0.1"
     set_env_var "WEB_PORT" "8080"
     if [[ "$with_nginx" == "true" ]]; then
-      # Avoid conflict with Nginx on 80/443 TCP
       set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
       set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
     fi
   else
-    set_env_var "CORS_ORIGINS" "http://${ip}:${web_port}"
-    set_env_var "SUB_PUBLIC_BASE_URL" "http://${ip}:${web_port}"
+    panel_url="http://${ip}:${web_port}"
+    sub_url="$panel_url"
+    set_env_var "CORS_ORIGINS" "$panel_url"
+    set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
     set_env_var "AUTH_COOKIE_SECURE" "false"
     set_env_var "WEB_BIND_ADDRESS" "0.0.0.0"
     set_env_var "WEB_PORT" "$web_port"
@@ -424,11 +643,25 @@ generate_env() {
 BOOTSTRAP_ADMIN_USER=${admin_user}
 BOOTSTRAP_ADMIN_PASSWORD=${admin_pass}
 PANEL_IP=${ip}
-PANEL_DOMAIN=${domain}
+PANEL_URL=${panel_url}
+SUB_PUBLIC_BASE_URL=${sub_url}
+VPN_PUBLIC_HOST=${CFG_VPN_HOST:-}
+BASE_DOMAIN=${CFG_BASE_DOMAIN:-}
 WEB_PORT=${web_port}
 CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
   chmod 600 "$CREDENTIALS_FILE"
+
+  cat >"$INSTALL_CONF" <<EOF
+MODE=${CFG_MODE}
+BASE_DOMAIN=${CFG_BASE_DOMAIN:-}
+PANEL_HOST=${CFG_PANEL_HOST:-}
+SUB_HOST=${CFG_SUB_HOST:-}
+SUB_PATH=${CFG_SUB_PATH:-}
+VPN_HOST=${CFG_VPN_HOST:-}
+EMAIL=${CFG_EMAIL:-}
+EOF
+  chmod 600 "$INSTALL_CONF"
 }
 
 wait_for_health() {
@@ -448,30 +681,30 @@ wait_for_health() {
 }
 
 print_success() {
-  local domain=$1
-  local web_port=$2
-  local ip user pass panel_url
+  local web_port=$1
+  local ip user pass panel_url sub_url vpn_host
 
   ip="$(get_env_var PANEL_IP "$CREDENTIALS_FILE" 2>/dev/null || public_ip)"
   user="$(get_env_var BOOTSTRAP_ADMIN_USER "$CREDENTIALS_FILE")"
   pass="$(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$CREDENTIALS_FILE")"
-
-  if [[ -n "$domain" ]]; then
-    panel_url="https://${domain}"
-  else
-    panel_url="http://${ip}:${web_port}"
-  fi
+  panel_url="$(get_env_var PANEL_URL "$CREDENTIALS_FILE")"
+  sub_url="$(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")"
+  vpn_host="$(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE")"
 
   echo
   colorized_echo green "╔══════════════════════════════════════════════╗"
   colorized_echo green "║         OverVPN installed successfully       ║"
   colorized_echo green "╚══════════════════════════════════════════════╝"
   echo
-  colorized_echo cyan  "Panel:    ${panel_url}"
-  colorized_echo cyan  "Login:    ${user}"
-  colorized_echo cyan  "Password: ${pass}"
+  colorized_echo cyan  "Panel:        ${panel_url}"
+  colorized_echo cyan  "Login:        ${user}"
+  colorized_echo cyan  "Password:     ${pass}"
+  colorized_echo cyan  "Subscriptions:${sub_url}/… (or /api/sub/… if no custom path)"
+  if [[ -n "$vpn_host" ]]; then
+    colorized_echo cyan  "VPN host:     ${vpn_host}  (use as public host in Inbounds)"
+  fi
   echo
-  colorized_echo yellow "Credentials saved to: ${CREDENTIALS_FILE}"
+  colorized_echo yellow "Credentials: ${CREDENTIALS_FILE}"
   colorized_echo yellow "Manage with: ${APP_NAME} status | logs | update | restart"
   echo
 }
@@ -485,17 +718,25 @@ Usage:
   ${APP_NAME} up | down | restart | status | logs [service] | update | uninstall
   ${APP_NAME} info | edit | bootstrap | install-script
 
-Install options:
-  --domain <host>     Skip prompt; use this domain + Nginx/HTTPS
-  --email <email>     Let's Encrypt email (default: admin@<domain>)
-  --port <port>       Panel port without domain (default: ${DEFAULT_WEB_PORT})
-  --branch <name>     Git branch/tag (default: ${DEFAULT_BRANCH})
-  --no-nginx          With domain, skip Nginx (panel on 127.0.0.1:8080)
-  --no-ufw            Do not touch UFW
-  -h, --help          Show help
+Install asks interactively:
+  1) base domain
+  2) panel host (subdomain; no path — SPA)
+  3) subscription host or host/path
+  4) VPN public host
+  5) Let's Encrypt email
+Then prints DNS A-records to create and waits before issuing certificates.
 
-During install the script asks for a domain interactively.
-Leave domain empty to publish the panel on http://IP:${DEFAULT_WEB_PORT}.
+Options:
+  --base-domain <host>     Skip base-domain prompt
+  --panel <host>           Panel hostname
+  --subscription <spec>    Host or host/path for public subscription URLs
+  --vpn-host <host>        VPN public hostname
+  --email <email>          Let's Encrypt email
+  --port <port>            Panel port without domain (default: ${DEFAULT_WEB_PORT})
+  --branch <name>          Git branch/tag (default: ${DEFAULT_BRANCH})
+  --no-nginx               Skip Nginx/TLS
+  --no-ufw                 Do not touch UFW
+  -h, --help               Show help
 
 One-liner:
   sudo bash -c "\$(curl -fsSL ${REPO_RAW_BASE}/${DEFAULT_BRANCH}/install.sh)" @ install
@@ -506,13 +747,17 @@ cmd_install() {
   check_root
   detect_os
 
-  local domain="" email="" web_port="$DEFAULT_WEB_PORT" branch="$DEFAULT_BRANCH"
-  local with_nginx="auto" use_ufw="true" domain_from_flag="false"
+  local web_port="$DEFAULT_WEB_PORT" branch="$DEFAULT_BRANCH"
+  local with_nginx="auto" use_ufw="true"
+  local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --domain) domain="${2:-}"; domain_from_flag="true"; shift 2 ;;
-      --email) email="${2:-}"; shift 2 ;;
+      --base-domain) flag_base="${2:-}"; shift 2 ;;
+      --panel) flag_panel="${2:-}"; shift 2 ;;
+      --subscription) flag_sub="${2:-}"; shift 2 ;;
+      --vpn-host) flag_vpn="${2:-}"; shift 2 ;;
+      --email) flag_email="${2:-}"; shift 2 ;;
       --port) web_port="${2:-}"; shift 2 ;;
       --branch|--version) branch="${2:-}"; shift 2 ;;
       --no-nginx) with_nginx="false"; shift ;;
@@ -533,25 +778,35 @@ cmd_install() {
     exit 1
   fi
 
-  if [[ "$domain_from_flag" != "true" ]]; then
-    prompt_domain
-    domain="$PROMPT_DOMAIN"
-    if [[ -z "$email" ]]; then
-      email="$PROMPT_EMAIL"
-    fi
-  fi
+  CFG_BASE_DOMAIN=""
+  CFG_PANEL_HOST=""
+  CFG_SUB_HOST=""
+  CFG_SUB_PATH=""
+  CFG_VPN_HOST=""
+  CFG_EMAIL=""
+  CFG_MODE="ip"
 
-  domain="$(printf '%s' "$domain" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-
-  if [[ -n "$domain" ]]; then
-    validate_domain "$domain"
-    if [[ -z "$email" ]]; then
-      email="admin@${domain}"
+  if [[ -n "$flag_base" ]]; then
+    validate_hostname "$flag_base"
+    CFG_BASE_DOMAIN="$flag_base"
+    CFG_MODE="domain"
+    parse_endpoint "${flag_panel:-panel.${flag_base}}" false
+    CFG_PANEL_HOST="$PARSE_HOST"
+    parse_endpoint "${flag_sub:-sub.${flag_base}}" true
+    CFG_SUB_HOST="$PARSE_HOST"
+    CFG_SUB_PATH="$PARSE_PATH"
+    parse_endpoint "${flag_vpn:-vpn.${flag_base}}" false
+    CFG_VPN_HOST="$PARSE_HOST"
+    CFG_EMAIL="${flag_email:-admin@${flag_base}}"
+  else
+    prompt_install_endpoints
+    if [[ -n "$flag_email" ]]; then
+      CFG_EMAIL="$flag_email"
     fi
   fi
 
   if [[ "$with_nginx" == "auto" ]]; then
-    if [[ -n "$domain" ]]; then
+    if [[ "$CFG_MODE" == "domain" ]]; then
       with_nginx="true"
     else
       with_nginx="false"
@@ -560,8 +815,18 @@ cmd_install() {
 
   install_packages
   ensure_docker
+
+  local ip
+  ip="$(public_ip)"
+  local -a dns_hosts=()
+
+  if [[ "$CFG_MODE" == "domain" && "$with_nginx" == "true" ]]; then
+    mapfile -t dns_hosts < <(unique_hosts "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
+    wait_for_dns "$ip" "${dns_hosts[@]}"
+  fi
+
   fetch_repo "$branch"
-  generate_env "$domain" "$web_port" "$with_nginx"
+  generate_env "$web_port" "$with_nginx"
 
   if [[ "$use_ufw" == "true" ]]; then
     configure_firewall "$with_nginx" "$web_port"
@@ -574,15 +839,15 @@ cmd_install() {
   health_port="$(get_env_var WEB_PORT)"
   wait_for_health "http://127.0.0.1:${health_port}/api/health" || true
 
-  if [[ -n "$domain" && "$with_nginx" == "true" ]]; then
-    install_nginx "$domain" "$email"
+  if [[ "$CFG_MODE" == "domain" && "$with_nginx" == "true" ]]; then
+    install_nginx "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_SUB_PATH" "$CFG_VPN_HOST" "$CFG_EMAIL"
   fi
 
   colorized_echo blue "Creating owner account..."
   compose --profile tools run --rm bootstrap-admin
 
   install_cli "${APP_DIR}/install.sh"
-  print_success "$domain" "$web_port"
+  print_success "$web_port"
 }
 
 cmd_up() {
@@ -660,19 +925,12 @@ cmd_info() {
   check_root
   is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
 
-  local domain port ip user
-  domain="$(get_env_var SUB_PUBLIC_BASE_URL)"
-  port="$(get_env_var WEB_PORT)"
-  ip="$(public_ip)"
-  user="$(get_env_var BOOTSTRAP_ADMIN_USER)"
-
   echo "Install dir:  ${APP_DIR}"
-  echo "Public URL:   ${domain}"
-  echo "Web port:     ${port}"
-  echo "Server IP:    ${ip}"
-  echo "Admin user:   ${user}"
   if [[ -f "$CREDENTIALS_FILE" ]]; then
-    echo "Credentials:  ${CREDENTIALS_FILE}"
+    echo "Panel URL:    $(get_env_var PANEL_URL "$CREDENTIALS_FILE")"
+    echo "Sub base:     $(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")"
+    echo "VPN host:     $(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE")"
+    echo "Admin user:   $(get_env_var BOOTSTRAP_ADMIN_USER "$CREDENTIALS_FILE")"
     echo "Password:     $(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$CREDENTIALS_FILE")"
   fi
   compose ps

@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   SUBSCRIPTION_FORMATS,
+  buildSubscriptionPublicUrl,
   type UserStatus,
   type UserStatusReason,
 } from '@overvpn/shared/constants';
@@ -191,7 +192,7 @@ export function buildSubscriptionInfo(
         ? source.dataLimitBytes - total
         : 0n;
   const effective = effectiveStatus(source, total, now);
-  const subscriptionUrl = `${publicBaseUrl}/api/sub/${token}`;
+  const subscriptionUrl = buildSubscriptionPublicUrl(publicBaseUrl, token);
 
   return {
     identity: source.identity,

@@ -1,3 +1,5 @@
+import { buildSubscriptionPublicUrl } from '@overvpn/shared/constants';
+
 const UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] as const;
 
 /** Format unsigned decimal byte strings (or numbers) for dense admin tables. */
@@ -40,8 +42,7 @@ export function buildSubscriptionUrl(
   token: string,
   origin: string = typeof window !== 'undefined' ? window.location.origin : '',
 ): string {
-  const base = origin.replace(/\/$/, '');
-  return `${base}/api/sub/${token}`;
+  return buildSubscriptionPublicUrl(origin, token);
 }
 
 export function truncateMiddle(value: string, head = 10, tail = 8): string {
