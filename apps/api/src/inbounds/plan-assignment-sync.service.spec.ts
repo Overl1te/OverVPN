@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import type { SecretEncryptionService } from '../auth/auth-crypto';
+import type { AppEnvironment } from '../config/environment';
 import type { Prisma } from '../generated/prisma/client';
 import { PlanAssignmentSyncService } from './plan-assignment-sync.service';
 
@@ -11,7 +12,7 @@ describe('PlanAssignmentSyncService', () => {
     get: jest.fn((key: string) =>
       key === 'SING_BOX_CONFIG_PATH' ? '/tmp/sing-box.json' : '/tmp/xray.json',
     ),
-  };
+  } as unknown as ConfigService<AppEnvironment, true>;
 
   it('creates missing assignments and disables extras for a user', async () => {
     const keepId = '11111111-1111-4111-8111-111111111111';
@@ -56,7 +57,7 @@ describe('PlanAssignmentSyncService', () => {
 
     const service = new PlanAssignmentSyncService(
       encryption as unknown as SecretEncryptionService,
-      config as unknown as ConfigService,
+      config,
     );
 
     await service.syncUserToInboundIds(
@@ -91,7 +92,7 @@ describe('PlanAssignmentSyncService', () => {
     };
     const service = new PlanAssignmentSyncService(
       encryption as unknown as SecretEncryptionService,
-      config as unknown as ConfigService,
+      config,
     );
     await expect(
       service.planInboundIds(tx as unknown as Prisma.TransactionClient, 'plan'),
