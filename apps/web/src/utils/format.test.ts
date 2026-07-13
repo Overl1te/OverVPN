@@ -61,10 +61,7 @@ describe('buildSubscriptionClientLinks', () => {
     );
     assert.equal(links[0]?.href, `happ://add/${url}`);
     assert.equal(links[1]?.href, `hiddify://import/${url}`);
-    assert.equal(
-      links[2]?.href,
-      `clash://install-config?url=${encodeURIComponent(url)}`,
-    );
+    assert.equal(links[2]?.href, `clash://install-config?url=${encodeURIComponent(url)}`);
   });
 });
 

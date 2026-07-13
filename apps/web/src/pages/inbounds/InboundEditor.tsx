@@ -121,10 +121,7 @@ function sanitizeInboundForm(
         tlsKeyPath: defaultsContext.tlsKeyPath,
       },
       listenOverrides(settings),
-    ) as Extract<
-      ReturnType<typeof buildDefaultInboundSettings>,
-      { tls: unknown }
-    >;
+    ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>;
     const presetTls = preset.tls;
     const formTls =
       'tls' in settings && settings.tls && typeof settings.tls === 'object'

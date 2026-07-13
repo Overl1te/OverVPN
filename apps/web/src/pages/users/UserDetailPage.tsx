@@ -41,11 +41,7 @@ import { QrModal } from '@/components/QrModal';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
-import {
-  buildSubscriptionClientLinks,
-  buildSubscriptionUrl,
-  formatBytes,
-} from '@/utils/format';
+import { buildSubscriptionClientLinks, buildSubscriptionUrl, formatBytes } from '@/utils/format';
 
 function userHasAdvancedValues(user: UserResult): boolean {
   return (
@@ -223,12 +219,8 @@ export function UserDetailPage() {
 
   const user = userQuery.data;
   const subBaseUrl = settingsQuery.data?.subPublicBaseUrl;
-  const subUrl =
-    user && subBaseUrl ? buildSubscriptionUrl(user.subToken, subBaseUrl) : '';
-  const clientLinks = useMemo(
-    () => (subUrl ? buildSubscriptionClientLinks(subUrl) : []),
-    [subUrl],
-  );
+  const subUrl = user && subBaseUrl ? buildSubscriptionUrl(user.subToken, subBaseUrl) : '';
+  const clientLinks = useMemo(() => (subUrl ? buildSubscriptionClientLinks(subUrl) : []), [subUrl]);
   const formatUrls = useMemo(
     () =>
       subUrl
@@ -409,7 +401,10 @@ export function UserDetailPage() {
           {!isNew && user ? (
             <Card size="small" title={t('users.subscription')} style={{ marginTop: 12 }}>
               {subUrl ? (
-                <Typography.Paragraph copyable={{ text: subUrl }} style={{ wordBreak: 'break-all' }}>
+                <Typography.Paragraph
+                  copyable={{ text: subUrl }}
+                  style={{ wordBreak: 'break-all' }}
+                >
                   {subUrl}
                 </Typography.Paragraph>
               ) : (
@@ -444,7 +439,9 @@ export function UserDetailPage() {
 
               {formatUrls ? (
                 <div style={{ marginTop: 12 }}>
-                  <Typography.Text type="secondary">{t('users.subscriptionFormats')}</Typography.Text>
+                  <Typography.Text type="secondary">
+                    {t('users.subscriptionFormats')}
+                  </Typography.Text>
                   <Space wrap style={{ marginTop: 6 }}>
                     <CopyButton value={formatUrls.links} label={t('users.formatLinks')} />
                     <CopyButton value={formatUrls.clash} label={t('users.formatClash')} />
