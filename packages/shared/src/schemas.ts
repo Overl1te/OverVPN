@@ -8,6 +8,7 @@ import {
   BULK_USER_ACTIONS,
   CORE_APPLY_STATUSES,
   CORE_APPLY_TRIGGERS,
+  CORE_ENGINES,
   DEFAULT_PAGE_SIZE,
   INBOUND_PROTOCOLS,
   MAX_PAGE_SIZE,
@@ -448,7 +449,7 @@ export const workerHealthSchema = z
   })
   .strict();
 
-export const coreHealthSchema = z
+export const coreHealthEngineSchema = z
   .object({
     healthy: z.boolean(),
     version: z.string().nullable(),
@@ -456,6 +457,14 @@ export const coreHealthSchema = z
     checkedAt: isoDateTimeSchema,
     error: z.string().nullable(),
     errorRu: z.string().nullable(),
+  })
+  .strict();
+
+export const coreHealthSchema = coreHealthEngineSchema
+  .extend({
+    engines: z
+      .partialRecord(z.enum(CORE_ENGINES), coreHealthEngineSchema)
+      .optional(),
   })
   .strict();
 
@@ -954,6 +963,74 @@ export const vlessRealityInboundSettingsSchema = z
   });
 export type VlessRealityInboundSettings = z.infer<typeof vlessRealityInboundSettingsSchema>;
 
+export const vlessXhttpModeSchema = z.enum([
+  'auto',
+  'packet-up',
+  'stream-up',
+  'stream-one',
+]);
+export type VlessXhttpMode = z.infer<typeof vlessXhttpModeSchema>;
+
+const vlessXhttpPathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1_024)
+  .startsWith('/')
+  .refine(
+    (value) => !/[\u0000-\u001f\u007f\s?#]/.test(value),
+    'xHTTP path must be an absolute URL path without whitespace, query, or fragment',
+  );
+
+export const vlessXhttpTlsFilesInputSchema = z
+  .object({
+    mode: z.literal('FILES'),
+    sni: singBoxHostSchema,
+    certificatePath: singBoxPathSchema.optional(),
+    keyPath: singBoxPathSchema.optional(),
+    certificatePem: z.string().min(1).max(1_000_000).optional(),
+    privateKeyPem: z.string().min(1).max(1_000_000).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const hasPaths = value.certificatePath !== undefined || value.keyPath !== undefined;
+    const hasInline = value.certificatePem !== undefined || value.privateKeyPem !== undefined;
+    if (hasPaths && (!value.certificatePath || !value.keyPath)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['certificatePath'],
+        message: 'certificatePath and keyPath must be supplied together',
+      });
+    }
+    if (hasInline && (!value.certificatePem || !value.privateKeyPem)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['certificatePem'],
+        message: 'certificatePem and privateKeyPem must be supplied together',
+      });
+    }
+    if (hasPaths === hasInline) {
+      context.addIssue({
+        code: 'custom',
+        path: ['mode'],
+        message: 'Xray FILES TLS requires exactly one certificate source: paths or inline PEM',
+      });
+    }
+  });
+
+export const vlessXhttpTlsInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    path: vlessXhttpPathSchema.default('/'),
+    host: singBoxHostSchema.nullable().default(null),
+    mode: vlessXhttpModeSchema.default('auto'),
+    tls: vlessXhttpTlsFilesInputSchema,
+  })
+  .strict();
+export type VlessXhttpTlsInboundSettings = z.infer<
+  typeof vlessXhttpTlsInboundSettingsSchema
+>;
+
 export const trojanFallbackInputSchema = z
   .object({
     server: singBoxHostSchema,
@@ -1085,6 +1162,13 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
   z
     .object({
       tag: singBoxTagSchema,
+      protocol: z.literal('VLESS_XHTTP_TLS'),
+      settings: vlessXhttpTlsInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
       protocol: z.literal('TROJAN'),
       settings: trojanInboundSettingsSchema,
     })
@@ -1107,6 +1191,7 @@ export const updateInboundSchema = z
       .union([
         hysteria2InboundSettingsSchema,
         vlessRealityInboundSettingsSchema,
+        vlessXhttpTlsInboundSettingsSchema,
         trojanInboundSettingsSchema,
         shadowsocksInboundSettingsSchema,
       ])
@@ -1236,6 +1321,27 @@ export const vlessRealityInboundPublicConfigSchema = z
   .strict();
 export type VlessRealityInboundPublicConfig = z.infer<typeof vlessRealityInboundPublicConfigSchema>;
 
+export const vlessXhttpTlsPublicConfigSchema = z
+  .object({
+    path: vlessXhttpPathSchema,
+    host: singBoxHostSchema.nullable(),
+    mode: vlessXhttpModeSchema,
+    tls: z
+      .object({
+        mode: z.literal('FILES'),
+        sni: singBoxHostSchema,
+        certificatePath: z.string().nullable(),
+        keyPath: z.string().nullable(),
+        certificatePemPresent: z.boolean(),
+        privateKeyPemPresent: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+export type VlessXhttpTlsPublicConfig = z.infer<
+  typeof vlessXhttpTlsPublicConfigSchema
+>;
+
 export const trojanInboundPublicConfigSchema = z
   .object({
     tls: hysteria2TlsPublicSchema,
@@ -1290,6 +1396,13 @@ export const inboundResultSchema = z.discriminatedUnion('protocol', [
       ...inboundResultCommonFields,
       protocol: z.literal('VLESS_REALITY'),
       settings: vlessRealityInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('VLESS_XHTTP_TLS'),
+      settings: vlessXhttpTlsPublicConfigSchema.extend(inboundListenPublicFields),
     })
     .strict(),
   z
@@ -1407,6 +1520,17 @@ export const vlessRealityLinkSchema = z
   .strict();
 export type VlessRealityLinkResult = z.infer<typeof vlessRealityLinkSchema>;
 
+export const vlessXhttpTlsLinkSchema = z
+  .object({
+    assignmentId: idSchema,
+    credentialVersion: z.number().int().positive(),
+    protocol: z.literal('VLESS_XHTTP_TLS'),
+    uri: z.string().startsWith('vless://'),
+    generatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type VlessXhttpTlsLinkResult = z.infer<typeof vlessXhttpTlsLinkSchema>;
+
 export const trojanLinkSchema = z
   .object({
     assignmentId: idSchema,
@@ -1432,6 +1556,7 @@ export type ShadowsocksLinkResult = z.infer<typeof shadowsocksLinkSchema>;
 export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   hysteria2LinkSchema,
   vlessRealityLinkSchema,
+  vlessXhttpTlsLinkSchema,
   trojanLinkSchema,
   shadowsocksLinkSchema,
 ]);
@@ -1527,6 +1652,28 @@ export type VlessRealitySubscriptionEndpoint = z.infer<
   typeof vlessRealitySubscriptionEndpointSchema
 >;
 
+export const vlessXhttpTlsSubscriptionEndpointSchema = z
+  .object({
+    protocol: z.literal('VLESS_XHTTP_TLS'),
+    tag: z.string().min(1).max(128),
+    displayName: z.string().min(1).max(256),
+    server: z.string().min(1).max(255),
+    port: z.number().int().min(1).max(65_535),
+    uuid: idSchema,
+    path: z.string().min(1).max(1_024),
+    host: z.string().min(1).max(255).nullable(),
+    mode: vlessXhttpModeSchema,
+    tls: z
+      .object({
+        serverName: z.string().min(1).max(255),
+      })
+      .strict(),
+  })
+  .strict();
+export type VlessXhttpTlsSubscriptionEndpoint = z.infer<
+  typeof vlessXhttpTlsSubscriptionEndpointSchema
+>;
+
 export const trojanSubscriptionEndpointSchema = z
   .object({
     protocol: z.literal('TROJAN'),
@@ -1562,6 +1709,7 @@ export type ShadowsocksSubscriptionEndpoint = z.infer<typeof shadowsocksSubscrip
 export const subscriptionEndpointSchema = z.discriminatedUnion('protocol', [
   hysteria2SubscriptionEndpointSchema,
   vlessRealitySubscriptionEndpointSchema,
+  vlessXhttpTlsSubscriptionEndpointSchema,
   trojanSubscriptionEndpointSchema,
   shadowsocksSubscriptionEndpointSchema,
 ]);
@@ -1573,9 +1721,22 @@ export const subscriptionProfileDescriptorSchema = z
     identity: z.string().min(1).max(128),
     username: z.string().min(1).max(64),
     endpoints: z.array(subscriptionEndpointSchema),
+    /** Non-fatal profile notes (e.g. formats that omit unsupported endpoints). */
+    warnings: z.array(z.string().min(1).max(512)).max(32).optional(),
   })
   .strict();
 export type SubscriptionProfileDescriptor = z.infer<typeof subscriptionProfileDescriptorSchema>;
+
+export const coreApplyEngineResultSchema = z
+  .object({
+    status: z.enum(['SUCCEEDED', 'FAILED', 'ROLLED_BACK']),
+    hash: z.string().length(64).nullable(),
+    previousHash: z.string().length(64).nullable(),
+    error: z.string().nullable(),
+    rollbackOutcome: z.string().nullable(),
+  })
+  .strict();
+export type CoreApplyEngineResult = z.infer<typeof coreApplyEngineResultSchema>;
 
 export const coreApplySummarySchema = z
   .object({
@@ -1587,6 +1748,9 @@ export const coreApplySummarySchema = z
     rollbackOutcome: z.string().nullable(),
     startedAt: isoDateTimeSchema.nullable(),
     completedAt: isoDateTimeSchema.nullable(),
+    engineResults: z
+      .partialRecord(z.enum(CORE_ENGINES), coreApplyEngineResultSchema)
+      .optional(),
   })
   .strict();
 export type CoreApplySummary = z.infer<typeof coreApplySummarySchema>;
@@ -1605,7 +1769,7 @@ export const assignmentMutationResultSchema = z
   })
   .strict();
 
-export const configPreviewSchema = z
+export const configPreviewEngineSchema = z
   .object({
     valid: z.boolean(),
     hash: z.string().length(64),
@@ -1613,6 +1777,16 @@ export const configPreviewSchema = z
     config: z.unknown(),
     diff: z.string(),
     validationError: z.string().nullable(),
+  })
+  .strict();
+export type ConfigPreviewEngine = z.infer<typeof configPreviewEngineSchema>;
+
+/** Top-level fields mirror the primary (SING_BOX / first) engine for older clients. */
+export const configPreviewSchema = configPreviewEngineSchema
+  .extend({
+    engines: z
+      .partialRecord(z.enum(CORE_ENGINES), configPreviewEngineSchema)
+      .optional(),
   })
   .strict();
 export type ConfigPreviewResult = z.infer<typeof configPreviewSchema>;
@@ -1639,6 +1813,10 @@ export const coreApplyRecordSchema = z
     diffSummary: z.unknown().nullable(),
     error: z.string().nullable(),
     rollbackOutcome: z.string().nullable(),
+    engineResults: z
+      .partialRecord(z.enum(CORE_ENGINES), coreApplyEngineResultSchema)
+      .nullable()
+      .optional(),
     startedAt: isoDateTimeSchema.nullable(),
     appliedAt: isoDateTimeSchema.nullable(),
     rollbackStartedAt: isoDateTimeSchema.nullable(),

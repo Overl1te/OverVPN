@@ -6,6 +6,7 @@ import {
   SubscriptionProfileBuilder,
   TrojanSubscriptionAdapter,
   VlessRealitySubscriptionAdapter,
+  VlessXhttpTlsSubscriptionAdapter,
 } from './subscription-profile';
 import {
   SubscriptionRateLimitGuard,
@@ -21,6 +22,7 @@ import { SubscriptionsService } from './subscriptions.service';
   providers: [
     Hysteria2SubscriptionAdapter,
     VlessRealitySubscriptionAdapter,
+    VlessXhttpTlsSubscriptionAdapter,
     TrojanSubscriptionAdapter,
     ShadowsocksSubscriptionAdapter,
     SubscriptionProfileBuilder,

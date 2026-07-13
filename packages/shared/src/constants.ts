@@ -34,8 +34,25 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 export const PLAN_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
-export const INBOUND_PROTOCOLS = ['HYSTERIA2', 'VLESS_REALITY', 'TROJAN', 'SHADOWSOCKS'] as const;
+export const CORE_ENGINES = ['SING_BOX', 'XRAY'] as const;
+export type CoreEngine = (typeof CORE_ENGINES)[number];
+
+export const INBOUND_PROTOCOLS = [
+  'HYSTERIA2',
+  'VLESS_REALITY',
+  'TROJAN',
+  'SHADOWSOCKS',
+  'VLESS_XHTTP_TLS',
+] as const;
 export type InboundProtocol = (typeof INBOUND_PROTOCOLS)[number];
+
+export const PROTOCOL_ENGINE_MAP = {
+  HYSTERIA2: 'SING_BOX',
+  VLESS_REALITY: 'SING_BOX',
+  TROJAN: 'SING_BOX',
+  SHADOWSOCKS: 'SING_BOX',
+  VLESS_XHTTP_TLS: 'XRAY',
+} as const satisfies Record<InboundProtocol, CoreEngine>;
 
 export const ASSIGNMENT_STATUSES = ['ACTIVE', 'DISABLED'] as const;
 export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
@@ -44,6 +61,7 @@ export const CORE_APPLY_STATUSES = [
   'PENDING',
   'APPLYING',
   'SUCCEEDED',
+  'PARTIAL_SUCCEEDED',
   'FAILED',
   'ROLLED_BACK',
 ] as const;

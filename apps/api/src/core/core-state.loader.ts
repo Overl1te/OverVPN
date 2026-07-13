@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import type { CoreEngine } from '@overvpn/shared/constants';
 import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
+  vlessXhttpTlsPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import { z } from 'zod';
 import { SecretEncryptionService } from '../auth/auth-crypto';
@@ -16,7 +18,9 @@ import type {
   ShadowsocksInboundSecrets,
   TrojanInboundSecrets,
   VlessRealityInboundSecrets,
+  VlessXhttpTlsInboundSecrets,
 } from './core-provider';
+import { coreStateId } from './core-ids';
 
 const hysteria2SecretsSchema = z
   .object({
@@ -38,6 +42,14 @@ const vlessSecretsSchema = z
     version: z.literal(1),
     privateKey: z.string().min(1),
     publicKey: z.string().min(1),
+  })
+  .strict();
+
+const vlessXhttpTlsSecretsSchema = z
+  .object({
+    version: z.literal(1),
+    certificatePem: z.string().optional(),
+    privateKeyPem: z.string().optional(),
   })
   .strict();
 
@@ -83,10 +95,11 @@ export class CoreStateLoader {
     private readonly encryption: SecretEncryptionService,
   ) {}
 
-  async load(): Promise<CoreDesiredState> {
+  async load(engine: CoreEngine = 'SING_BOX'): Promise<CoreDesiredState> {
     const [inbounds, users, coreState] = await this.prisma.$transaction(
       async (tx) => {
         const inbounds = await tx.inbound.findMany({
+          where: { engine },
           orderBy: [{ tag: 'asc' }, { id: 'asc' }],
           include: {
             userAssignments: {
@@ -116,7 +129,7 @@ export class CoreStateLoader {
           orderBy: { id: 'asc' },
         });
         const coreState = await tx.coreState.findUnique({
-          where: { id: 'sing-box' },
+          where: { id: coreStateId(engine) },
         });
         return [inbounds, users, coreState] as const;
       },
@@ -178,6 +191,18 @@ export class CoreStateLoader {
         });
         continue;
       }
+      if (inbound.protocol === 'VLESS_XHTTP_TLS') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'VLESS_XHTTP_TLS',
+          config: vlessXhttpTlsPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptVlessXhttpTlsSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+        });
+        continue;
+      }
       if (inbound.protocol === 'TROJAN') {
         desiredInbounds.push({
           ...base,
@@ -210,6 +235,7 @@ export class CoreStateLoader {
     }
 
     return {
+      engine,
       loadedAt: new Date(),
       desiredRevision: coreState?.desiredRevision ?? 0,
       inbounds: desiredInbounds,
@@ -266,6 +292,22 @@ export class CoreStateLoader {
     }
   }
 
+  private decryptVlessXhttpTlsSecrets(
+    inboundId: string,
+    encrypted: string | null,
+  ): VlessXhttpTlsInboundSecrets {
+    if (!encrypted) {
+      return { version: 1 };
+    }
+    try {
+      return vlessXhttpTlsSecretsSchema.parse(
+        JSON.parse(this.encryption.decrypt(encrypted)) as unknown,
+      );
+    } catch {
+      throw new Error(`Inbound ${inboundId} has unreadable encrypted secrets`);
+    }
+  }
+
   private decryptShadowsocksSecrets(
     inboundId: string,
     encrypted: string | null,
@@ -294,7 +336,10 @@ export class CoreStateLoader {
     }
     try {
       const parsed = JSON.parse(this.encryption.decrypt(encrypted)) as unknown;
-      if (protocol === 'VLESS_REALITY') {
+      if (
+        protocol === 'VLESS_REALITY' ||
+        protocol === 'VLESS_XHTTP_TLS'
+      ) {
         return vlessCredentialSchema.parse(parsed);
       }
       return passwordCredentialSchema.parse(parsed);

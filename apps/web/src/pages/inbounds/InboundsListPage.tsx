@@ -2,6 +2,8 @@ import { Button, Input, Popconfirm, Space, Table, Tag, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PROTOCOL_ENGINE_MAP } from '@overvpn/shared';
+import type { InboundProtocol } from '@overvpn/shared/constants';
 import type { InboundResult } from '@overvpn/shared/schemas';
 import {
   addAssignment,
@@ -217,8 +219,20 @@ export function InboundsListPage() {
           {
             title: t('inbounds.protocol'),
             dataIndex: 'protocol',
-            render: (protocol: string) =>
-              t(`enums.protocol.${protocol}`, { defaultValue: protocol }),
+            render: (protocol: InboundProtocol) => (
+              <Space size={4} wrap>
+                <span>
+                  {t(`enums.protocol.${protocol}`, {
+                    defaultValue: t(`enums.inboundProtocol.${protocol}`, {
+                      defaultValue: protocol,
+                    }),
+                  })}
+                </span>
+                <Tag style={{ marginInlineEnd: 0 }}>
+                  {t(`enums.coreEngine.${PROTOCOL_ENGINE_MAP[protocol]}`)}
+                </Tag>
+              </Space>
+            ),
           },
           {
             title: t('inbounds.listen'),

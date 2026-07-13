@@ -48,6 +48,7 @@ describe('InboundsService VLESS Reality create', () => {
     const inboundCreate = jest.fn().mockResolvedValue({
       id: '443f67c0-f935-44d1-a9c1-b00dbd5d3f09',
       tag: 'vless-main',
+      engine: 'SING_BOX',
       protocol: 'VLESS_REALITY',
       listenHost: '0.0.0.0',
       listenPort: 443,
@@ -73,11 +74,13 @@ describe('InboundsService VLESS Reality create', () => {
       updatedAt: new Date('2026-07-12T00:00:00.000Z'),
       _count: { userAssignments: 0 },
     });
+    const inboundFindFirst = jest.fn().mockResolvedValue(null);
     const prisma = {
+      inbound: { findFirst: inboundFindFirst },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<unknown>) =>
           callback({
-            inbound: { create: inboundCreate },
+            inbound: { create: inboundCreate, findFirst: inboundFindFirst },
             coreState: { upsert: jest.fn().mockResolvedValue(undefined) },
           }),
       ),
@@ -92,6 +95,7 @@ describe('InboundsService VLESS Reality create', () => {
       {
         get: (key: string) => {
           if (key === 'SING_BOX_CONFIG_PATH') return '/tmp/config.json';
+          if (key === 'XRAY_CONFIG_PATH') return '/tmp/xray/config.json';
           if (key === 'SING_BOX_BINARY_PATH') return '/usr/bin/sing-box';
           if (key === 'SING_BOX_PROCESS_TIMEOUT_MS') return 500;
           return undefined;

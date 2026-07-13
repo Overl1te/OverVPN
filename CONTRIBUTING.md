@@ -29,7 +29,12 @@
 
 ## 1. Что это за система
 
-OverVPN — **control plane** над одним VPN-ядром на одной машине (сейчас это sing-box).
+OverVPN — **control plane** над VPN data plane на одной машине. Сейчас поддержаны **два независимых ядра** на одной ноде:
+
+- **sing-box** — HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS
+- **Xray** — VLESS_XHTTP_TLS (и зона для будущих Xray-only протоколов)
+
+Одна админ-панель, одна модель пользователей/планов/assignments, один URL подписки `/api/sub/:token`, агрегированный учёт трафика и онлайна. Inbound всегда принадлежит ровно одному engine (`PROTOCOL_ENGINE_MAP` в `@overvpn/shared`).
 
 ```mermaid
 flowchart LR
@@ -37,18 +42,19 @@ flowchart LR
   web -->|"/api/*"| api["api NestJS"]
   api --> postgres[(postgres)]
   api --> redis[(redis locks)]
-  api --> core["VPN core"]
+  api --> core["sing-box core"]
+  api --> coreXray["xray core"]
 ```
 
 Панель **не** маршрутизирует клиентский VPN-трафик сама. Она:
 
 - хранит пользователей, inbound’ы, планы, assignments;
-- рендерит desired-конфиг ядра и применяет его атомарно;
-- отдаёт subscription-профили клиентам;
-- собирает трафик/онлайн через Clash API + V2Ray Stats API;
+- рендерит desired-конфиг **каждого** ядра и применяет его изолированно;
+- отдаёт subscription-профили клиентам (endpoints со всех engines);
+- собирает трафик/онлайн с обоих ядер и суммирует в usage;
 - enforce’ит лимиты и пишет audit.
 
-**Не делаем:** мульти-нода, федерация, шардинг ядра, «панель как прокси».
+**Не делаем:** мульти-нода, федерация, шардинг, «панель как прокси», замена sing-box на Xray.
 
 ---
 
@@ -72,7 +78,8 @@ OverVPN/
 │   ├── docker-compose.yml   # прод-стек
 │   ├── proxy/               # пример Nginx
 │   ├── landing/             # HTML-заглушки для доменов
-│   └── sing-box/            # entrypoint, bootstrap config, certs/
+│   ├── sing-box/            # entrypoint, bootstrap config, certs/
+│   └── xray/                # entrypoint, bootstrap config, certs/
 ├── scripts/
 │   └── install-github-runner.sh
 ├── install.sh               # прод-установщик + CLI `overvpn`
@@ -224,49 +231,54 @@ Env валидируется при старте API в `apps/api/src/config/env
 
 ---
 
-## 6. Ядро: apply / reload / rollback
+## 6. Ядра: apply / reload / rollback (dual-core)
 
-Ключевой файл: `apps/api/src/core/sing-box.provider.ts` (`SingBoxProvider extends CoreProvider`).
+Ключевые файлы:
+
+| Engine | Provider | Entrypoint | CoreState id |
+| ------ | -------- | ---------- | ------------ |
+| SING_BOX | `sing-box.provider.ts` | `deploy/sing-box/entrypoint.sh` | `sing-box` |
+| XRAY | `xray.provider.ts` | `deploy/xray/entrypoint.sh` | `xray` |
+
+Абстракция: `EngineProvider` + `CoreEngineRegistry` + `CompositeCoreProvider` (facade для health/traffic/online). Apply оркестрирует `CoreApplyService` **по каждому engine отдельно**.
 
 ### Desired state
 
-Панель собирает desired inbounds + users/credentials из БД → рендерит JSON конфиг → canonical JSON + hash (для diff/audit без утечки секретов: `redactJson` / `redactText` в `core-config-utils`).
+`CoreStateLoader.load(engine)` фильтрует inbound’ы по `Inbound.engine`. Панель рендерит JSON → canonical + hash (redact секретов).
 
 ### Apply pipeline (концептуально)
 
 ```text
 acquire Redis lock
-  → validate config (core check)
-  → write config.json
-  → signal reload (request/ack handshake через файлы в /var/lib/overvpn/reload)
-  → verify health (Clash API)
-  → persist CoreApplyRecord + update CoreState / last-known-good
-on failure
-  → restore previous config
-  → reload again
-  → mark apply FAILED
+  for each engine in registry:
+    → load desired state for engine
+    → validate (sing-box check / xray run -test)
+    → write config + reload handshake + health
+    → on success: mark inbound needsApply=false for this engine; upsert CoreState
+  aggregate → SUCCEEDED | PARTIAL_SUCCEEDED | FAILED
+  store engineResults on CoreApplyRecord
 ```
 
-В Compose пути задаются так (см. `deploy/docker-compose.yml`):
+**Partial success:** если одно ядро применилось, а другое нет — конфиг успешного ядра **остаётся**. Статус `PARTIAL_SUCCEEDED`, детали в `engineResults`.
 
-| Env                                          | Назначение                  |
-| -------------------------------------------- | --------------------------- |
-| `SING_BOX_BINARY_PATH`                       | бинарь                      |
-| `SING_BOX_CONFIG_PATH`                       | живой конфиг                |
-| `SING_BOX_LAST_KNOWN_GOOD_PATH`              | откат                       |
-| `SING_BOX_RELOAD_REQUEST_PATH` / `_ACK_PATH` | handshake с entrypoint ядра |
-| `SING_BOX_CLASH_API_URL`                     | health / online             |
-| `SING_BOX_V2RAY_API_ADDRESS`                 | traffic counters            |
+В Compose пути (см. `deploy/docker-compose.yml`):
 
-Entrypoint ядра: `deploy/sing-box/entrypoint.sh` — слушает reload-request и шлёт SIGHUP/рестарт по контракту панели.
+| Env | Назначение |
+| --- | ---------- |
+| `SING_BOX_*` | бинарь, config, LKG, Clash, V2Ray stats, reload |
+| `XRAY_*` | бинарь, config, LKG, Stats gRPC (`XRAY_STATS_ADDRESS`), reload |
+
+Сервисы: `core` (sing-box) + `core-xray` (Xray). Внутренние stats-порты: sing-box `8080`/`9090`, Xray `10085`.
 
 ### Важные инварианты
 
-1. После reload **счётчики V2Ray API сбрасываются** → accounting хранит generation/epoch (`TrafficCursor` / checkpoints), иначе двойной учёт или дыры.
-2. Трафик в stats API — **per-user aggregate**, не per-(user, inbound).
-3. Бинарь должен быть собран с нужными tags (`with_v2ray_api`, Clash, QUIC, ACME).
+1. После reload **счётчики stats сбрасываются независимо** на каждом engine → `TrafficCursor` keyed by `(statsKey, engine)` (`@@unique([userId, engine])`), иначе двойной учёт при независимом reload.
+2. Worker суммирует deltas с обоих engines в один `User.used*Bytes`.
+3. Listen `(listenHost, listenPort)` уникален **глобально** между engines.
+4. Protocol → engine map — source of truth в `PROTOCOL_ENGINE_MAP`; нельзя создать HYSTERIA2 на XRAY.
+5. Subscription formats: `links` включает Xray endpoints; `sing-box` client JSON **пропускает** xHTTP outbounds; Clash Meta — best-effort / skip с warning.
 
-Если меняешь формат конфига или handshake — синхронно правь **provider + entrypoint + тесты** (`sing-box.provider.spec.ts` и соседние).
+Если меняешь формат конфига или handshake — синхронно правь **provider + entrypoint + тесты** (`sing-box.provider.spec.ts`, `xray.provider.spec.ts`).
 
 ---
 
@@ -596,9 +608,9 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 | Задача                               | Куда идти                                                                      |
 | ------------------------------------ | ------------------------------------------------------------------------------ |
-| Новый протокол inbound               | `inbounds/` + `core/sing-box.provider.ts` + shared schemas + web Inbounds page |
+| Новый протокол inbound               | `inbounds/` + engine provider + `PROTOCOL_ENGINE_MAP` + shared schemas + web Inbounds page |
 | Баг в подписке Clash                 | `subscriptions/`                                                               |
-| Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor`, provider generation                      |
+| Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor` per engine, provider generation                      |
 | Пользователь не режется по квоте     | `limit-enforcer` / `limit-enforcement.ts`                                      |
 | Не логинится / cookie                | `auth/`, `AUTH_COOKIE_*`, `CORS_ORIGINS`                                       |
 | Apply откатывается                   | логи api + `CoreApplyRecord`, entrypoint reload handshake                      |

@@ -191,6 +191,7 @@
       "PENDING": "Ожидание",
       "APPLYING": "Применение",
       "SUCCEEDED": "Успешно",
+      "PARTIAL_SUCCEEDED": "Частичный успех",
       "FAILED": "Ошибка",
       "ROLLED_BACK": "Откат"
     },
@@ -226,7 +227,19 @@
       "HYSTERIA2": "Hysteria2",
       "VLESS_REALITY": "VLESS Reality",
       "TROJAN": "Trojan",
-      "SHADOWSOCKS": "Shadowsocks"
+      "SHADOWSOCKS": "Shadowsocks",
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+    },
+    "inboundProtocol": {
+      "HYSTERIA2": "Hysteria2",
+      "VLESS_REALITY": "VLESS Reality",
+      "TROJAN": "Trojan",
+      "SHADOWSOCKS": "Shadowsocks",
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+    },
+    "coreEngine": {
+      "SING_BOX": "sing-box",
+      "XRAY": "Xray"
     },
     "workerName": {
       "traffic-collector": "Сборщик трафика",
@@ -337,7 +350,16 @@
     "flowNone": "Без flow",
     "shadowsocksMethod": "Метод",
     "shadowsocksPassword": "Пароль",
-    "credential": "Учётные данные"
+    "credential": "Учётные данные",
+    "engine": "Ядро",
+    "engineGroupSingBox": "sing-box",
+    "engineGroupXray": "Xray",
+    "xhttpPath": "Путь xHTTP",
+    "xhttpHost": "Host xHTTP",
+    "xhttpHostOptional": "Необязательный заголовок Host",
+    "xhttpMode": "Режим xHTTP",
+    "certificatePem": "Сертификат PEM",
+    "privateKeyPem": "Приватный ключ PEM"
   },
   "plans": {
     "title": "Планы",
@@ -415,6 +437,8 @@
     "workersEnabled": "Воркеры включены",
     "backupEncrypt": "Шифрование бэкапов",
     "core": "VPN-ядро",
+    "coreEngine": "Состояние {{engine}}",
+    "coreEngineVersion": "{{engine}}: версия / задержка",
     "workers": "Фоновые воркеры",
     "statusOk": "OK",
     "statusDegraded": "Деградация"

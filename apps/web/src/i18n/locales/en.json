@@ -191,6 +191,7 @@
       "PENDING": "Pending",
       "APPLYING": "Applying",
       "SUCCEEDED": "Succeeded",
+      "PARTIAL_SUCCEEDED": "Partial success",
       "FAILED": "Failed",
       "ROLLED_BACK": "Rolled back"
     },
@@ -226,7 +227,19 @@
       "HYSTERIA2": "Hysteria2",
       "VLESS_REALITY": "VLESS Reality",
       "TROJAN": "Trojan",
-      "SHADOWSOCKS": "Shadowsocks"
+      "SHADOWSOCKS": "Shadowsocks",
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+    },
+    "inboundProtocol": {
+      "HYSTERIA2": "Hysteria2",
+      "VLESS_REALITY": "VLESS Reality",
+      "TROJAN": "Trojan",
+      "SHADOWSOCKS": "Shadowsocks",
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+    },
+    "coreEngine": {
+      "SING_BOX": "sing-box",
+      "XRAY": "Xray"
     },
     "workerName": {
       "traffic-collector": "Traffic collector",
@@ -337,7 +350,16 @@
     "flowNone": "No flow",
     "shadowsocksMethod": "Method",
     "shadowsocksPassword": "Password",
-    "credential": "Credential"
+    "credential": "Credential",
+    "engine": "Core engine",
+    "engineGroupSingBox": "sing-box",
+    "engineGroupXray": "Xray",
+    "xhttpPath": "xHTTP path",
+    "xhttpHost": "xHTTP host",
+    "xhttpHostOptional": "Optional Host header",
+    "xhttpMode": "xHTTP mode",
+    "certificatePem": "Certificate PEM",
+    "privateKeyPem": "Private key PEM"
   },
   "plans": {
     "title": "Plans",
@@ -415,6 +437,8 @@
     "workersEnabled": "Workers enabled",
     "backupEncrypt": "Backup encryption",
     "core": "VPN core",
+    "coreEngine": "{{engine}} health",
+    "coreEngineVersion": "{{engine}} version / latency",
     "workers": "Background workers",
     "statusOk": "OK",
     "statusDegraded": "Degraded"

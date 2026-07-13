@@ -45,6 +45,16 @@ x-api-environment: &api-environment
   SING_BOX_HEALTH_TIMEOUT_MS: ${SING_BOX_HEALTH_TIMEOUT_MS:-5000}
   SING_BOX_ACME_HTTP_PORT: ${SING_BOX_ACME_HTTP_PORT:-80}
   SING_BOX_ACME_TLS_PORT: ${SING_BOX_ACME_TLS_PORT:-443}
+  XRAY_BINARY_PATH: /usr/local/bin/xray
+  XRAY_CONFIG_PATH: /var/lib/xray/config.json
+  XRAY_LAST_KNOWN_GOOD_PATH: /var/lib/xray/config.last-known-good.json
+  XRAY_RELOAD_REQUEST_PATH: /var/lib/overvpn/xray-reload/request
+  XRAY_RELOAD_ACK_PATH: /var/lib/overvpn/xray-reload/ack
+  XRAY_API_LISTEN: 0.0.0.0:10085
+  XRAY_STATS_ADDRESS: core-xray:10085
+  XRAY_PROCESS_TIMEOUT_MS: ${XRAY_PROCESS_TIMEOUT_MS:-15000}
+  XRAY_RELOAD_TIMEOUT_MS: ${XRAY_RELOAD_TIMEOUT_MS:-20000}
+  XRAY_HEALTH_TIMEOUT_MS: ${XRAY_HEALTH_TIMEOUT_MS:-5000}
   CORE_APPLY_LOCK_TTL_MS: ${CORE_APPLY_LOCK_TTL_MS:-60000}
   WORKERS_ENABLED: ${WORKERS_ENABLED:-true}
   WORKER_LOCK_TTL_MS: ${WORKER_LOCK_TTL_MS:-60000}
@@ -182,6 +192,66 @@ services:
       - core
     <<: *service-security
 
+  core-xray-config-init:
+    image: busybox:1.37
+    restart: 'no'
+    network_mode: none
+    environment:
+      XRAY_API_LISTEN: 0.0.0.0:10085
+    entrypoint: ['/bin/sh', '/seed/bootstrap-config.sh']
+    volumes:
+      - ./xray/bootstrap-config.sh:/seed/bootstrap-config.sh:ro
+      - ./xray/config.json:/seed/config.json:ro
+      - xray_config:/shared
+      - xray_reload:/reload
+      - xray_state:/state
+    <<: *service-security
+
+  core-xray:
+    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
+    build: *api-build
+    restart: unless-stopped
+    entrypoint: ['/usr/bin/dumb-init', '--', '/usr/local/bin/xray-entrypoint']
+    environment:
+      XRAY_CONFIG_PATH: /var/lib/xray/config.json
+      XRAY_RELOAD_REQUEST_PATH: /var/lib/overvpn/xray-reload/request
+      XRAY_RELOAD_ACK_PATH: /var/lib/overvpn/xray-reload/ack
+      XRAY_PID_PATH: /var/lib/overvpn/xray-reload/xray.pid
+    depends_on:
+      core-xray-config-init:
+        condition: service_completed_successfully
+    volumes:
+      - xray_config:/var/lib/xray:ro
+      - xray_reload:/var/lib/overvpn/xray-reload
+      - xray_state:/var/lib/xray-state
+      - ./xray/certs:/var/lib/xray-certs:ro
+      # Reuse the same LE cert files when VLESS xHTTP TLS uses FILES mode.
+      - ./sing-box/certs:/var/lib/sing-box-certs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_LISTEN_PORT:-8443}:${XRAY_LISTEN_PORT:-8443}/tcp'
+    expose:
+      - '10085'
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'test -r /var/lib/overvpn/xray-reload/xray.pid && kill -0 "$$(cat /var/lib/overvpn/xray-reload/xray.pid)"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - core
+    <<: *service-security
+
   migrate:
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
@@ -216,11 +286,17 @@ services:
         condition: service_healthy
       core:
         condition: service_healthy
+      core-xray:
+        condition: service_healthy
     volumes:
       - singbox_config:/var/lib/sing-box
       - singbox_reload:/var/lib/overvpn/reload
       - singbox_state:/var/lib/sing-box-state
       - ./sing-box/certs:/var/lib/sing-box-certs:ro
+      - xray_config:/var/lib/xray
+      - xray_reload:/var/lib/overvpn/xray-reload
+      - xray_state:/var/lib/xray-state
+      - ./xray/certs:/var/lib/xray-certs:ro
       - backup_data:/var/lib/overvpn/backups
     read_only: true
     tmpfs:
@@ -268,6 +344,9 @@ volumes:
   singbox_config:
   singbox_reload:
   singbox_state:
+  xray_config:
+  xray_reload:
+  xray_state:
   backup_data:
 
 networks:

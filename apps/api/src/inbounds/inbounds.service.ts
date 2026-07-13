@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { InboundProtocol } from '@overvpn/shared/constants';
+import {
+  PROTOCOL_ENGINE_MAP,
+  type CoreEngine,
+  type InboundProtocol,
+} from '@overvpn/shared/constants';
 import type {
   AddAssignment,
   AssignmentListQuery,
@@ -49,6 +53,7 @@ import {
   parseShadowsocksPublicConfig,
   parseTrojanPublicConfig,
   parseVlessRealityPublicConfig,
+  parseVlessXhttpTlsPublicConfig,
   storageFromInbound,
   type InboundSecretBundle,
   type InboundStorage,
@@ -65,6 +70,7 @@ import {
   normalizeTrojanPassword,
 } from './trojan-domain';
 import { buildVlessUri, createVlessCredential } from './vless-reality-domain';
+import { buildVlessXhttpTlsUri } from './vless-xhttp-tls-domain';
 
 type InboundWithCount = Inbound & {
   _count: { userAssignments: number };
@@ -82,6 +88,7 @@ type AssignmentWithUser = UserInboundAssignment & {
 @Injectable()
 export class InboundsService {
   private readonly configPath: string;
+  private readonly xrayConfigPath: string;
   private readonly binaryPath: string;
   private readonly processTimeoutMs: number;
 
@@ -94,6 +101,7 @@ export class InboundsService {
     config: ConfigService<AppEnvironment, true>,
   ) {
     this.configPath = config.get('SING_BOX_CONFIG_PATH', { infer: true });
+    this.xrayConfigPath = config.get('XRAY_CONFIG_PATH', { infer: true });
     this.binaryPath = config.get('SING_BOX_BINARY_PATH', { infer: true });
     this.processTimeoutMs = config.get('SING_BOX_PROCESS_TIMEOUT_MS', {
       infer: true,
@@ -157,6 +165,11 @@ export class InboundsService {
     metadata: RequestMetadata,
   ) {
     try {
+      const engine = this.resolveEngine(input.protocol);
+      await this.assertListenPortAvailable(
+        input.settings.listenHost,
+        input.settings.listenPort,
+      );
       const built = await buildInboundStorage(
         input.protocol,
         input.settings,
@@ -168,9 +181,16 @@ export class InboundsService {
         },
       );
       const inbound = await this.prisma.$transaction(async (tx) => {
+        await this.assertListenPortAvailable(
+          input.settings.listenHost,
+          input.settings.listenPort,
+          undefined,
+          tx,
+        );
         const created = await tx.inbound.create({
           data: {
             tag: input.tag,
+            engine,
             protocol: input.protocol,
             listenHost: input.settings.listenHost,
             listenPort: input.settings.listenPort,
@@ -184,7 +204,7 @@ export class InboundsService {
           },
           include: { _count: { select: { userAssignments: true } } },
         });
-        await this.bumpDesiredRevision(tx);
+        await this.bumpDesiredRevision(tx, engine);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -232,6 +252,15 @@ export class InboundsService {
             reason: 'inbound_protocol_change_not_allowed',
           });
         }
+        const expectedEngine = this.resolveEngine(before.protocol);
+        if (before.engine !== expectedEngine) {
+          throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+            reason: 'inbound_engine_protocol_mismatch',
+            protocol: before.protocol,
+            engine: before.engine,
+            expectedEngine,
+          });
+        }
         const previous = this.tryStorageFromInbound(before);
         if (!input.settings && !previous) {
           throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
@@ -250,6 +279,14 @@ export class InboundsService {
               },
             )
           : previous!;
+        if (input.settings) {
+          await this.assertListenPortAvailable(
+            input.settings.listenHost,
+            input.settings.listenPort,
+            id,
+            tx,
+          );
+        }
         const updated = await tx.inbound.update({
           where: { id },
           data: {
@@ -274,7 +311,7 @@ export class InboundsService {
           },
           include: { _count: { select: { userAssignments: true } } },
         });
-        await this.bumpDesiredRevision(tx);
+        await this.bumpDesiredRevision(tx, before.engine);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -330,7 +367,7 @@ export class InboundsService {
           },
           include: { _count: { select: { userAssignments: true } } },
         });
-        await this.bumpDesiredRevision(tx);
+        await this.bumpDesiredRevision(tx, before.engine);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -367,7 +404,7 @@ export class InboundsService {
       const tag = await this.prisma.$transaction(async (tx) => {
         const before = await this.requireInbound(id, tx);
         await tx.inbound.delete({ where: { id } });
-        await this.bumpDesiredRevision(tx);
+        await this.bumpDesiredRevision(tx, before.engine);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -788,6 +825,19 @@ export class InboundsService {
           label,
         });
         protocol = 'VLESS_REALITY';
+      } else if (inbound.protocol === 'VLESS_XHTTP_TLS') {
+        const publicConfig = parseVlessXhttpTlsPublicConfig(inbound.config);
+        uri = buildVlessXhttpTlsUri({
+          uuid: (credential as VlessCredential).uuid,
+          host,
+          port,
+          path: publicConfig.path,
+          sni: publicConfig.tls.sni,
+          mode: publicConfig.mode,
+          xhttpHost: publicConfig.host,
+          label,
+        });
+        protocol = 'VLESS_XHTTP_TLS';
       } else if (inbound.protocol === 'TROJAN') {
         const publicConfig = parseTrojanPublicConfig(inbound.config);
         uri = buildTrojanUri({
@@ -885,6 +935,44 @@ export class InboundsService {
     return assignment;
   }
 
+  private resolveEngine(protocol: InboundProtocol): CoreEngine {
+    const engine = PROTOCOL_ENGINE_MAP[protocol];
+    if (!engine) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_protocol_engine_unknown',
+        protocol,
+      });
+    }
+    return engine;
+  }
+
+  private async assertListenPortAvailable(
+    listenHost: string,
+    listenPort: number,
+    excludeId?: string,
+    client: Pick<PrismaService, 'inbound'> | Prisma.TransactionClient = this
+      .prisma,
+  ): Promise<void> {
+    const collision = await client.inbound.findFirst({
+      where: {
+        listenHost,
+        listenPort,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true, tag: true },
+    });
+    if (collision) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_listen_port_conflict',
+        message: `Listen address ${listenHost}:${listenPort} is already used by inbound "${collision.tag}"`,
+        listenHost,
+        listenPort,
+        conflictingInboundId: collision.id,
+        conflictingTag: collision.tag,
+      });
+    }
+  }
+
   private storageFromInbound(inbound: Inbound): InboundStorage {
     return storageFromInbound(
       inbound.protocol,
@@ -914,7 +1002,10 @@ export class InboundsService {
     inbound: Inbound,
     input: AddAssignment | RotateAssignmentCredential,
   ): AssignmentCredential {
-    if (inbound.protocol === 'VLESS_REALITY') {
+    if (
+      inbound.protocol === 'VLESS_REALITY' ||
+      inbound.protocol === 'VLESS_XHTTP_TLS'
+    ) {
       return createVlessCredential(input.uuid);
     }
     if (inbound.protocol === 'TROJAN') {
@@ -976,7 +1067,10 @@ export class InboundsService {
       if (parsed.version !== 1) {
         throw new Error('Invalid credential payload');
       }
-      if (protocol === 'VLESS_REALITY') {
+      if (
+        protocol === 'VLESS_REALITY' ||
+        protocol === 'VLESS_XHTTP_TLS'
+      ) {
         if (
           !('uuid' in parsed) ||
           typeof parsed.uuid !== 'string' ||
@@ -1023,12 +1117,13 @@ export class InboundsService {
     inboundId: string,
     userId: string,
   ): Promise<void> {
-    await tx.inbound.update({
+    const inbound = await tx.inbound.update({
       where: { id: inboundId },
       data: {
         revision: { increment: 1 },
         needsApply: true,
       },
+      select: { engine: true },
     });
     await tx.user.update({
       where: { id: userId },
@@ -1037,23 +1132,27 @@ export class InboundsService {
         needsApply: true,
       },
     });
-    await this.bumpDesiredRevision(tx);
+    await this.bumpDesiredRevision(tx, inbound.engine);
   }
 
   private async bumpDesiredRevision(
     tx: Prisma.TransactionClient,
+    engine: CoreEngine,
   ): Promise<void> {
+    const id = engine === 'SING_BOX' ? 'sing-box' : 'xray';
+    const configPath =
+      engine === 'SING_BOX' ? this.configPath : this.xrayConfigPath;
     await tx.coreState.upsert({
-      where: { id: 'sing-box' },
+      where: { id },
       create: {
-        id: 'sing-box',
+        id,
         desiredRevision: 1,
         appliedRevision: 0,
-        configPath: this.configPath,
+        configPath,
       },
       update: {
         desiredRevision: { increment: 1 },
-        configPath: this.configPath,
+        configPath,
       },
     });
   }
@@ -1100,6 +1199,16 @@ export class InboundsService {
         protocol: 'VLESS_REALITY',
         settings: {
           ...this.parseVlessRealityPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
+    if (inbound.protocol === 'VLESS_XHTTP_TLS') {
+      return {
+        ...common,
+        protocol: 'VLESS_XHTTP_TLS',
+        settings: {
+          ...this.parseVlessXhttpTlsPublicConfig(inbound),
           ...listen,
         },
       };
@@ -1157,6 +1266,17 @@ export class InboundsService {
     }
   }
 
+  private parseVlessXhttpTlsPublicConfig(inbound: Inbound) {
+    try {
+      return parseVlessXhttpTlsPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
   private parseShadowsocksPublicConfig(inbound: Inbound) {
     try {
       return parseShadowsocksPublicConfig(inbound.config);
@@ -1174,6 +1294,9 @@ export class InboundsService {
     }
     if (inbound.protocol === 'VLESS_REALITY') {
       return this.parseVlessRealityPublicConfig(inbound);
+    }
+    if (inbound.protocol === 'VLESS_XHTTP_TLS') {
+      return this.parseVlessXhttpTlsPublicConfig(inbound);
     }
     if (inbound.protocol === 'TROJAN') {
       return this.parseTrojanPublicConfig(inbound);

@@ -484,6 +484,8 @@ compose_up() {
   colorized_echo blue "$(cli_t refreshing_core_config)"
   compose up -d --force-recreate --no-deps core-config-init
   compose up -d --force-recreate --no-deps core
+  compose up -d --force-recreate --no-deps core-xray-config-init
+  compose up -d --force-recreate --no-deps core-xray
 }
 
 # Finished install (safe for up/down/update).
@@ -1439,6 +1441,7 @@ generate_env() {
   set_env_var "BOOTSTRAP_ADMIN_PASSWORD" "$admin_pass"
   set_env_var "SWAGGER_ENABLED" "false"
   set_env_var "SING_BOX_UDP_PORT" "443"
+  set_env_var "XRAY_LISTEN_PORT" "8443"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
 
@@ -1459,6 +1462,7 @@ generate_env() {
     if [[ "$with_nginx" == "true" ]]; then
       set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
       set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
+      set_env_var "XRAY_LISTEN_PORT" "9443"
       set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
       set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
     fi

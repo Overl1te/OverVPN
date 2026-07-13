@@ -32,11 +32,17 @@ enum PlanStatus {
   ARCHIVED
 }
 
+enum CoreEngine {
+  SING_BOX
+  XRAY
+}
+
 enum InboundProtocol {
   HYSTERIA2
   VLESS_REALITY
   TROJAN
   SHADOWSOCKS
+  VLESS_XHTTP_TLS
 }
 
 enum ResetStrategy {
@@ -104,6 +110,7 @@ enum CoreApplyStatus {
   PENDING
   APPLYING
   SUCCEEDED
+  PARTIAL_SUCCEEDED
   FAILED
   ROLLED_BACK
 }
@@ -240,6 +247,7 @@ model Plan {
 model Inbound {
   id                  String                  @id @default(uuid()) @db.Uuid
   tag                 String                  @unique @db.VarChar(100)
+  engine              CoreEngine              @default(SING_BOX)
   protocol            InboundProtocol
   listenHost          String                  @default("0.0.0.0") @db.VarChar(255)
   listenPort          Int
@@ -321,18 +329,21 @@ model UsageDaily {
 }
 
 model TrafficCursor {
-  statsKey          String   @id @db.VarChar(128)
-  userId            String   @unique @db.Uuid
+  statsKey          String     @db.VarChar(128)
+  engine            CoreEngine @default(SING_BOX)
+  userId            String     @db.Uuid
   lastUploadBytes   BigInt
   lastDownloadBytes BigInt
   accountingEpoch   Int
-  generation        Int      @default(0)
-  lastSampleHash    String   @db.Char(64)
-  observedAt        DateTime @db.Timestamptz(3)
-  createdAt         DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
-  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  generation        Int        @default(0)
+  lastSampleHash    String     @db.Char(64)
+  observedAt        DateTime   @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @db.Timestamptz(3)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Restrict)
 
+  @@id([statsKey, engine])
+  @@unique([userId, engine])
   @@index([observedAt])
   @@map("traffic_cursors")
 }
@@ -374,19 +385,20 @@ model TrafficCheckpoint {
 }
 
 model OnlineSession {
-  id             String    @id @default(uuid()) @db.Uuid
-  sessionKey     String    @unique @db.VarChar(255)
-  userId         String    @db.Uuid
-  inboundId      String    @db.Uuid
-  ipAddress      String?   @db.VarChar(64)
-  deviceId       String?   @db.VarChar(255)
-  connectedAt    DateTime  @db.Timestamptz(3)
-  lastSeenAt     DateTime  @db.Timestamptz(3)
-  disconnectedAt DateTime? @db.Timestamptz(3)
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
-  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  inbound        Inbound   @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+  id             String     @id @default(uuid()) @db.Uuid
+  sessionKey     String     @unique @db.VarChar(255)
+  engine         CoreEngine @default(SING_BOX)
+  userId         String     @db.Uuid
+  inboundId      String     @db.Uuid
+  ipAddress      String?    @db.VarChar(64)
+  deviceId       String?    @db.VarChar(255)
+  connectedAt    DateTime   @db.Timestamptz(3)
+  lastSeenAt     DateTime   @db.Timestamptz(3)
+  disconnectedAt DateTime?  @db.Timestamptz(3)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  inbound        Inbound    @relation(fields: [inboundId], references: [id], onDelete: Restrict)
 
   @@index([userId, disconnectedAt, lastSeenAt])
   @@index([inboundId, disconnectedAt, lastSeenAt])
@@ -452,6 +464,7 @@ model CoreApplyRecord {
   completedAt         DateTime?        @db.Timestamptz(3)
   errorMessage        String?
   rollbackOutcome     String?
+  engineResults       Json?
   metadata            Json?
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime         @updatedAt @db.Timestamptz(3)

@@ -16,7 +16,6 @@ import {
   sha256,
 } from './core-config-utils';
 import {
-  CoreProvider,
   type CoreDesiredState,
   type CoreHealthResult,
   type CoreProviderApplyResult,
@@ -25,6 +24,7 @@ import {
   type DesiredShadowsocksInbound,
   type DesiredTrojanInbound,
   type DesiredVlessRealityInbound,
+  EngineProvider,
   type JsonObject,
   type OnlineClient,
   type OnlineClientsResult,
@@ -41,7 +41,9 @@ import {
 import { type RawV2RayStat, V2RayStatsAdapter } from './v2ray-stats.adapter';
 
 @Injectable()
-export class SingBoxProvider extends CoreProvider {
+export class SingBoxProvider extends EngineProvider {
+  readonly engine = 'SING_BOX' as const;
+
   private readonly binaryPath: string;
   private readonly configPath: string;
   private readonly lastKnownGoodPath: string;
@@ -91,6 +93,11 @@ export class SingBoxProvider extends CoreProvider {
   }
 
   renderConfig(state: CoreDesiredState): RenderedCoreConfig {
+    if (state.engine !== this.engine) {
+      throw new Error(
+        `SingBoxProvider cannot render ${state.engine} desired state`,
+      );
+    }
     const secretValues = new Set<string>([this.clashApiSecret]);
     const inbounds = [...state.inbounds]
       .sort(compareByTagAndId)
@@ -439,7 +446,12 @@ export class SingBoxProvider extends CoreProvider {
     if (inbound.protocol === 'TROJAN') {
       return this.renderTrojanInbound(inbound, secretValues);
     }
-    return this.renderShadowsocksInbound(inbound, secretValues);
+    if (inbound.protocol === 'SHADOWSOCKS') {
+      return this.renderShadowsocksInbound(inbound, secretValues);
+    }
+    throw new Error(
+      `SingBoxProvider cannot render ${inbound.protocol} inbound ${inbound.id}`,
+    );
   }
 
   private renderHysteria2Inbound(
@@ -887,6 +899,7 @@ function aggregateTrafficCounters(raw: RawV2RayStat[]): TrafficCounter[] {
         compareStrings(left.key, right.key),
     )
     .map((counter) => ({
+      engine: 'SING_BOX',
       scope: counter.scope,
       key: counter.key,
       uplinkBytes: (counter.uplinkBytes ?? 0n).toString(),
@@ -903,6 +916,7 @@ function parseOnlineClient(value: unknown): OnlineClient | null {
   const userName =
     typeof metadata.user === 'string' && metadata.user ? metadata.user : null;
   return {
+    engine: 'SING_BOX',
     connectionId: connection.id,
     panelUserId:
       userName && uuidPattern.test(userName) ? userName.toLowerCase() : null,
@@ -921,6 +935,7 @@ function parseOnlineClient(value: unknown): OnlineClient | null {
       !Number.isNaN(Date.parse(connection.start))
         ? new Date(connection.start)
         : null,
+    lastSeenAt: null,
     uploadBytes: nonnegativeNumberString(connection.upload),
     downloadBytes: nonnegativeNumberString(connection.download),
   };

@@ -18,6 +18,26 @@ RUN export CGO_ENABLED=0 GOOS="${TARGETOS:-linux}" GOARCH="${TARGETARCH:-amd64}"
       -ldflags "-X \"github.com/sagernet/sing-box/constant.Version=$VERSION\" $LDFLAGS_SHARED -s -w -buildid=" \
       ./cmd/sing-box
 
+FROM alpine:3.22 AS xray-build
+
+ARG TARGETARCH
+ARG XRAY_VERSION=v26.6.27
+
+RUN apk add --no-cache ca-certificates curl unzip \
+    && mkdir -p /out \
+    && case "${TARGETARCH:-amd64}" in \
+         amd64) XRAY_ARCH=64 ;; \
+         arm64) XRAY_ARCH=arm64-v8a ;; \
+         arm) XRAY_ARCH=arm32-v7a ;; \
+         *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL \
+         "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${XRAY_ARCH}.zip" \
+         -o /tmp/xray.zip \
+    && unzip -q /tmp/xray.zip -d /tmp/xray \
+    && install -m 755 /tmp/xray/xray /out/xray \
+    && rm -rf /tmp/xray /tmp/xray.zip
+
 FROM node:24-bookworm-slim AS base
 
 ENV PNPM_HOME="/pnpm"
@@ -61,6 +81,8 @@ COPY --from=build --chown=node:node /workspace/packages/shared ./packages/shared
 COPY --from=build --chown=node:node /workspace/apps/api ./apps/api
 COPY --from=singbox-build /out/sing-box /usr/local/bin/sing-box
 COPY --chmod=755 deploy/sing-box/entrypoint.sh /usr/local/bin/sing-box-entrypoint
+COPY --from=xray-build /out/xray /usr/local/bin/xray
+COPY --chmod=755 deploy/xray/entrypoint.sh /usr/local/bin/xray-entrypoint
 
 USER node
 EXPOSE 3000

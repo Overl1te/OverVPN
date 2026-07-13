@@ -4,6 +4,7 @@ import type {
   ShadowsocksInboundSettings,
   TrojanInboundSettings,
   VlessRealityInboundSettings,
+  VlessXhttpTlsInboundSettings,
 } from './schemas.js';
 
 export type InboundDefaultsContext = {
@@ -115,6 +116,7 @@ export function buildDefaultInboundSettings(
 ):
   | Hysteria2InboundSettings
   | VlessRealityInboundSettings
+  | VlessXhttpTlsInboundSettings
   | TrojanInboundSettings
   | ShadowsocksInboundSettings {
   const publicHost = overrides?.publicHost ?? context.publicHost;
@@ -169,6 +171,24 @@ export function buildDefaultInboundSettings(
         listenPort: overrides?.listenPort ?? 8388,
         method: '2022-blake3-aes-256-gcm',
       };
+    case 'VLESS_XHTTP_TLS':
+      if (!context.tlsCertificatePath?.trim() || !context.tlsKeyPath?.trim()) {
+        throw new Error(
+          'VLESS_XHTTP_TLS defaults require configured VPN TLS certificate and key paths',
+        );
+      }
+      return {
+        ...common,
+        path: '/',
+        host: publicHost,
+        mode: 'auto',
+        tls: {
+          mode: 'FILES',
+          sni: publicHost,
+          certificatePath: context.tlsCertificatePath.trim(),
+          keyPath: context.tlsKeyPath.trim(),
+        },
+      };
   }
 }
 
@@ -218,6 +238,12 @@ export function applyVpnPublicHostFallback(
     return body;
   }
   settingsRecord.publicHost = host;
+  if (
+    record.protocol === 'VLESS_XHTTP_TLS' &&
+    (typeof settingsRecord.host !== 'string' || !settingsRecord.host.trim())
+  ) {
+    settingsRecord.host = host;
+  }
   syncTlsPublicHost(settingsRecord, host);
   return { ...record, settings: settingsRecord };
 }

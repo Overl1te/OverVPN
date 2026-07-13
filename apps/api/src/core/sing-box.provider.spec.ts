@@ -308,6 +308,7 @@ function fakeConfig(values: Partial<AppEnvironment>) {
 
 function desiredState(): CoreDesiredState {
   return {
+    engine: 'SING_BOX',
     loadedAt: new Date('2026-07-12T00:00:00.000Z'),
     desiredRevision: 4,
     inboundRevisions: [
@@ -393,6 +394,7 @@ function multiProtocolState(): CoreDesiredState {
     credentialVersion: 1,
   };
   return {
+    engine: 'SING_BOX',
     loadedAt: new Date('2026-07-12T00:00:00.000Z'),
     desiredRevision: 5,
     inboundRevisions: [],

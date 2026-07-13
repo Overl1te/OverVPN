@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { CoreEngine } from '@overvpn/shared/constants';
 import type {
   GlobalUsage,
   OnlineSessionListQuery,
@@ -10,7 +11,11 @@ import type {
 } from '@overvpn/shared/schemas';
 import { localizeThroughputReason } from '../core/core-user-messages';
 import type { AppEnvironment } from '../config/environment';
-import { CoreProvider } from '../core/core-provider';
+import {
+  CoreProvider,
+  type AggregatedCoreHealthResult,
+  type CoreHealthResult,
+} from '../core/core-provider';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 import {
@@ -196,14 +201,7 @@ export class SystemService {
         period: usage,
         throughput: throughputFromWorkers(workers),
       },
-      core: {
-        healthy: core.healthy,
-        version: core.version,
-        latencyMs: core.latencyMs,
-        checkedAt: core.checkedAt.toISOString(),
-        error: core.error,
-        errorRu: core.errorRu,
-      },
+      core: toCoreHealthPayload(core),
       workers,
     };
   }
@@ -219,17 +217,40 @@ export class SystemService {
     return {
       status: core.healthy && degradedWorkers.length === 0 ? 'ok' : 'degraded',
       checkedAt: new Date().toISOString(),
-      core: {
-        healthy: core.healthy,
-        version: core.version,
-        latencyMs: core.latencyMs,
-        checkedAt: core.checkedAt.toISOString(),
-        error: core.error,
-        errorRu: core.errorRu,
-      },
+      core: toCoreHealthPayload(core),
       workers,
     };
   }
+}
+
+function toCoreHealthPayload(
+  core: CoreHealthResult | AggregatedCoreHealthResult,
+): SystemHealth['core'] {
+  const engines =
+    'engines' in core && core.engines
+      ? (Object.fromEntries(
+          Object.entries(core.engines).map(([engine, health]) => [
+            engine as CoreEngine,
+            {
+              healthy: health.healthy,
+              version: health.version,
+              latencyMs: health.latencyMs,
+              checkedAt: health.checkedAt.toISOString(),
+              error: health.error,
+              errorRu: health.errorRu,
+            },
+          ]),
+        ) as NonNullable<SystemHealth['core']['engines']>)
+      : undefined;
+  return {
+    healthy: core.healthy,
+    version: core.version,
+    latencyMs: core.latencyMs,
+    checkedAt: core.checkedAt.toISOString(),
+    error: core.error,
+    errorRu: core.errorRu,
+    ...(engines ? { engines } : {}),
+  };
 }
 
 function throughputFromWorkers(workers: WorkerHealthResult[]) {

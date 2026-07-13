@@ -1,6 +1,7 @@
 import {
   buildDefaultInboundSettings,
   defaultAcmeEmail,
+  PROTOCOL_ENGINE_MAP,
   type InboundDefaultsContext,
   type InboundListenOverrides,
 } from '@overvpn/shared';
@@ -19,6 +20,7 @@ import {
   Space,
   Spin,
   Switch,
+  Tag,
   Tooltip,
   Typography,
 } from 'antd';
@@ -29,9 +31,16 @@ import { createInbound, updateInbound } from '@/api/inbounds';
 import { getSettings } from '@/api/settings';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 
-const PROTOCOLS: InboundProtocol[] = ['HYSTERIA2', 'VLESS_REALITY', 'TROJAN', 'SHADOWSOCKS'];
+const SING_BOX_PROTOCOLS: InboundProtocol[] = [
+  'HYSTERIA2',
+  'VLESS_REALITY',
+  'TROJAN',
+  'SHADOWSOCKS',
+];
+const XRAY_PROTOCOLS: InboundProtocol[] = ['VLESS_XHTTP_TLS'];
 
 const VLESS_FLOWS = ['', 'xtls-rprx-vision'] as const;
+const VLESS_XHTTP_MODES = ['auto', 'packet-up', 'stream-up', 'stream-one'] as const;
 const REALITY_FINGERPRINTS = [
   'chrome',
   'firefox',
@@ -69,32 +78,44 @@ function listenOverrides(settings: InboundEditorForm['settings']): InboundListen
   };
 }
 
-function syncAcmeTlsHost(
+function syncTlsPublicHost(
   settings: InboundEditorForm['settings'],
   host: string,
 ): InboundEditorForm['settings'] {
-  if (!('tls' in settings) || settings.tls.mode !== 'ACME') {
+  if (!('tls' in settings)) {
     return settings;
   }
-  const previousSni = settings.tls.sni;
-  const previousEmail = settings.tls.email;
-  const previousDefaultEmail = defaultAcmeEmail(previousSni);
-  const nextEmail = defaultAcmeEmail(host);
-  const shouldSyncEmail =
-    Boolean(nextEmail) &&
-    (!previousEmail ||
-      (previousDefaultEmail !== undefined && previousEmail === previousDefaultEmail));
+  if (settings.tls.mode === 'ACME') {
+    const previousSni = settings.tls.sni;
+    const previousEmail = settings.tls.email;
+    const previousDefaultEmail = defaultAcmeEmail(previousSni);
+    const nextEmail = defaultAcmeEmail(host);
+    const shouldSyncEmail =
+      Boolean(nextEmail) &&
+      (!previousEmail ||
+        (previousDefaultEmail !== undefined && previousEmail === previousDefaultEmail));
 
-  return {
-    ...settings,
-    tls: {
-      ...settings.tls,
-      sni: host,
-      domains: host ? [host] : [],
-      provider: settings.tls.provider || 'letsencrypt',
-      ...(shouldSyncEmail && nextEmail ? { email: nextEmail } : {}),
-    },
-  };
+    return {
+      ...settings,
+      tls: {
+        ...settings.tls,
+        sni: host,
+        domains: host ? [host] : [],
+        provider: settings.tls.provider || 'letsencrypt',
+        ...(shouldSyncEmail && nextEmail ? { email: nextEmail } : {}),
+      },
+    } as InboundEditorForm['settings'];
+  }
+  if (settings.tls.mode === 'FILES') {
+    return {
+      ...settings,
+      tls: {
+        ...settings.tls,
+        sni: host,
+      },
+    } as InboundEditorForm['settings'];
+  }
+  return settings;
 }
 
 function isProbablyEmail(value: string): boolean {
@@ -110,6 +131,92 @@ function sanitizeInboundForm(
 
   // Ant Design onFinish only returns registered fields; simple mode hides most TLS
   // keys, so rebuild defaults and overlay whatever the form still has.
+  if (values.protocol === 'VLESS_XHTTP_TLS') {
+    let preset: Extract<
+      ReturnType<typeof buildDefaultInboundSettings>,
+      { protocol?: never; path: string }
+    >;
+    try {
+      preset = buildDefaultInboundSettings(
+        'VLESS_XHTTP_TLS',
+        {
+          publicHost: host || defaultsContext.publicHost,
+          tlsCertificatePath: defaultsContext.tlsCertificatePath,
+          tlsKeyPath: defaultsContext.tlsKeyPath,
+        },
+        listenOverrides(settings),
+      ) as typeof preset;
+    } catch {
+      preset = {
+        ...listenOverrides(settings),
+        listenHost: settings.listenHost ?? '0.0.0.0',
+        listenPort: settings.listenPort ?? 443,
+        publicHost: host || defaultsContext.publicHost,
+        publicPort: 'publicPort' in settings ? settings.publicPort : undefined,
+        enabled: settings.enabled ?? true,
+        path: 'path' in settings && typeof settings.path === 'string' ? settings.path : '/',
+        host: 'host' in settings ? settings.host : host || defaultsContext.publicHost || null,
+        mode: 'mode' in settings && typeof settings.mode === 'string' ? settings.mode : 'auto',
+        tls: {
+          mode: 'FILES',
+          sni: host || defaultsContext.publicHost,
+          certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
+          keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
+        },
+      } as typeof preset;
+    }
+    const formTls =
+      'tls' in settings && settings.tls && typeof settings.tls === 'object'
+        ? settings.tls
+        : preset.tls;
+    const certificatePath =
+      ('certificatePath' in formTls && typeof formTls.certificatePath === 'string'
+        ? formTls.certificatePath
+        : undefined) || defaultsContext.tlsCertificatePath || undefined;
+    const keyPath =
+      ('keyPath' in formTls && typeof formTls.keyPath === 'string'
+        ? formTls.keyPath
+        : undefined) || defaultsContext.tlsKeyPath || undefined;
+    const certificatePem =
+      'certificatePem' in formTls && typeof formTls.certificatePem === 'string'
+        ? formTls.certificatePem
+        : undefined;
+    const privateKeyPem =
+      'privateKeyPem' in formTls && typeof formTls.privateKeyPem === 'string'
+        ? formTls.privateKeyPem
+        : undefined;
+    const tls =
+      certificatePem && privateKeyPem
+        ? {
+            mode: 'FILES' as const,
+            sni:
+              ('sni' in formTls && typeof formTls.sni === 'string' && formTls.sni) ||
+              host ||
+              defaultsContext.publicHost,
+            certificatePem,
+            privateKeyPem,
+          }
+        : {
+            mode: 'FILES' as const,
+            sni:
+              ('sni' in formTls && typeof formTls.sni === 'string' && formTls.sni) ||
+              host ||
+              defaultsContext.publicHost,
+            certificatePath: certificatePath!,
+            keyPath: keyPath!,
+          };
+    settings = {
+      ...preset,
+      ...settings,
+      path: 'path' in settings && typeof settings.path === 'string' ? settings.path : preset.path,
+      host: 'host' in settings ? settings.host : preset.host,
+      mode:
+        'mode' in settings && typeof settings.mode === 'string' ? settings.mode : preset.mode,
+      tls,
+    } as InboundEditorForm['settings'];
+    return { ...values, settings };
+  }
+
   if (values.protocol === 'HYSTERIA2' || values.protocol === 'TROJAN') {
     const preset = buildDefaultInboundSettings(
       values.protocol,
@@ -121,7 +228,11 @@ function sanitizeInboundForm(
         tlsKeyPath: defaultsContext.tlsKeyPath,
       },
       listenOverrides(settings),
-    ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>;
+    ) as Extract<
+      ReturnType<typeof buildDefaultInboundSettings>,
+      { tls: unknown }
+    > &
+      InboundEditorForm['settings'];
     const presetTls = preset.tls;
     const formTls =
       'tls' in settings && settings.tls && typeof settings.tls === 'object'
@@ -175,7 +286,7 @@ function sanitizeInboundForm(
           certificatePath: certificatePath!,
           keyPath: keyPath!,
         },
-      };
+      } as InboundEditorForm['settings'];
     } else {
       const acmePreset =
         presetTls.mode === 'ACME'
@@ -219,10 +330,10 @@ function sanitizeInboundForm(
               ? formTls.dataDirectory
               : undefined) || acmePreset.dataDirectory,
         },
-      };
+      } as InboundEditorForm['settings'];
 
-      const acmeTls = settings.tls;
-      if (acmeTls.mode === 'ACME') {
+      if ('tls' in settings && settings.tls.mode === 'ACME') {
+        const acmeTls = settings.tls;
         if (formEmail && isProbablyEmail(formEmail)) {
           acmeTls.email = formEmail;
         } else {
@@ -560,6 +671,72 @@ function ShadowsocksFields() {
   );
 }
 
+function VlessXhttpTlsFields({ detailed }: { detailed: boolean }) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <Form.Item
+        name={['settings', 'path']}
+        label={t('inbounds.xhttpPath')}
+        rules={[{ required: true }]}
+      >
+        <Input autoComplete="off" placeholder="/" />
+      </Form.Item>
+      <Form.Item name={['settings', 'host']} label={t('inbounds.xhttpHost')}>
+        <Input autoComplete="off" placeholder={t('inbounds.xhttpHostOptional')} />
+      </Form.Item>
+      <Form.Item name={['settings', 'mode']} label={t('inbounds.xhttpMode')} rules={[{ required: true }]}>
+        <Select options={VLESS_XHTTP_MODES.map((value) => ({ value, label: value }))} />
+      </Form.Item>
+      <Form.Item name={['settings', 'tls', 'mode']} hidden>
+        <Input />
+      </Form.Item>
+      {detailed ? (
+        <>
+          <Form.Item
+            name={['settings', 'tls', 'sni']}
+            label={t('inbounds.tlsSni')}
+            rules={[{ required: true }]}
+          >
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name={['settings', 'tls', 'certificatePath']}
+            label={t('inbounds.certificatePath')}
+          >
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name={['settings', 'tls', 'keyPath']} label={t('inbounds.keyPath')}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name={['settings', 'tls', 'certificatePem']}
+            label={t('inbounds.certificatePem')}
+          >
+            <Input.TextArea rows={3} autoComplete="off" />
+          </Form.Item>
+          <Form.Item name={['settings', 'tls', 'privateKeyPem']} label={t('inbounds.privateKeyPem')}>
+            <Input.TextArea rows={3} autoComplete="off" />
+          </Form.Item>
+        </>
+      ) : (
+        <>
+          <Form.Item name={['settings', 'tls', 'sni']} hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name={['settings', 'tls', 'certificatePath']} hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name={['settings', 'tls', 'keyPath']} hidden>
+            <Input />
+          </Form.Item>
+        </>
+      )}
+    </>
+  );
+}
+
 function ProtocolFields({
   protocol,
   detailed,
@@ -574,6 +751,8 @@ function ProtocolFields({
       return <TrojanFields detailed={detailed} />;
     case 'VLESS_REALITY':
       return <VlessRealityFields detailed={detailed} />;
+    case 'VLESS_XHTTP_TLS':
+      return <VlessXhttpTlsFields detailed={detailed} />;
     case 'SHADOWSOCKS':
       return <ShadowsocksFields />;
     default:
@@ -688,11 +867,34 @@ export function InboundEditor({
       return;
     }
     const current = form.getFieldsValue();
-    const nextSettings = buildDefaultInboundSettings(
-      value,
-      defaultsContext,
-      listenOverrides(current.settings),
-    );
+    let nextSettings: InboundEditorForm['settings'];
+    try {
+      nextSettings = buildDefaultInboundSettings(
+        value,
+        defaultsContext,
+        listenOverrides(current.settings),
+      );
+    } catch {
+      if (value !== 'VLESS_XHTTP_TLS') {
+        return;
+      }
+      nextSettings = {
+        listenHost: current.settings?.listenHost ?? '0.0.0.0',
+        listenPort: current.settings?.listenPort ?? 443,
+        publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
+        publicPort: current.settings?.publicPort,
+        enabled: current.settings?.enabled ?? true,
+        path: '/',
+        host: defaultsContext.publicHost || null,
+        mode: 'auto',
+        tls: {
+          mode: 'FILES',
+          sni: defaultsContext.publicHost,
+          certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
+          keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
+        },
+      };
+    }
     form.setFieldsValue({ protocol: value, settings: nextSettings });
     if (!advancedTouched) {
       setAdvancedJson(JSON.stringify(nextSettings, null, 2));
@@ -701,7 +903,7 @@ export function InboundEditor({
 
   const handlePublicHostChange = (host: string) => {
     const current = form.getFieldValue('settings') as InboundEditorForm['settings'];
-    form.setFieldValue('settings', syncAcmeTlsHost({ ...current, publicHost: host }, host));
+    form.setFieldValue('settings', syncTlsPublicHost({ ...current, publicHost: host }, host));
   };
 
   const applyAdvancedJson = () => {
@@ -775,13 +977,34 @@ export function InboundEditor({
           <Form.Item name="protocol" label={t('inbounds.protocol')}>
             <Select
               disabled={!!inbound}
-              options={PROTOCOLS.map((value) => ({
-                value,
-                label: t(`enums.protocol.${value}`),
-              }))}
+              options={[
+                {
+                  label: t('inbounds.engineGroupSingBox'),
+                  options: SING_BOX_PROTOCOLS.map((value) => ({
+                    value,
+                    label: t(`enums.protocol.${value}`, {
+                      defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
+                    }),
+                  })),
+                },
+                {
+                  label: t('inbounds.engineGroupXray'),
+                  options: XRAY_PROTOCOLS.map((value) => ({
+                    value,
+                    label: t(`enums.protocol.${value}`, {
+                      defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
+                    }),
+                  })),
+                },
+              ]}
               onChange={handleProtocolChange}
             />
           </Form.Item>
+          {protocol ? (
+            <Form.Item label={t('inbounds.engine')}>
+              <Tag>{t(`enums.coreEngine.${PROTOCOL_ENGINE_MAP[protocol]}`)}</Tag>
+            </Form.Item>
+          ) : null}
 
           {detailed ? (
             <>
@@ -866,12 +1089,21 @@ export function InboundEditor({
             <Switch />
           </Form.Item>
 
-          {detailed || protocol === 'VLESS_REALITY' || protocol === 'SHADOWSOCKS' ? (
+          {detailed ||
+          protocol === 'VLESS_REALITY' ||
+          protocol === 'VLESS_XHTTP_TLS' ||
+          protocol === 'SHADOWSOCKS' ? (
             <>
               <Typography.Title level={5}>{t('inbounds.sectionProtocol')}</Typography.Title>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                {protocol ? t(`enums.protocol.${protocol}`, { defaultValue: protocol }) : '—'} ·{' '}
-                {t('inbounds.secretPresent')}
+                {protocol
+                  ? t(`enums.protocol.${protocol}`, {
+                      defaultValue: t(`enums.inboundProtocol.${protocol}`, {
+                        defaultValue: protocol,
+                      }),
+                    })
+                  : '—'}{' '}
+                · {t('inbounds.secretPresent')}
               </Typography.Text>
               <ProtocolFields protocol={protocol} detailed={detailed} />
             </>

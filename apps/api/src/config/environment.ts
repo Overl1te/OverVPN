@@ -262,6 +262,57 @@ export const environmentSchema = z
       .min(250)
       .max(60_000)
       .default(5_000),
+    XRAY_BINARY_PATH: z.string().trim().min(1).default('xray'),
+    XRAY_CONFIG_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/xray/config.json'),
+    XRAY_LAST_KNOWN_GOOD_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/xray/config.last-known-good.json'),
+    XRAY_RELOAD_REQUEST_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/xray-reload/request'),
+    XRAY_RELOAD_ACK_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/xray-reload/ack'),
+    XRAY_STATS_ADDRESS: z
+      .string()
+      .trim()
+      .min(3)
+      .max(255)
+      .default('127.0.0.1:10085'),
+    XRAY_API_LISTEN: z
+      .string()
+      .trim()
+      .min(3)
+      .max(255)
+      .default('0.0.0.0:10085'),
+    XRAY_PROCESS_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(15_000),
+    XRAY_RELOAD_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(20_000),
+    XRAY_HEALTH_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(60_000)
+      .default(5_000),
     SING_BOX_ACME_HTTP_PORT: z.coerce
       .number()
       .int()

@@ -1,8 +1,11 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { CoreEngine } from '@overvpn/shared/constants';
 import type {
   ConfigApplyRequest,
+  ConfigPreviewEngine,
   ConfigPreviewResult,
+  CoreApplyEngineResult,
   CoreApplyListQuery,
   CoreApplyRecordResult,
   CoreApplySummary,
@@ -16,6 +19,7 @@ import type {
 import type { AppEnvironment } from '../config/environment';
 import type {
   CoreApplyRecord,
+  CoreApplyStatus,
   CoreApplyTrigger,
   Prisma,
 } from '../generated/prisma/client';
@@ -29,17 +33,33 @@ import {
   summarizeDiff,
   unifiedDiff,
 } from './core-config-utils';
-import { CoreProvider, type CoreDesiredState } from './core-provider';
+import { CoreEngineRegistry } from './core-engine.registry';
+import { coreStateId } from './core-ids';
+import type {
+  CoreDesiredState,
+  EngineProvider,
+  RenderedCoreConfig,
+} from './core-provider';
 import { CoreStateLoader } from './core-state.loader';
 import { RedisDistributedLock } from './distributed-lock';
 
+type EngineApplyOutcome = CoreApplyEngineResult & {
+  appliedAt: Date | null;
+  completedAt: Date | null;
+  configPath: string;
+  configRevision: number | null;
+  diffSummary: unknown;
+  state: CoreDesiredState | null;
+  rendered: RenderedCoreConfig | null;
+};
+
 @Injectable()
 export class CoreApplyService {
-  private readonly configPath: string;
+  private readonly configPaths: Record<CoreEngine, string>;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly provider: CoreProvider,
+    private readonly registry: CoreEngineRegistry,
     private readonly stateLoader: CoreStateLoader,
     private readonly lock: RedisDistributedLock,
     private readonly fileSystem: CoreFileSystem,
@@ -47,26 +67,28 @@ export class CoreApplyService {
     private readonly notifications: TelegramNotificationService,
     config: ConfigService<AppEnvironment, true>,
   ) {
-    this.configPath = config.get('SING_BOX_CONFIG_PATH', { infer: true });
+    this.configPaths = {
+      SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
+      XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
+    };
+  }
+
+  configPathFor(engine: CoreEngine): string {
+    return this.configPaths[engine];
   }
 
   async preview(): Promise<ConfigPreviewResult> {
-    const state = await this.stateLoader.load();
-    const rendered = this.provider.renderConfig(state);
-    const validation = await this.provider.validate(rendered);
-    const current = await this.currentRedacted();
+    const engines: Partial<Record<CoreEngine, ConfigPreviewEngine>> = {};
+    for (const provider of this.registry.all()) {
+      engines[provider.engine] = await this.previewEngine(provider);
+    }
+    const primary =
+      engines.SING_BOX ??
+      engines[this.registry.all()[0]?.engine ?? 'SING_BOX'] ??
+      emptyPreview();
     return {
-      valid: validation.valid,
-      hash: rendered.hash,
-      previousHash: current.hash,
-      config: rendered.redactedConfig,
-      diff: unifiedDiff(
-        current.canonical,
-        rendered.redactedCanonical,
-        'current-redacted.json',
-        'desired-redacted.json',
-      ),
-      validationError: validation.error,
+      ...primary,
+      engines: engines as Record<string, ConfigPreviewEngine>,
     };
   }
 
@@ -89,118 +111,144 @@ export class CoreApplyService {
     let secretValues: string[] = [];
     try {
       const result = await this.lock.withLock(async (assertOwned) => {
-        const state = await this.stateLoader.load();
-        const rendered = this.provider.renderConfig(state);
-        secretValues = rendered.secretValues;
-        const current = await this.currentRedacted();
-        const diff = unifiedDiff(
-          current.canonical,
-          rendered.redactedCanonical,
-          'current-redacted.json',
-          'desired-redacted.json',
-        );
-        const diffSummary = summarizeDiff(diff);
-        const currentState = await this.prisma.coreState.findUnique({
-          where: { id: 'sing-box' },
-        });
-        const configRevision = (currentState?.appliedRevision ?? 0) + 1;
-        await this.prisma.coreApplyRecord.update({
-          where: { id: initial.id },
-          data: {
-            desiredHash: rendered.hash,
-            configChecksum: rendered.hash,
-            previousHash: current.hash,
-            configRevision,
-            configPath: current.path,
-            diffSummary,
-          },
-        });
+        const providers = this.registry.all();
+        const engineResults: Partial<Record<CoreEngine, EngineApplyOutcome>> =
+          {};
 
-        const validation = await this.provider.validate(rendered);
-        if (!validation.valid) {
-          return this.finishFailure(
-            initial.id,
-            rendered.hash,
-            current.hash,
-            `sing-box validation failed: ${validation.error ?? 'unknown validation error'}`,
-          );
+        for (const provider of providers) {
+          assertOwned();
+          const outcome = await this.applyEngine(provider, assertOwned);
+          engineResults[provider.engine] = outcome;
+          secretValues = [
+            ...secretValues,
+            ...(outcome.rendered?.secretValues ?? []),
+          ];
         }
-        assertOwned();
-        const applied = await this.provider.apply(rendered);
-        assertOwned();
-        if (applied.status !== 'SUCCEEDED') {
+
+        const mappedResults = toStoredEngineResults(engineResults);
+        // desiredHash is sha256 of sorted "ENGINE=hash" lines across all engines.
+        const desiredHash = compositeHash(
+          Object.entries(engineResults).map(([engine, outcome]) => [
+            engine,
+            outcome.rendered?.hash ?? outcome.hash,
+          ]),
+        );
+        const previousHash = compositeHash(
+          Object.entries(engineResults).map(([engine, outcome]) => [
+            engine,
+            outcome.previousHash,
+          ]),
+        );
+        const primary =
+          engineResults.SING_BOX ??
+          engineResults[providers[0]?.engine ?? 'SING_BOX'];
+        const status = aggregateApplyStatus(engineResults);
+        const completedAt = new Date();
+        const errorMessage = aggregateError(engineResults);
+        const rollbackOutcome = aggregateRollback(engineResults);
+
+        if (status === 'FAILED' || status === 'ROLLED_BACK') {
           const record = await this.prisma.coreApplyRecord.update({
             where: { id: initial.id },
             data: {
-              status: applied.status,
-              desiredHash: applied.desiredHash,
-              configChecksum: applied.desiredHash,
-              previousHash: applied.previousHash,
-              errorMessage: applied.error,
-              rollbackOutcome: applied.rollbackOutcome,
-              rollbackStartedAt: applied.rollbackStartedAt,
-              rollbackCompletedAt: applied.rollbackCompletedAt,
-              completedAt: applied.completedAt,
+              status,
+              desiredHash,
+              configChecksum: desiredHash,
+              previousHash,
+              configRevision: primary?.configRevision ?? null,
+              configPath: primary?.configPath ?? null,
+              diffSummary:
+                (primary?.diffSummary as Prisma.InputJsonValue) ?? undefined,
+              errorMessage,
+              rollbackOutcome,
+              engineResults: mappedResults as Prisma.InputJsonValue,
+              completedAt,
             },
           });
           return this.toSummary(record);
         }
 
-        const completedAt = applied.completedAt;
+        const succeededEngines = Object.entries(engineResults).filter(
+          ([, outcome]) => outcome.status === 'SUCCEEDED',
+        );
+        const allSucceeded = status === 'SUCCEEDED';
+
         const record = await this.prisma.$transaction(async (tx) => {
-          await this.markSnapshotApplied(tx, state);
-          await tx.coreState.upsert({
-            where: { id: 'sing-box' },
-            create: {
-              id: 'sing-box',
-              desiredRevision: state.desiredRevision,
-              appliedRevision: configRevision,
-              appliedConfigHash: rendered.hash,
-              configPath: current.path,
-              lastApplyRecordId: initial.id,
-              appliedAt: applied.appliedAt,
-            },
-            update: {
-              appliedRevision: configRevision,
-              appliedConfigHash: rendered.hash,
-              configPath: current.path,
-              lastApplyRecordId: initial.id,
-              appliedAt: applied.appliedAt,
-            },
-          });
-          await tx.coreApplyRecord.updateMany({
-            where: {
-              id: { not: initial.id },
-              status: 'PENDING',
-              createdAt: { lte: startedAt },
-            },
-            data: {
-              status: 'SUCCEEDED',
-              desiredHash: rendered.hash,
-              configChecksum: rendered.hash,
-              previousHash: current.hash,
-              configRevision,
-              configPath: current.path,
-              appliedAt: applied.appliedAt,
-              completedAt,
-              metadata: {
-                reconciledByApplyRecordId: initial.id,
+          for (const [engine, outcome] of succeededEngines) {
+            if (
+              !outcome.state ||
+              !outcome.rendered ||
+              outcome.configRevision === null
+            ) {
+              continue;
+            }
+            await this.markInboundRevisionsApplied(tx, outcome.state);
+            await tx.coreState.upsert({
+              where: { id: coreStateId(engine as CoreEngine) },
+              create: {
+                id: coreStateId(engine as CoreEngine),
+                desiredRevision: outcome.state.desiredRevision,
+                appliedRevision: outcome.configRevision,
+                appliedConfigHash: outcome.rendered.hash,
+                configPath: outcome.configPath,
+                lastApplyRecordId: initial.id,
+                appliedAt: outcome.appliedAt,
               },
-            },
-          });
+              update: {
+                appliedRevision: outcome.configRevision,
+                appliedConfigHash: outcome.rendered.hash,
+                configPath: outcome.configPath,
+                lastApplyRecordId: initial.id,
+                appliedAt: outcome.appliedAt,
+              },
+            });
+          }
+
+          if (allSucceeded) {
+            const userRevisions = uniqueUserRevisions(
+              succeededEngines.map(([, outcome]) => outcome.state),
+            );
+            await this.markUserRevisionsApplied(tx, userRevisions);
+            await tx.coreApplyRecord.updateMany({
+              where: {
+                id: { not: initial.id },
+                status: 'PENDING',
+                createdAt: { lte: startedAt },
+              },
+              data: {
+                status: 'SUCCEEDED',
+                desiredHash,
+                configChecksum: desiredHash,
+                previousHash,
+                configRevision: primary?.configRevision ?? null,
+                configPath: primary?.configPath ?? null,
+                appliedAt: primary?.appliedAt ?? completedAt,
+                completedAt,
+                metadata: {
+                  reconciledByApplyRecordId: initial.id,
+                },
+              },
+            });
+          }
+
           return tx.coreApplyRecord.update({
             where: { id: initial.id },
             data: {
-              status: 'SUCCEEDED',
-              desiredHash: rendered.hash,
-              configChecksum: rendered.hash,
-              previousHash: applied.previousHash,
-              configRevision,
-              configPath: current.path,
-              diffSummary,
-              appliedAt: applied.appliedAt,
+              status,
+              desiredHash,
+              configChecksum: desiredHash,
+              previousHash,
+              configRevision: primary?.configRevision ?? null,
+              configPath: primary?.configPath ?? null,
+              diffSummary:
+                (primary?.diffSummary as Prisma.InputJsonValue) ?? undefined,
+              errorMessage,
+              rollbackOutcome,
+              engineResults: mappedResults as Prisma.InputJsonValue,
+              appliedAt: allSucceeded
+                ? (primary?.appliedAt ?? completedAt)
+                : (succeededEngines[0]?.[1].appliedAt ?? null),
               completedAt,
-              rollbackOutcome: 'NOT_REQUIRED',
             },
           });
         });
@@ -295,12 +343,108 @@ export class CoreApplyService {
     );
   }
 
-  private async currentRedacted(): Promise<{
+  private async previewEngine(
+    provider: EngineProvider,
+  ): Promise<ConfigPreviewEngine> {
+    const state = await this.stateLoader.load(provider.engine);
+    const rendered = provider.renderConfig(state);
+    const validation = await provider.validate(rendered);
+    const current = await this.currentRedacted(provider.engine);
+    return {
+      valid: validation.valid,
+      hash: rendered.hash,
+      previousHash: current.hash,
+      config: rendered.redactedConfig,
+      diff: unifiedDiff(
+        current.canonical,
+        rendered.redactedCanonical,
+        'current-redacted.json',
+        'desired-redacted.json',
+      ),
+      validationError: validation.error,
+    };
+  }
+
+  private async applyEngine(
+    provider: EngineProvider,
+    assertOwned: () => void,
+  ): Promise<EngineApplyOutcome> {
+    const path = this.configPathFor(provider.engine);
+    try {
+      const state = await this.stateLoader.load(provider.engine);
+      const rendered = provider.renderConfig(state);
+      const current = await this.currentRedacted(provider.engine);
+      const diff = unifiedDiff(
+        current.canonical,
+        rendered.redactedCanonical,
+        'current-redacted.json',
+        'desired-redacted.json',
+      );
+      const diffSummary = summarizeDiff(diff);
+      const currentState = await this.prisma.coreState.findUnique({
+        where: { id: coreStateId(provider.engine) },
+      });
+      const configRevision = (currentState?.appliedRevision ?? 0) + 1;
+
+      const validation = await provider.validate(rendered);
+      if (!validation.valid) {
+        return {
+          status: 'FAILED',
+          hash: rendered.hash,
+          previousHash: current.hash,
+          error: `${provider.engine} validation failed: ${validation.error ?? 'unknown validation error'}`,
+          rollbackOutcome: 'NOT_REQUIRED',
+          appliedAt: null,
+          completedAt: new Date(),
+          configPath: path,
+          configRevision,
+          diffSummary,
+          state,
+          rendered,
+        };
+      }
+
+      assertOwned();
+      const applied = await provider.apply(rendered);
+      assertOwned();
+      return {
+        status: applied.status,
+        hash: applied.desiredHash,
+        previousHash: applied.previousHash,
+        error: applied.error,
+        rollbackOutcome: applied.rollbackOutcome,
+        appliedAt: applied.appliedAt,
+        completedAt: applied.completedAt,
+        configPath: path,
+        configRevision,
+        diffSummary,
+        state,
+        rendered,
+      };
+    } catch (error: unknown) {
+      return {
+        status: 'FAILED',
+        hash: null,
+        previousHash: null,
+        error: `${provider.engine} apply failed: ${errorMessage(error)}`,
+        rollbackOutcome: 'NOT_REQUIRED',
+        appliedAt: null,
+        completedAt: new Date(),
+        configPath: path,
+        configRevision: null,
+        diffSummary: null,
+        state: null,
+        rendered: null,
+      };
+    }
+  }
+
+  private async currentRedacted(engine: CoreEngine): Promise<{
     hash: string | null;
     canonical: string;
     path: string;
   }> {
-    const path = this.configPath;
+    const path = this.configPathFor(engine);
     try {
       const bytes = await this.fileSystem.read(path);
       return {
@@ -320,29 +464,7 @@ export class CoreApplyService {
     }
   }
 
-  private async finishFailure(
-    id: string,
-    desiredHash: string,
-    previousHash: string | null,
-    error: string,
-  ): Promise<CoreApplySummary> {
-    return this.toSummary(
-      await this.prisma.coreApplyRecord.update({
-        where: { id },
-        data: {
-          status: 'FAILED',
-          desiredHash,
-          configChecksum: desiredHash,
-          previousHash,
-          errorMessage: error,
-          completedAt: new Date(),
-          rollbackOutcome: 'NOT_REQUIRED',
-        },
-      }),
-    );
-  }
-
-  private async markSnapshotApplied(
+  private async markInboundRevisionsApplied(
     tx: Prisma.TransactionClient,
     state: CoreDesiredState,
   ): Promise<void> {
@@ -355,7 +477,13 @@ export class CoreApplyService {
         data: { needsApply: false },
       });
     }
-    for (const user of state.userRevisions) {
+  }
+
+  private async markUserRevisionsApplied(
+    tx: Prisma.TransactionClient,
+    userRevisions: Array<{ id: string; revision: number }>,
+  ): Promise<void> {
+    for (const user of userRevisions) {
       await tx.user.updateMany({
         where: {
           id: user.id,
@@ -390,6 +518,7 @@ export class CoreApplyService {
         previousHash: result.previousHash,
         error: result.error,
         rollbackOutcome: result.rollbackOutcome,
+        engineResults: result.engineResults ?? null,
       },
     };
     if (event.outcome === 'FAILURE') {
@@ -423,6 +552,7 @@ export class CoreApplyService {
       rollbackOutcome: record.rollbackOutcome,
       startedAt: record.startedAt?.toISOString() ?? null,
       completedAt: record.completedAt?.toISOString() ?? null,
+      engineResults: parseEngineResults(record.engineResults),
     };
   }
 
@@ -444,6 +574,7 @@ export class CoreApplyService {
       diffSummary: record.diffSummary,
       error: record.errorMessage,
       rollbackOutcome: record.rollbackOutcome,
+      engineResults: parseEngineResults(record.engineResults),
       startedAt: record.startedAt?.toISOString() ?? null,
       appliedAt: record.appliedAt?.toISOString() ?? null,
       rollbackStartedAt: record.rollbackStartedAt?.toISOString() ?? null,
@@ -453,6 +584,129 @@ export class CoreApplyService {
       updatedAt: record.updatedAt.toISOString(),
     };
   }
+}
+
+function emptyPreview(): ConfigPreviewEngine {
+  return {
+    valid: false,
+    hash: '0'.repeat(64),
+    previousHash: null,
+    config: {},
+    diff: '',
+    validationError: 'No core engines registered',
+  };
+}
+
+/**
+ * Composite apply hash: sha256 of sorted "ENGINE=hash" lines.
+ * Missing hashes use the literal "null".
+ */
+function compositeHash(
+  entries: Array<[string, string | null | undefined]>,
+): string {
+  const lines = entries
+    .map(([engine, hash]) => `${engine}=${hash ?? 'null'}`)
+    .sort((left, right) => left.localeCompare(right));
+  return sha256(Buffer.from(`${lines.join('\n')}\n`, 'utf8'));
+}
+
+function toStoredEngineResults(
+  results: Partial<Record<CoreEngine, EngineApplyOutcome>>,
+): Record<string, CoreApplyEngineResult> {
+  const stored: Record<string, CoreApplyEngineResult> = {};
+  for (const [engine, outcome] of Object.entries(results)) {
+    if (!outcome) {
+      continue;
+    }
+    stored[engine] = {
+      status: outcome.status,
+      hash: outcome.hash,
+      previousHash: outcome.previousHash,
+      error: outcome.error,
+      rollbackOutcome: outcome.rollbackOutcome,
+    };
+  }
+  return stored;
+}
+
+function parseEngineResults(
+  value: Prisma.JsonValue | null,
+): CoreApplySummary['engineResults'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as CoreApplySummary['engineResults'];
+}
+
+function aggregateApplyStatus(
+  results: Partial<Record<CoreEngine, EngineApplyOutcome>>,
+): CoreApplyStatus {
+  const statuses = Object.values(results).map((result) => result.status);
+  if (statuses.length === 0) {
+    return 'FAILED';
+  }
+  const succeeded = statuses.filter((status) => status === 'SUCCEEDED').length;
+  const rolledBack = statuses.filter(
+    (status) => status === 'ROLLED_BACK',
+  ).length;
+  if (succeeded === statuses.length) {
+    return 'SUCCEEDED';
+  }
+  if (succeeded > 0) {
+    return 'PARTIAL_SUCCEEDED';
+  }
+  if (rolledBack === statuses.length) {
+    return 'ROLLED_BACK';
+  }
+  return 'FAILED';
+}
+
+function aggregateError(
+  results: Partial<Record<CoreEngine, EngineApplyOutcome>>,
+): string | null {
+  const errors = Object.values(results)
+    .map((result) => result.error)
+    .filter((error): error is string => Boolean(error));
+  return errors.length > 0 ? errors.join('; ') : null;
+}
+
+function aggregateRollback(
+  results: Partial<Record<CoreEngine, EngineApplyOutcome>>,
+): string | null {
+  const outcomes = Object.values(results).map(
+    (result) => result.rollbackOutcome,
+  );
+  if (
+    outcomes.every((outcome) => outcome === 'NOT_REQUIRED' || outcome === null)
+  ) {
+    return 'NOT_REQUIRED';
+  }
+  if (outcomes.some((outcome) => outcome === 'FAILED')) {
+    return 'FAILED';
+  }
+  if (outcomes.some((outcome) => outcome === 'SUCCEEDED')) {
+    return 'SUCCEEDED';
+  }
+  return (
+    outcomes.find((outcome): outcome is string => Boolean(outcome)) ?? null
+  );
+}
+
+function uniqueUserRevisions(
+  states: Array<CoreDesiredState | null>,
+): Array<{ id: string; revision: number }> {
+  const byId = new Map<string, number>();
+  for (const state of states) {
+    if (!state) {
+      continue;
+    }
+    for (const user of state.userRevisions) {
+      byId.set(user.id, user.revision);
+    }
+  }
+  return [...byId.entries()]
+    .map(([id, revision]) => ({ id, revision }))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

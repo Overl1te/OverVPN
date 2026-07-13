@@ -1,8 +1,10 @@
+import type { CoreEngine } from '@overvpn/shared/constants';
 import type {
   Hysteria2InboundPublicConfig,
   ShadowsocksInboundPublicConfig,
   TrojanInboundPublicConfig,
   VlessRealityInboundPublicConfig,
+  VlessXhttpTlsPublicConfig,
 } from '@overvpn/shared/schemas';
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -28,6 +30,12 @@ export interface VlessRealityInboundSecrets {
   version: 1;
   privateKey: string;
   publicKey: string;
+}
+
+export interface VlessXhttpTlsInboundSecrets {
+  version: 1;
+  certificatePem?: string;
+  privateKeyPem?: string;
 }
 
 export interface TrojanInboundSecrets {
@@ -94,6 +102,12 @@ export interface DesiredVlessRealityInbound extends DesiredInboundBase {
   secrets: VlessRealityInboundSecrets;
 }
 
+export interface DesiredVlessXhttpTlsInbound extends DesiredInboundBase {
+  protocol: 'VLESS_XHTTP_TLS';
+  config: VlessXhttpTlsPublicConfig;
+  secrets: VlessXhttpTlsInboundSecrets;
+}
+
 export interface DesiredTrojanInbound extends DesiredInboundBase {
   protocol: 'TROJAN';
   config: TrojanInboundPublicConfig;
@@ -109,10 +123,12 @@ export interface DesiredShadowsocksInbound extends DesiredInboundBase {
 export type DesiredInbound =
   | DesiredHysteria2Inbound
   | DesiredVlessRealityInbound
+  | DesiredVlessXhttpTlsInbound
   | DesiredTrojanInbound
   | DesiredShadowsocksInbound;
 
 export interface CoreDesiredState {
+  engine: CoreEngine;
   loadedAt: Date;
   desiredRevision: number;
   inbounds: DesiredInbound[];
@@ -162,6 +178,7 @@ export interface CoreHealthResult {
 }
 
 export interface TrafficCounter {
+  engine: CoreEngine;
   scope: 'user' | 'inbound' | 'outbound';
   key: string;
   uplinkBytes: string;
@@ -185,6 +202,7 @@ export type TrafficSnapshotResult =
     };
 
 export interface OnlineClient {
+  engine: CoreEngine;
   connectionId: string;
   panelUserId: string | null;
   userName: string | null;
@@ -193,6 +211,7 @@ export interface OnlineClient {
   device: string | null;
   network: string | null;
   connectedAt: Date | null;
+  lastSeenAt: Date | null;
   uploadBytes: string | null;
   downloadBytes: string | null;
 }
@@ -204,6 +223,22 @@ export interface OnlineClientsResult {
   warnings: string[];
 }
 
+export type EngineResultMap<T> = Partial<Record<CoreEngine, T>>;
+
+export interface AggregatedCoreHealthResult extends CoreHealthResult {
+  engines: EngineResultMap<CoreHealthResult>;
+}
+
+export type AggregatedTrafficSnapshotResult = TrafficSnapshotResult & {
+  engines: EngineResultMap<TrafficSnapshotResult>;
+  partial: boolean;
+  warnings: string[];
+};
+
+export interface AggregatedOnlineClientsResult extends OnlineClientsResult {
+  engines: EngineResultMap<OnlineClientsResult>;
+}
+
 export abstract class CoreProvider {
   abstract renderConfig(state: CoreDesiredState): RenderedCoreConfig;
   abstract validate(config: RenderedCoreConfig): Promise<CoreValidationResult>;
@@ -211,4 +246,10 @@ export abstract class CoreProvider {
   abstract health(): Promise<CoreHealthResult>;
   abstract getTrafficSnapshot(): Promise<TrafficSnapshotResult>;
   abstract getOnlineClients(): Promise<OnlineClientsResult>;
+}
+
+export abstract class EngineProvider<
+  TEngine extends CoreEngine = CoreEngine,
+> extends CoreProvider {
+  abstract readonly engine: TEngine;
 }

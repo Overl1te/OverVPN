@@ -377,6 +377,84 @@ export class SharedVolumeReloadHandshakeAdapter extends ReloadHandshakeAdapter {
   }
 }
 
+export abstract class XrayReloadHandshakeAdapter {
+  abstract requestReload(hash: string): Promise<ReloadAcknowledgement>;
+}
+
+@Injectable()
+export class SharedVolumeXrayReloadHandshakeAdapter extends XrayReloadHandshakeAdapter {
+  private readonly requestPath: string;
+  private readonly acknowledgementPath: string;
+  private readonly timeoutMs: number;
+
+  constructor(
+    config: ConfigService<AppEnvironment, true>,
+    private readonly fileSystem: CoreFileSystem,
+  ) {
+    super();
+    this.requestPath = config.get('XRAY_RELOAD_REQUEST_PATH', {
+      infer: true,
+    });
+    this.acknowledgementPath = config.get('XRAY_RELOAD_ACK_PATH', {
+      infer: true,
+    });
+    this.timeoutMs = config.get('XRAY_RELOAD_TIMEOUT_MS', { infer: true });
+  }
+
+  async requestReload(hash: string): Promise<ReloadAcknowledgement> {
+    if (!/^[a-f0-9]{64}$/.test(hash)) {
+      throw new Error('Xray reload request hash is invalid');
+    }
+    const requestId = randomUUID();
+    await this.fileSystem.atomicWrite(
+      this.requestPath,
+      `id=${requestId}\nhash=${hash}\n`,
+    );
+    const deadline = Date.now() + this.timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const acknowledgement = parseKeyValueFile(
+          (await this.fileSystem.read(this.acknowledgementPath)).toString(
+            'utf8',
+          ),
+        );
+        if (acknowledgement.id !== requestId) {
+          await delay(100);
+          continue;
+        }
+        if (acknowledgement.hash !== hash) {
+          throw new Error('Xray reload acknowledgement hash did not match request');
+        }
+        if (acknowledgement.status !== 'ok') {
+          throw new Error(
+            `Xray reload sidecar rejected request: ${
+              acknowledgement.message ?? 'unknown error'
+            }`,
+          );
+        }
+        return {
+          requestId,
+          hash,
+          acknowledgedAt: new Date(),
+        };
+      } catch (error: unknown) {
+        if (!isNodeError(error) || error.code !== 'ENOENT') {
+          if (
+            error instanceof Error &&
+            error.message.startsWith('Xray reload sidecar')
+          ) {
+            throw error;
+          }
+        }
+      }
+      await delay(100);
+    }
+    throw new Error(
+      `Timed out after ${this.timeoutMs}ms waiting for Xray reload acknowledgement`,
+    );
+  }
+}
+
 function parseKeyValueFile(value: string): Record<string, string> {
   return Object.fromEntries(
     value

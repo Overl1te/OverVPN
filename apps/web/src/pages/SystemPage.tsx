@@ -207,6 +207,24 @@ export function SystemPage() {
                         health.core.errorRu,
                       ) ?? '—',
                   },
+                  ...Object.entries(health.core.engines ?? {}).flatMap(
+                    ([engine, engineHealth]) => [
+                      {
+                        field: t('system.coreEngine', {
+                          engine: t(`enums.coreEngine.${engine}`),
+                        }),
+                        value: engineHealth.healthy
+                          ? t('dashboard.healthy')
+                          : t('dashboard.unhealthy'),
+                      },
+                      {
+                        field: t('system.coreEngineVersion', {
+                          engine: t(`enums.coreEngine.${engine}`),
+                        }),
+                        value: `${engineHealth.version ?? '—'} · ${engineHealth.latencyMs} ms`,
+                      },
+                    ],
+                  ),
                 ]
               : []
           }

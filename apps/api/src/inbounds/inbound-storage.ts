@@ -8,12 +8,15 @@ import type {
   TrojanInboundSettings,
   VlessRealityInboundPublicConfig,
   VlessRealityInboundSettings,
+  VlessXhttpTlsInboundSettings,
+  VlessXhttpTlsPublicConfig,
 } from '@overvpn/shared/schemas';
 import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
+  vlessXhttpTlsPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import type { ProcessAdapter } from '../core/core-adapters';
 import type {
@@ -21,6 +24,7 @@ import type {
   ShadowsocksInboundSecrets,
   TrojanInboundSecrets,
   VlessRealityInboundSecrets,
+  VlessXhttpTlsInboundSecrets,
 } from '../core/core-provider';
 import {
   buildHysteria2Storage,
@@ -36,22 +40,29 @@ import {
   generateRealityKeypair,
   type VlessRealityStorage,
 } from './vless-reality-domain';
+import {
+  buildVlessXhttpTlsStorage,
+  type VlessXhttpTlsStorage,
+} from './vless-xhttp-tls-domain';
 
 export type InboundStorage =
   | { protocol: 'HYSTERIA2'; storage: Hysteria2Storage }
   | { protocol: 'VLESS_REALITY'; storage: VlessRealityStorage }
+  | { protocol: 'VLESS_XHTTP_TLS'; storage: VlessXhttpTlsStorage }
   | { protocol: 'TROJAN'; storage: TrojanStorage }
   | { protocol: 'SHADOWSOCKS'; storage: ShadowsocksStorage };
 
 export type InboundPublicConfig =
   | Hysteria2InboundPublicConfig
   | VlessRealityInboundPublicConfig
+  | VlessXhttpTlsPublicConfig
   | TrojanInboundPublicConfig
   | ShadowsocksInboundPublicConfig;
 
 export type InboundSecretBundle =
   | Hysteria2InboundSecrets
   | VlessRealityInboundSecrets
+  | VlessXhttpTlsInboundSecrets
   | TrojanInboundSecrets
   | ShadowsocksInboundSecrets;
 
@@ -60,6 +71,7 @@ export async function buildInboundStorage(
   settings:
     | Hysteria2InboundSettings
     | VlessRealityInboundSettings
+    | VlessXhttpTlsInboundSettings
     | TrojanInboundSettings
     | ShadowsocksInboundSettings,
   previous: InboundStorage | undefined,
@@ -102,6 +114,17 @@ export async function buildInboundStorage(
       ),
     };
   }
+  if (protocol === 'VLESS_XHTTP_TLS') {
+    return {
+      protocol,
+      storage: buildVlessXhttpTlsStorage(
+        settings as VlessXhttpTlsInboundSettings,
+        previous?.protocol === 'VLESS_XHTTP_TLS'
+          ? previous.storage
+          : undefined,
+      ),
+    };
+  }
   if (protocol === 'TROJAN') {
     return {
       protocol,
@@ -138,6 +161,12 @@ export function parseTrojanPublicConfig(
   return trojanInboundPublicConfigSchema.parse(config);
 }
 
+export function parseVlessXhttpTlsPublicConfig(
+  config: unknown,
+): VlessXhttpTlsPublicConfig {
+  return vlessXhttpTlsPublicConfigSchema.parse(config);
+}
+
 export function parseShadowsocksPublicConfig(
   config: unknown,
 ): ShadowsocksInboundPublicConfig {
@@ -153,6 +182,9 @@ export function parseInboundPublicConfig(
   }
   if (protocol === 'VLESS_REALITY') {
     return parseVlessRealityPublicConfig(config);
+  }
+  if (protocol === 'VLESS_XHTTP_TLS') {
+    return parseVlessXhttpTlsPublicConfig(config);
   }
   if (protocol === 'TROJAN') {
     return parseTrojanPublicConfig(config);
@@ -181,6 +213,15 @@ export function storageFromInbound(
       storage: {
         publicConfig: publicConfig as VlessRealityInboundPublicConfig,
         secrets: secrets as VlessRealityInboundSecrets,
+      },
+    };
+  }
+  if (protocol === 'VLESS_XHTTP_TLS') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as VlessXhttpTlsPublicConfig,
+        secrets: secrets as VlessXhttpTlsInboundSecrets,
       },
     };
   }
@@ -241,6 +282,13 @@ export function isInboundSecretBundle(
       keys.has('publicKey') &&
       typeof value.privateKey === 'string' &&
       typeof value.publicKey === 'string'
+    );
+  }
+  if (protocol === 'VLESS_XHTTP_TLS') {
+    return [...keys].every(
+      (key) =>
+        ['version', 'certificatePem', 'privateKeyPem'].includes(key) &&
+        (key === 'version' || typeof value[key] === 'string'),
     );
   }
   if (protocol === 'TROJAN') {

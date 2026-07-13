@@ -32,10 +32,21 @@ OverVPN — **однонодовая** панель для выдачи дост
 | **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce          |
 | **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты  |
 
-Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Под капотом — [sing-box](https://sing-box.sagernet.org/) как VPN-ядро.
+Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — два независимых ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/) и [Xray-core](https://github.com/XTLS/Xray-core).
 
 > [!IMPORTANT]
-> Мульти-нода **не поддерживается**. Один сервер — одно ядро.
+> Мульти-нода **не поддерживается**. Один сервер — два core-процесса (`core` + `core-xray`), один control plane.
+
+### Dual cores
+
+| Зона | Engine | Протоколы (MVP) | Compose service |
+| ---- | ------ | --------------- | --------------- |
+| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS | `core` |
+| Xray | `XRAY` | VLESS_XHTTP_TLS | `core-xray` |
+
+Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами обоих ядер. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`).
+
+Ограничения подписок для Xray-only transports: полный endpoint всегда в `?format=links`; client `sing-box` JSON может пропускать xHTTP; Clash Meta — best-effort.
 
 ---
 

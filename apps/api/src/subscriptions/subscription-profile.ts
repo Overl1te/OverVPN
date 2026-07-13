@@ -11,12 +11,14 @@ import type {
   SubscriptionProfileDescriptor,
   TrojanSubscriptionEndpoint,
   VlessRealitySubscriptionEndpoint,
+  VlessXhttpTlsSubscriptionEndpoint,
 } from '@overvpn/shared/schemas';
 import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
+  vlessXhttpTlsPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import { stringify as stringifyYaml } from 'yaml';
 import { SecretEncryptionService } from '../auth/auth-crypto';
@@ -35,6 +37,7 @@ import {
   normalizeTrojanPassword,
 } from '../inbounds/trojan-domain';
 import { buildVlessUri } from '../inbounds/vless-reality-domain';
+import { buildVlessXhttpTlsUri } from '../inbounds/vless-xhttp-tls-domain';
 
 export interface SubscriptionInboundRecord {
   id: string;
@@ -205,6 +208,46 @@ export class VlessRealitySubscriptionAdapter implements SubscriptionProtocolAdap
 }
 
 @Injectable()
+export class VlessXhttpTlsSubscriptionAdapter implements SubscriptionProtocolAdapter {
+  readonly protocol = 'VLESS_XHTTP_TLS' as const;
+
+  constructor(private readonly encryption: SecretEncryptionService) {}
+
+  build(
+    assignment: SubscriptionAssignmentRecord,
+    user: SubscriptionProfileUser,
+    tag: string,
+  ): VlessXhttpTlsSubscriptionEndpoint {
+    const inbound = assignment.inbound;
+    if (!inbound.publicHost) {
+      throw unavailable();
+    }
+    const config = vlessXhttpTlsPublicConfigSchema.safeParse(inbound.config);
+    if (!config.success) {
+      throw unavailable();
+    }
+    const uuid = uuidCredential(
+      this.encryption,
+      assignment.credentialEncrypted,
+    );
+    return {
+      protocol: 'VLESS_XHTTP_TLS',
+      tag,
+      displayName: `${user.identity} - ${inbound.tag}`,
+      server: inbound.publicHost,
+      port: inbound.publicPort ?? inbound.listenPort,
+      uuid,
+      path: config.data.path,
+      host: config.data.host,
+      mode: config.data.mode,
+      tls: {
+        serverName: config.data.tls.sni,
+      },
+    };
+  }
+}
+
+@Injectable()
 export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
   readonly protocol = 'TROJAN' as const;
 
@@ -302,12 +345,14 @@ export class SubscriptionProfileBuilder {
   constructor(
     hysteria2: Hysteria2SubscriptionAdapter,
     vlessReality: VlessRealitySubscriptionAdapter,
+    vlessXhttpTls: VlessXhttpTlsSubscriptionAdapter,
     trojan: TrojanSubscriptionAdapter,
     shadowsocks: ShadowsocksSubscriptionAdapter,
   ) {
     this.adapters = new Map<InboundProtocol, SubscriptionProtocolAdapter>([
       [hysteria2.protocol, hysteria2],
       [vlessReality.protocol, vlessReality],
+      [vlessXhttpTls.protocol, vlessXhttpTls],
       [trojan.protocol, trojan],
       [shadowsocks.protocol, shadowsocks],
     ]);
@@ -328,11 +373,19 @@ export class SubscriptionProfileBuilder {
         return [adapter.build(assignment, user, tag)];
       });
 
+    const warnings: string[] = [];
+    if (endpoints.some((endpoint) => endpoint.protocol === 'VLESS_XHTTP_TLS')) {
+      warnings.push(
+        'VLESS_XHTTP_TLS endpoints are omitted from sing-box client profiles (xHTTP outbound is not included)',
+      );
+    }
+
     return {
       title: `${PRODUCT_NAME} - ${user.username}`,
       identity: user.identity,
       username: user.username,
       endpoints,
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
   }
 
@@ -365,8 +418,12 @@ export class SubscriptionProfileBuilder {
 export function renderSingBoxProfile(
   profile: SubscriptionProfileDescriptor,
 ): string {
-  const endpointTags = profile.endpoints.map((endpoint) => endpoint.tag);
-  const proxyOutbounds = profile.endpoints.map((endpoint) =>
+  // sing-box client JSON does not include VLESS xHTTP outbounds yet; keep other endpoints.
+  const singBoxEndpoints = profile.endpoints.filter(
+    (endpoint) => endpoint.protocol !== 'VLESS_XHTTP_TLS',
+  );
+  const endpointTags = singBoxEndpoints.map((endpoint) => endpoint.tag);
+  const proxyOutbounds = singBoxEndpoints.map((endpoint) =>
     renderSingBoxOutbound(endpoint),
   );
 
@@ -459,7 +516,7 @@ export function renderSingBoxProfile(
 }
 
 function renderSingBoxOutbound(
-  endpoint: SubscriptionEndpoint,
+  endpoint: Exclude<SubscriptionEndpoint, VlessXhttpTlsSubscriptionEndpoint>,
 ): Record<string, unknown> {
   if (endpoint.protocol === 'HYSTERIA2') {
     const outbound: Record<string, unknown> = {
@@ -564,6 +621,18 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
         label: endpoint.displayName,
       });
     }
+    if (endpoint.protocol === 'VLESS_XHTTP_TLS') {
+      return buildVlessXhttpTlsUri({
+        uuid: endpoint.uuid,
+        host: endpoint.server,
+        port: endpoint.port,
+        path: endpoint.path,
+        sni: endpoint.tls.serverName,
+        mode: endpoint.mode,
+        xhttpHost: endpoint.host,
+        label: endpoint.displayName,
+      });
+    }
     if (endpoint.protocol === 'TROJAN') {
       return buildTrojanUri({
         password: endpoint.password,
@@ -589,72 +658,104 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
 export function renderClashProfile(
   profile: SubscriptionProfileDescriptor,
 ): string {
-  const proxyNames = profile.endpoints.map((endpoint) => endpoint.tag);
-  const proxies = profile.endpoints.map((endpoint) => {
-    if (endpoint.protocol === 'HYSTERIA2') {
-      return {
-        name: endpoint.tag,
-        type: 'hysteria2',
-        server: endpoint.server,
-        port: endpoint.port,
-        password: endpoint.password,
-        sni: endpoint.tls.serverName,
-        'skip-cert-verify': endpoint.tls.insecure,
-        ...(endpoint.tls.alpn.length > 0 ? { alpn: endpoint.tls.alpn } : {}),
-        ...(endpoint.obfs
-          ? {
-              obfs: endpoint.obfs.type,
-              'obfs-password': endpoint.obfs.password,
-            }
-          : {}),
-        ...(endpoint.bandwidth.upMbps === null
-          ? {}
-          : { up: `${endpoint.bandwidth.upMbps} Mbps` }),
-        ...(endpoint.bandwidth.downMbps === null
-          ? {}
-          : { down: `${endpoint.bandwidth.downMbps} Mbps` }),
-      };
-    }
-    if (endpoint.protocol === 'VLESS_REALITY') {
-      return {
-        name: endpoint.tag,
-        type: 'vless',
-        server: endpoint.server,
-        port: endpoint.port,
-        uuid: endpoint.uuid,
-        network: 'tcp',
-        tls: true,
-        udp: true,
-        ...(endpoint.flow ? { flow: endpoint.flow } : {}),
-        'client-fingerprint': endpoint.tls.fingerprint,
-        servername: endpoint.tls.serverName,
-        'reality-opts': {
-          'public-key': endpoint.tls.publicKey,
-          'short-id': endpoint.tls.shortId,
+  const proxies: Array<Record<string, unknown>> = profile.endpoints.flatMap(
+    (endpoint): Array<Record<string, unknown>> => {
+      if (endpoint.protocol === 'HYSTERIA2') {
+        return [
+          {
+            name: endpoint.tag,
+            type: 'hysteria2',
+            server: endpoint.server,
+            port: endpoint.port,
+            password: endpoint.password,
+            sni: endpoint.tls.serverName,
+            'skip-cert-verify': endpoint.tls.insecure,
+            ...(endpoint.tls.alpn.length > 0 ? { alpn: endpoint.tls.alpn } : {}),
+            ...(endpoint.obfs
+              ? {
+                  obfs: endpoint.obfs.type,
+                  'obfs-password': endpoint.obfs.password,
+                }
+              : {}),
+            ...(endpoint.bandwidth.upMbps === null
+              ? {}
+              : { up: `${endpoint.bandwidth.upMbps} Mbps` }),
+            ...(endpoint.bandwidth.downMbps === null
+              ? {}
+              : { down: `${endpoint.bandwidth.downMbps} Mbps` }),
+          },
+        ];
+      }
+      if (endpoint.protocol === 'VLESS_REALITY') {
+        return [
+          {
+            name: endpoint.tag,
+            type: 'vless',
+            server: endpoint.server,
+            port: endpoint.port,
+            uuid: endpoint.uuid,
+            network: 'tcp',
+            tls: true,
+            udp: true,
+            ...(endpoint.flow ? { flow: endpoint.flow } : {}),
+            'client-fingerprint': endpoint.tls.fingerprint,
+            servername: endpoint.tls.serverName,
+            'reality-opts': {
+              'public-key': endpoint.tls.publicKey,
+              'short-id': endpoint.tls.shortId,
+            },
+          },
+        ];
+      }
+      if (endpoint.protocol === 'VLESS_XHTTP_TLS') {
+        // Mihomo-style VLESS + network xhttp
+        return [
+          {
+            name: endpoint.tag,
+            type: 'vless',
+            server: endpoint.server,
+            port: endpoint.port,
+            uuid: endpoint.uuid,
+            network: 'xhttp',
+            tls: true,
+            udp: true,
+            'client-fingerprint': 'chrome',
+            servername: endpoint.tls.serverName,
+            'xhttp-opts': {
+              path: endpoint.path,
+              mode: endpoint.mode,
+              ...(endpoint.host ? { host: endpoint.host } : {}),
+            },
+          },
+        ];
+      }
+      if (endpoint.protocol === 'TROJAN') {
+        return [
+          {
+            name: endpoint.tag,
+            type: 'trojan',
+            server: endpoint.server,
+            port: endpoint.port,
+            password: endpoint.password,
+            sni: endpoint.tls.serverName,
+            'skip-cert-verify': endpoint.tls.insecure,
+            ...(endpoint.tls.alpn.length > 0 ? { alpn: endpoint.tls.alpn } : {}),
+          },
+        ];
+      }
+      return [
+        {
+          name: endpoint.tag,
+          type: 'ss',
+          server: endpoint.server,
+          port: endpoint.port,
+          cipher: endpoint.method,
+          password: endpoint.password,
         },
-      };
-    }
-    if (endpoint.protocol === 'TROJAN') {
-      return {
-        name: endpoint.tag,
-        type: 'trojan',
-        server: endpoint.server,
-        port: endpoint.port,
-        password: endpoint.password,
-        sni: endpoint.tls.serverName,
-        'skip-cert-verify': endpoint.tls.insecure,
-        ...(endpoint.tls.alpn.length > 0 ? { alpn: endpoint.tls.alpn } : {}),
-      };
-    }
-    return {
-      name: endpoint.tag,
-      type: 'ss',
-      server: endpoint.server,
-      port: endpoint.port,
-      cipher: endpoint.method,
-      password: endpoint.password,
-    };
-  });
+      ];
+    },
+  );
+  const proxyNames = proxies.map((proxy) => String(proxy.name));
   const config = {
     'mixed-port': 7890,
     'allow-lan': false,

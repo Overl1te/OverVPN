@@ -6,11 +6,24 @@ import {
   SubscriptionProfileBuilder,
   TrojanSubscriptionAdapter,
   VlessRealitySubscriptionAdapter,
+  VlessXhttpTlsSubscriptionAdapter,
   renderClashProfile,
   renderLinkList,
   renderSingBoxProfile,
   type SubscriptionProfileUser,
 } from './subscription-profile';
+
+function createBuilder(
+  encryption: SecretEncryptionService,
+): SubscriptionProfileBuilder {
+  return new SubscriptionProfileBuilder(
+    new Hysteria2SubscriptionAdapter(encryption),
+    new VlessRealitySubscriptionAdapter(encryption),
+    new VlessXhttpTlsSubscriptionAdapter(encryption),
+    new TrojanSubscriptionAdapter(encryption),
+    new ShadowsocksSubscriptionAdapter(encryption),
+  );
+}
 
 describe('SubscriptionProfileBuilder', () => {
   let builder: SubscriptionProfileBuilder;
@@ -36,19 +49,8 @@ describe('SubscriptionProfileBuilder', () => {
         throw new Error('Unknown encrypted fixture');
       }),
     };
-    builder = new SubscriptionProfileBuilder(
-      new Hysteria2SubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
-      new VlessRealitySubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
-      new TrojanSubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
-      new ShadowsocksSubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
+    builder = createBuilder(
+      encryption as unknown as SecretEncryptionService,
     );
     profile = builder.build(profileUser());
   });
@@ -262,19 +264,8 @@ describe('SubscriptionProfileBuilder', () => {
         throw new Error('Unknown encrypted fixture');
       }),
     };
-    const mixedBuilder = new SubscriptionProfileBuilder(
-      new Hysteria2SubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
-      new VlessRealitySubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
-      new TrojanSubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
-      new ShadowsocksSubscriptionAdapter(
-        encryption as unknown as SecretEncryptionService,
-      ),
+    const mixedBuilder = createBuilder(
+      encryption as unknown as SecretEncryptionService,
     );
     const mixedProfile = mixedBuilder.build(mixedUser);
     const links = renderLinkList(mixedProfile).trim().split('\n');
@@ -308,6 +299,93 @@ describe('SubscriptionProfileBuilder', () => {
     expect(
       builder.build(user).endpoints.map((endpoint) => endpoint.tag),
     ).toEqual(['hy2-edge_eu', 'hy2-edge_eu-2']);
+  });
+
+  it('builds VLESS_XHTTP_TLS share links and warns about sing-box omission', () => {
+    const encryption = {
+      decrypt: jest.fn((payload: string) => {
+        if (payload === 'v1:xhttp-credential') {
+          return JSON.stringify({
+            version: 1,
+            uuid: '7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e',
+          });
+        }
+        throw new Error('Unknown encrypted fixture');
+      }),
+    };
+    const xhttpBuilder = createBuilder(
+      encryption as unknown as SecretEncryptionService,
+    );
+    const user: SubscriptionProfileUser = {
+      identity: 'Bob',
+      username: 'bob',
+      inboundAssignments: [
+        {
+          id: 'assignment-xhttp',
+          credentialEncrypted: 'v1:xhttp-credential',
+          inbound: {
+            id: 'inbound-xhttp',
+            tag: 'Edge_XHTTP',
+            protocol: 'VLESS_XHTTP_TLS',
+            publicHost: 'vpn.example.com',
+            publicPort: 443,
+            listenPort: 443,
+            config: {
+              path: '/api/v1/ws',
+              host: 'cdn.example.com',
+              mode: 'auto',
+              tls: {
+                mode: 'FILES',
+                sni: 'vpn.example.com',
+                certificatePath: '/cert.pem',
+                keyPath: '/key.pem',
+                certificatePemPresent: false,
+                privateKeyPemPresent: false,
+              },
+            },
+            secretDataEncrypted: null,
+          },
+        },
+      ],
+    };
+
+    const xhttpProfile = xhttpBuilder.build(user);
+    const links = renderLinkList(xhttpProfile).trim();
+    const singBox = JSON.parse(renderSingBoxProfile(xhttpProfile)) as {
+      outbounds: Array<{ type: string; tag: string }>;
+    };
+    const clash = parseYaml(renderClashProfile(xhttpProfile)) as {
+      proxies: Array<Record<string, unknown>>;
+    };
+
+    expect(xhttpProfile.warnings).toEqual([
+      'VLESS_XHTTP_TLS endpoints are omitted from sing-box client profiles (xHTTP outbound is not included)',
+    ]);
+    expect(links).toBe(
+      'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:443?encryption=none&security=tls&type=xhttp&path=%2Fapi%2Fv1%2Fws&host=cdn.example.com&sni=vpn.example.com&fp=chrome&mode=auto#Bob%20-%20Edge_XHTTP',
+    );
+    expect(singBox.outbounds.filter((outbound) => outbound.type === 'vless')).toEqual(
+      [],
+    );
+    expect(clash.proxies).toEqual([
+      {
+        name: 'vless-xhttp-tls-edge_xhttp',
+        type: 'vless',
+        server: 'vpn.example.com',
+        port: 443,
+        uuid: '7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e',
+        network: 'xhttp',
+        tls: true,
+        udp: true,
+        'client-fingerprint': 'chrome',
+        servername: 'vpn.example.com',
+        'xhttp-opts': {
+          path: '/api/v1/ws',
+          mode: 'auto',
+          host: 'cdn.example.com',
+        },
+      },
+    ]);
   });
 });
 

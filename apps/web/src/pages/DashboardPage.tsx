@@ -96,6 +96,31 @@ export function DashboardPage() {
                 <br />
                 {t('dashboard.latency')}: {health?.core.latencyMs ?? data?.core.latencyMs ?? '—'} ms
               </div>
+              {Object.entries(health?.core.engines ?? data?.core.engines ?? {}).map(
+                ([engine, engineHealth]) => (
+                  <div
+                    key={engine}
+                    style={{
+                      marginTop: 6,
+                      fontSize: 12,
+                      color: '#64748b',
+                      display: 'flex',
+                      gap: 6,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Tag
+                      color={engineHealth.healthy ? 'green' : 'red'}
+                      style={{ marginInlineEnd: 0 }}
+                    >
+                      {t(`enums.coreEngine.${engine}`)}
+                    </Tag>
+                    <span>
+                      {engineHealth.version || '—'} · {engineHealth.latencyMs} ms
+                    </span>
+                  </div>
+                ),
+              )}
             </div>
           </Card>
         </Col>

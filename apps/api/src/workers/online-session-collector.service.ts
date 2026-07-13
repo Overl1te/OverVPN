@@ -65,7 +65,18 @@ export class OnlineSessionCollectorService {
                   ),
                 ),
               ];
-              const [users, inbounds] = await Promise.all([
+              const xrayUserIdsNeedingFallback = [
+                ...new Set(
+                  snapshot.clients.flatMap((client) =>
+                    client.engine === 'XRAY' &&
+                    !client.inboundTag &&
+                    client.panelUserId
+                      ? [client.panelUserId]
+                      : [],
+                  ),
+                ),
+              ];
+              const [users, inbounds, xrayAssignments] = await Promise.all([
                 tx.user.findMany({
                   where: { id: { in: userIds }, deletedAt: null },
                   select: { id: true },
@@ -74,11 +85,37 @@ export class OnlineSessionCollectorService {
                   where: { tag: { in: inboundTags } },
                   select: { id: true, tag: true },
                 }),
+                xrayUserIdsNeedingFallback.length > 0
+                  ? tx.userInboundAssignment.findMany({
+                      where: {
+                        userId: { in: xrayUserIdsNeedingFallback },
+                        status: 'ACTIVE',
+                        inbound: {
+                          engine: 'XRAY',
+                          enabled: true,
+                        },
+                      },
+                      select: {
+                        userId: true,
+                        inboundId: true,
+                      },
+                      orderBy: [{ userId: 'asc' }, { id: 'asc' }],
+                    })
+                  : Promise.resolve([]),
               ]);
               const knownUsers = new Set(users.map((user) => user.id));
               const inboundByTag = new Map(
                 inbounds.map((inbound) => [inbound.tag, inbound.id]),
               );
+              const xrayInboundByUser = new Map<string, string>();
+              for (const assignment of xrayAssignments) {
+                if (!xrayInboundByUser.has(assignment.userId)) {
+                  xrayInboundByUser.set(
+                    assignment.userId,
+                    assignment.inboundId,
+                  );
+                }
+              }
               const seenConnectionIds = snapshot.clients
                 .map((client) => client.connectionId)
                 .filter((id) => id.length > 0 && id.length <= 255);
@@ -91,13 +128,19 @@ export class OnlineSessionCollectorService {
                   !client.connectionId ||
                   client.connectionId.length > 255 ||
                   !client.panelUserId ||
-                  !knownUsers.has(client.panelUserId) ||
-                  !client.inboundTag
+                  !knownUsers.has(client.panelUserId)
                 ) {
                   unresolved += 1;
                   continue;
                 }
-                const inboundId = inboundByTag.get(client.inboundTag);
+
+                let inboundId: string | undefined;
+                if (client.inboundTag) {
+                  inboundId = inboundByTag.get(client.inboundTag);
+                } else if (client.engine === 'XRAY') {
+                  inboundId = xrayInboundByUser.get(client.panelUserId);
+                }
+
                 if (!inboundId) {
                   unresolved += 1;
                   continue;
@@ -124,6 +167,7 @@ export class OnlineSessionCollectorService {
                   where: { sessionKey: client.connectionId },
                   create: {
                     sessionKey: client.connectionId,
+                    engine: client.engine,
                     userId: client.panelUserId,
                     inboundId,
                     ipAddress,
@@ -133,6 +177,7 @@ export class OnlineSessionCollectorService {
                     disconnectedAt: null,
                   },
                   update: {
+                    engine: client.engine,
                     userId: client.panelUserId,
                     inboundId,
                     ipAddress,

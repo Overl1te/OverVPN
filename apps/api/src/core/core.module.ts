@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CompositeCoreProvider } from './composite-core.provider';
 import {
   CoreFileSystem,
   CoreHttpAdapter,
@@ -10,14 +11,20 @@ import {
   ProcessAdapter,
   ReloadHandshakeAdapter,
   SharedVolumeReloadHandshakeAdapter,
+  SharedVolumeXrayReloadHandshakeAdapter,
+  XrayReloadHandshakeAdapter,
 } from './core-adapters';
 import { CoreApplyService } from './core-apply.service';
+import {
+  CORE_ENGINE_PROVIDERS,
+  CoreEngineRegistry,
+} from './core-engine.registry';
 import {
   CoreChangeDispatcher,
   DurableCoreChangeDispatcher,
 } from './core-change-dispatcher';
 import { CoreController } from './core.controller';
-import { CoreProvider } from './core-provider';
+import { CoreProvider, type EngineProvider } from './core-provider';
 import { CoreStateLoader } from './core-state.loader';
 import { RedisDistributedLock } from './distributed-lock';
 import { SingBoxProvider } from './sing-box.provider';
@@ -25,6 +32,11 @@ import {
   GrpcV2RayStatsAdapter,
   V2RayStatsAdapter,
 } from './v2ray-stats.adapter';
+import { XrayProvider } from './xray.provider';
+import {
+  GrpcXrayStatsAdapter,
+  XrayStatsAdapter,
+} from './xray-stats.adapter';
 
 @Global()
 @Module({
@@ -48,6 +60,10 @@ import {
       useClass: SharedVolumeReloadHandshakeAdapter,
     },
     {
+      provide: XrayReloadHandshakeAdapter,
+      useClass: SharedVolumeXrayReloadHandshakeAdapter,
+    },
+    {
       provide: CoreHttpAdapter,
       useClass: FetchCoreHttpAdapter,
     },
@@ -56,8 +72,24 @@ import {
       useClass: GrpcV2RayStatsAdapter,
     },
     {
+      provide: XrayStatsAdapter,
+      useClass: GrpcXrayStatsAdapter,
+    },
+    SingBoxProvider,
+    XrayProvider,
+    {
+      provide: CORE_ENGINE_PROVIDERS,
+      inject: [SingBoxProvider, XrayProvider],
+      useFactory: (
+        singBoxProvider: SingBoxProvider,
+        xrayProvider: XrayProvider,
+      ): readonly EngineProvider[] => [singBoxProvider, xrayProvider],
+    },
+    CoreEngineRegistry,
+    CompositeCoreProvider,
+    {
       provide: CoreProvider,
-      useClass: SingBoxProvider,
+      useExisting: CompositeCoreProvider,
     },
     CoreStateLoader,
     RedisDistributedLock,
@@ -66,11 +98,13 @@ import {
   exports: [
     CoreChangeDispatcher,
     CoreProvider,
+    CoreEngineRegistry,
     CoreApplyService,
     RedisDistributedLock,
     ProcessAdapter,
     CoreFileSystem,
     ReloadHandshakeAdapter,
+    XrayReloadHandshakeAdapter,
   ],
 })
 export class CoreModule {}

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { CoreEngine } from '@overvpn/shared/constants';
 import type { AppEnvironment } from '../config/environment';
 import { localizeWorkerError } from '../core/core-user-messages';
 import { CoreProvider, type TrafficCounter } from '../core/core-provider';
@@ -25,6 +26,7 @@ const uuidPattern =
 
 interface ParsedCounter {
   statsKey: string;
+  engine: CoreEngine;
   uploadBytes: bigint;
   downloadBytes: bigint;
 }
@@ -118,6 +120,10 @@ export class TrafficCollectorService {
             unknownUsers: accounting.unknownUserIds.length,
             unknownUserIds: accounting.unknownUserIds.slice(0, 20),
             invalidCounters: parsed.invalidCounters,
+            enginesPolled: parsed.enginesPolled,
+            countersByEngine: Object.entries(parsed.countersByEngine).map(
+              ([engine, count]) => `${engine}:${count}`,
+            ),
             uploadDeltaBytes: accounting.uploadDelta.toString(),
             downloadDeltaBytes: accounting.downloadDelta.toString(),
             absoluteUploadBytes: parsed.absoluteUpload.toString(),
@@ -171,9 +177,12 @@ export class TrafficCollectorService {
     invalidCounters: number;
     absoluteUpload: bigint;
     absoluteDownload: bigint;
+    enginesPolled: CoreEngine[];
+    countersByEngine: Record<string, number>;
   } {
     const parsed = new Map<string, ParsedCounter>();
     let invalidCounters = 0;
+    const countersByEngine: Record<string, number> = {};
     for (const counter of counters) {
       if (counter.scope !== 'user') {
         continue;
@@ -189,7 +198,15 @@ export class TrafficCollectorService {
         invalidCounters += 1;
         continue;
       }
-      parsed.set(statsKey, { statsKey, uploadBytes, downloadBytes });
+      const cursorKey = `${statsKey}\0${counter.engine}`;
+      parsed.set(cursorKey, {
+        statsKey,
+        engine: counter.engine,
+        uploadBytes,
+        downloadBytes,
+      });
+      countersByEngine[counter.engine] =
+        (countersByEngine[counter.engine] ?? 0) + 1;
     }
     let absoluteUpload = 0n;
     let absoluteDownload = 0n;
@@ -197,13 +214,18 @@ export class TrafficCollectorService {
       absoluteUpload += counter.uploadBytes;
       absoluteDownload += counter.downloadBytes;
     }
+    const enginesPolled = Object.keys(countersByEngine).sort() as CoreEngine[];
     return {
       counters: [...parsed.values()].sort((left, right) =>
-        left.statsKey.localeCompare(right.statsKey),
+        left.statsKey === right.statsKey
+          ? left.engine.localeCompare(right.engine)
+          : left.statsKey.localeCompare(right.statsKey),
       ),
       invalidCounters,
       absoluteUpload,
       absoluteDownload,
+      enginesPolled,
+      countersByEngine,
     };
   }
 
@@ -234,44 +256,57 @@ export class TrafficCollectorService {
     }
     return this.prisma.$transaction(
       async (tx) => {
+        const userIds = [...new Set(counters.map((counter) => counter.statsKey))];
         const users = await tx.user.findMany({
           where: {
-            id: { in: counters.map((counter) => counter.statsKey) },
+            id: { in: userIds },
             deletedAt: null,
           },
           orderBy: { id: 'asc' },
         });
-        const counterById = new Map(
-          counters.map((counter) => [counter.statsKey, counter]),
-        );
         const knownIds = new Set(users.map((user) => user.id));
-        const unknownUserIds = counters
-          .map((counter) => counter.statsKey)
-          .filter((id) => !knownIds.has(id));
+        const unknownUserIds = userIds.filter((id) => !knownIds.has(id));
         const cursors = await tx.trafficCursor.findMany({
-          where: { statsKey: { in: users.map((user) => user.id) } },
+          where: {
+            OR: counters.map((counter) => ({
+              statsKey: counter.statsKey,
+              engine: counter.engine,
+            })),
+          },
         });
         const cursorByKey = new Map(
-          cursors.map((cursor) => [cursor.statsKey, cursor]),
+          cursors.map((cursor) => [
+            `${cursor.statsKey}\0${cursor.engine}`,
+            cursor,
+          ]),
         );
+        const userById = new Map(users.map((user) => [user.id, user]));
+        const userDeltas = new Map<
+          string,
+          { upload: bigint; download: bigint }
+        >();
         let uploadDelta = 0n;
         let downloadDelta = 0n;
         let baselineUsers = 0;
         let resetCounters = 0;
         let staleSamples = 0;
+        const touchedUsers = new Set<string>();
 
-        for (const user of users) {
-          const counter = counterById.get(user.id);
-          if (!counter) {
+        for (const counter of counters) {
+          const user = userById.get(counter.statsKey);
+          if (!user) {
             continue;
           }
-          const cursor = cursorByKey.get(counter.statsKey) ?? null;
+          touchedUsers.add(user.id);
+          const cursorKey = `${counter.statsKey}\0${counter.engine}`;
+          const cursor = cursorByKey.get(cursorKey) ?? null;
           if (cursor && capturedAt <= cursor.observedAt) {
             staleSamples += 1;
             continue;
           }
+          // Include engine in the sample-key material so dual-core samples do not collide.
           const computed = computeTrafficDelta(
-            counter.statsKey,
+            `${counter.engine}:${counter.statsKey}`,
             user.accountingEpoch,
             counter.uploadBytes,
             counter.downloadBytes,
@@ -284,8 +319,13 @@ export class TrafficCollectorService {
             resetCounters += 1;
           }
           if (computed.uploadDelta > 0n || computed.downloadDelta > 0n) {
-            checkedByteSum(user.usedUploadBytes, computed.uploadDelta);
-            checkedByteSum(user.usedDownloadBytes, computed.downloadDelta);
+            const existing = userDeltas.get(user.id) ?? {
+              upload: 0n,
+              download: 0n,
+            };
+            existing.upload += computed.uploadDelta;
+            existing.download += computed.downloadDelta;
+            userDeltas.set(user.id, existing);
             await tx.trafficDelta.create({
               data: {
                 userId: user.id,
@@ -297,20 +337,19 @@ export class TrafficCollectorService {
                 sampleKey: computed.sampleKey,
               },
             });
-            await tx.user.update({
-              where: { id: user.id },
-              data: {
-                usedUploadBytes: { increment: computed.uploadDelta },
-                usedDownloadBytes: { increment: computed.downloadDelta },
-              },
-            });
             uploadDelta += computed.uploadDelta;
             downloadDelta += computed.downloadDelta;
           }
           await tx.trafficCursor.upsert({
-            where: { statsKey: counter.statsKey },
+            where: {
+              statsKey_engine: {
+                statsKey: counter.statsKey,
+                engine: counter.engine,
+              },
+            },
             create: {
               statsKey: counter.statsKey,
+              engine: counter.engine,
               userId: user.id,
               lastUploadBytes: counter.uploadBytes,
               lastDownloadBytes: counter.downloadBytes,
@@ -330,9 +369,26 @@ export class TrafficCollectorService {
             },
           });
         }
+
+        for (const [userId, deltas] of userDeltas) {
+          const user = userById.get(userId);
+          if (!user) {
+            continue;
+          }
+          checkedByteSum(user.usedUploadBytes, deltas.upload);
+          checkedByteSum(user.usedDownloadBytes, deltas.download);
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              usedUploadBytes: { increment: deltas.upload },
+              usedDownloadBytes: { increment: deltas.download },
+            },
+          });
+        }
+
         await assertOwned.verify();
         return {
-          collectedUsers: users.length,
+          collectedUsers: touchedUsers.size,
           baselineUsers,
           resetCounters,
           staleSamples,
