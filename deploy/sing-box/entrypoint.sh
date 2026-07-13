@@ -9,7 +9,7 @@ POLL_SECONDS="${SING_BOX_RELOAD_POLL_SECONDS:-0.2}"
 SETTLE_SECONDS="${SING_BOX_RELOAD_SETTLE_SECONDS:-1}"
 
 mkdir -p "$(dirname "$ACK_PATH")"
-rm -f "$ACK_PATH"
+rm -f "$ACK_PATH" "$REQUEST_PATH"
 
 sing-box run -c "$CONFIG_PATH" &
 child_pid=$!
