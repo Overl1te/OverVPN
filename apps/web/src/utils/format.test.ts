@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { buildSubscriptionUrl, formatBytes, formatBytesPerSecond, truncateMiddle } from './format';
+import {
+  buildSubscriptionClientLinks,
+  buildSubscriptionUrl,
+  formatBytes,
+  formatBytesPerSecond,
+  truncateMiddle,
+} from './format';
 
 describe('formatBytes', () => {
   it('formats small and large values', () => {
@@ -34,6 +40,30 @@ describe('buildSubscriptionUrl', () => {
     assert.equal(
       buildSubscriptionUrl('abc', 'https://example.com/sub'),
       'https://example.com/sub/abc',
+    );
+  });
+
+  it('prefers the configured subscription base host', () => {
+    assert.equal(
+      buildSubscriptionUrl('abc', 'https://sub.example.com'),
+      'https://sub.example.com/api/sub/abc',
+    );
+  });
+});
+
+describe('buildSubscriptionClientLinks', () => {
+  it('builds known client deep links', () => {
+    const url = 'https://sub.example.com/api/sub/token';
+    const links = buildSubscriptionClientLinks(url);
+    assert.deepEqual(
+      links.map((link) => link.id),
+      ['happ', 'hiddify', 'clash', 'v2rayng', 'singbox'],
+    );
+    assert.equal(links[0]?.href, `happ://add/${url}`);
+    assert.equal(links[1]?.href, `hiddify://import/${url}`);
+    assert.equal(
+      links[2]?.href,
+      `clash://install-config?url=${encodeURIComponent(url)}`,
     );
   });
 });

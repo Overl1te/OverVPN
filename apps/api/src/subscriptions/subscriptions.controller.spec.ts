@@ -1,4 +1,4 @@
-import { type INestApplication } from '@nestjs/common';
+import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { SubscriptionInfo } from '@overvpn/shared/schemas';
 import request from 'supertest';
@@ -87,6 +87,15 @@ describe('SubscriptionsController', () => {
       .compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
+    // Mirror production: forbidNonWhitelisted must not reject ?format=
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        transformOptions: { enableImplicitConversion: false },
+      }),
+    );
     await app.init();
   });
 
@@ -148,6 +157,9 @@ describe('subscription format negotiation', () => {
     ['application/json', 'Mihomo/1.0', 'sing-box'],
     ['*/*', 'Mihomo/1.0', 'clash'],
     ['*/*', 'v2rayN/7', 'links'],
+    ['*/*', 'Happ/1.0', 'links'],
+    ['*/*', 'HiddifyNext/1.0', 'links'],
+    ['*/*', 'nekoray/3', 'links'],
     [undefined, undefined, 'sing-box'],
   ] as const)(
     'negotiates Accept=%s User-Agent=%s as %s',

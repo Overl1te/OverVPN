@@ -274,6 +274,14 @@ export const environmentSchema = z
       .min(1)
       .max(65_535)
       .default(443),
+    VPN_TLS_CERTIFICATE_PATH: z.preprocess(
+      (value) => (value === '' || value === undefined ? undefined : value),
+      z.string().trim().min(1).max(1_024).optional(),
+    ),
+    VPN_TLS_KEY_PATH: z.preprocess(
+      (value) => (value === '' || value === undefined ? undefined : value),
+      z.string().trim().min(1).max(1_024).optional(),
+    ),
     CORE_APPLY_LOCK_TTL_MS: z.coerce
       .number()
       .int()

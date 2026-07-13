@@ -109,24 +109,94 @@ function sanitizeInboundForm(
   const host = settings.publicHost?.trim() ?? '';
 
   // Ant Design onFinish only returns registered fields; simple mode hides most TLS
-  // keys, so rebuild ACME defaults and overlay whatever the form still has.
-  if (
-    (values.protocol === 'HYSTERIA2' || values.protocol === 'TROJAN') &&
-    'tls' in settings &&
-    (!settings.tls || settings.tls.mode === 'ACME' || settings.tls.mode === undefined)
-  ) {
+  // keys, so rebuild defaults and overlay whatever the form still has.
+  if (values.protocol === 'HYSTERIA2' || values.protocol === 'TROJAN') {
     const preset = buildDefaultInboundSettings(
       values.protocol,
       {
         publicHost: host || defaultsContext.publicHost,
         acmeHttpPort: defaultsContext.acmeHttpPort,
         acmeTlsPort: defaultsContext.acmeTlsPort,
+        tlsCertificatePath: defaultsContext.tlsCertificatePath,
+        tlsKeyPath: defaultsContext.tlsKeyPath,
       },
       listenOverrides(settings),
-    );
-    if ('tls' in preset && preset.tls.mode === 'ACME') {
-      const formTls =
-        settings.tls && typeof settings.tls === 'object' ? settings.tls : { mode: 'ACME' as const };
+    ) as Extract<
+      ReturnType<typeof buildDefaultInboundSettings>,
+      { tls: unknown }
+    >;
+    const presetTls = preset.tls;
+    const formTls =
+      'tls' in settings && settings.tls && typeof settings.tls === 'object'
+        ? settings.tls
+        : { mode: presetTls.mode };
+    const formMode =
+      'mode' in formTls && (formTls.mode === 'ACME' || formTls.mode === 'FILES')
+        ? formTls.mode
+        : presetTls.mode;
+
+    if (formMode === 'FILES') {
+      const presetFiles = presetTls.mode === 'FILES' ? presetTls : null;
+      const certificatePath =
+        ('certificatePath' in formTls && typeof formTls.certificatePath === 'string'
+          ? formTls.certificatePath
+          : undefined) ||
+        presetFiles?.certificatePath ||
+        defaultsContext.tlsCertificatePath ||
+        undefined;
+      const keyPath =
+        ('keyPath' in formTls && typeof formTls.keyPath === 'string'
+          ? formTls.keyPath
+          : undefined) ||
+        presetFiles?.keyPath ||
+        defaultsContext.tlsKeyPath ||
+        undefined;
+      settings = {
+        ...preset,
+        ...settings,
+        tls: {
+          ...(presetFiles ?? {
+            mode: 'FILES' as const,
+            sni: host || defaultsContext.publicHost,
+            alpn: ['h3'],
+            minVersion: '1.2' as const,
+            cipherSuites: [],
+            curvePreferences: [],
+            kernelTx: false,
+            kernelRx: false,
+            clientInsecure: false,
+            certificatePath: certificatePath!,
+            keyPath: keyPath!,
+          }),
+          ...('mode' in formTls && formTls.mode === 'FILES' ? formTls : {}),
+          mode: 'FILES',
+          sni:
+            ('sni' in formTls && typeof formTls.sni === 'string' && formTls.sni) ||
+            host ||
+            presetFiles?.sni ||
+            defaultsContext.publicHost,
+          certificatePath: certificatePath!,
+          keyPath: keyPath!,
+        },
+      };
+    } else {
+      const acmePreset =
+        presetTls.mode === 'ACME'
+          ? presetTls
+          : (
+              buildDefaultInboundSettings(
+                values.protocol,
+                {
+                  publicHost: host || defaultsContext.publicHost,
+                  acmeHttpPort: defaultsContext.acmeHttpPort,
+                  acmeTlsPort: defaultsContext.acmeTlsPort,
+                },
+                listenOverrides(settings),
+              ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>
+            ).tls;
+      if (acmePreset.mode !== 'ACME') {
+        return { ...values, settings };
+      }
       const formDomains =
         'domains' in formTls && Array.isArray(formTls.domains) ? formTls.domains : undefined;
       const formSni = 'sni' in formTls && typeof formTls.sni === 'string' ? formTls.sni : undefined;
@@ -141,47 +211,31 @@ function sanitizeInboundForm(
         ...preset,
         ...settings,
         tls: {
-          ...preset.tls,
-          ...formTls,
+          ...acmePreset,
+          ...('mode' in formTls && formTls.mode === 'ACME' ? formTls : {}),
           mode: 'ACME',
-          sni: formSni || host || preset.tls.sni,
-          domains: formDomains?.length ? formDomains : host ? [host] : preset.tls.domains,
+          sni: formSni || host || acmePreset.sni,
+          domains: formDomains?.length ? formDomains : host ? [host] : acmePreset.domains,
           provider: formProvider || 'letsencrypt',
           dataDirectory:
             ('dataDirectory' in formTls && typeof formTls.dataDirectory === 'string'
               ? formTls.dataDirectory
-              : undefined) || preset.tls.dataDirectory,
+              : undefined) || acmePreset.dataDirectory,
         },
       };
 
       const acmeTls = settings.tls;
-      if (acmeTls.mode !== 'ACME') {
-        return { ...values, settings };
-      }
-
-      const email = formEmail;
-      if (email && isProbablyEmail(email)) {
-        acmeTls.email = email;
-      } else {
-        const fallback = defaultAcmeEmail(settings.publicHost);
-        if (fallback) {
-          acmeTls.email = fallback;
+      if (acmeTls.mode === 'ACME') {
+        if (formEmail && isProbablyEmail(formEmail)) {
+          acmeTls.email = formEmail;
         } else {
-          delete acmeTls.email;
+          const fallback = defaultAcmeEmail(settings.publicHost);
+          if (fallback) {
+            acmeTls.email = fallback;
+          } else {
+            delete acmeTls.email;
+          }
         }
-      }
-    }
-  } else if ('tls' in settings && settings.tls.mode === 'ACME') {
-    const email = settings.tls.email?.trim();
-    settings.tls.provider = settings.tls.provider?.trim() || 'letsencrypt';
-    if (email && isProbablyEmail(email)) {
-      settings.tls.email = email;
-    } else {
-      const fallback = defaultAcmeEmail(settings.publicHost);
-      if (fallback) {
-        settings.tls.email = fallback;
-      } else {
-        delete settings.tls.email;
       }
     }
   }
@@ -271,11 +325,26 @@ function AcmeTlsFields({ detailed }: { detailed: boolean }) {
   );
 }
 
-function Hysteria2Fields({ detailed }: { detailed: boolean }) {
+function FileTlsHiddenFields() {
+  return (
+    <>
+      <Form.Item name={['settings', 'tls', 'sni']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={['settings', 'tls', 'certificatePath']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={['settings', 'tls', 'keyPath']} hidden>
+        <Input />
+      </Form.Item>
+    </>
+  );
+}
+
+function TlsModeFields({ detailed }: { detailed: boolean }) {
   const { t } = useTranslation();
   const form = Form.useFormInstance<InboundEditorForm>();
   const tlsMode = Form.useWatch(['settings', 'tls', 'mode'], form);
-  const obfsEnabled = Form.useWatch(['settings', 'obfs'], form) !== null;
 
   return (
     <>
@@ -293,8 +362,8 @@ function Hysteria2Fields({ detailed }: { detailed: boolean }) {
           <Input />
         </Form.Item>
       )}
-      {(detailed ? tlsMode === 'ACME' : true) ? <AcmeTlsFields detailed={detailed} /> : null}
-      {detailed && tlsMode === 'FILES' ? (
+      {tlsMode === 'ACME' ? <AcmeTlsFields detailed={detailed} /> : null}
+      {tlsMode === 'FILES' && detailed ? (
         <>
           <Form.Item
             name={['settings', 'tls', 'certificatePath']}
@@ -307,6 +376,19 @@ function Hysteria2Fields({ detailed }: { detailed: boolean }) {
           </Form.Item>
         </>
       ) : null}
+      {tlsMode === 'FILES' && !detailed ? <FileTlsHiddenFields /> : null}
+    </>
+  );
+}
+
+function Hysteria2Fields({ detailed }: { detailed: boolean }) {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance<InboundEditorForm>();
+  const obfsEnabled = Form.useWatch(['settings', 'obfs'], form) !== null;
+
+  return (
+    <>
+      <TlsModeFields detailed={detailed} />
       {detailed ? (
         <>
           <Space size="large" wrap>
@@ -352,39 +434,11 @@ function Hysteria2Fields({ detailed }: { detailed: boolean }) {
 function TrojanFields({ detailed }: { detailed: boolean }) {
   const { t } = useTranslation();
   const form = Form.useFormInstance<InboundEditorForm>();
-  const tlsMode = Form.useWatch(['settings', 'tls', 'mode'], form);
   const fallbackEnabled = Form.useWatch(['settings', 'fallback'], form) !== null;
 
   return (
     <>
-      {detailed ? (
-        <Form.Item name={['settings', 'tls', 'mode']} label={t('inbounds.tlsMode')}>
-          <Select
-            options={[
-              { value: 'ACME', label: t('inbounds.tlsAcme') },
-              { value: 'FILES', label: t('inbounds.tlsFiles') },
-            ]}
-          />
-        </Form.Item>
-      ) : (
-        <Form.Item name={['settings', 'tls', 'mode']} hidden>
-          <Input />
-        </Form.Item>
-      )}
-      {(detailed ? tlsMode === 'ACME' : true) ? <AcmeTlsFields detailed={detailed} /> : null}
-      {detailed && tlsMode === 'FILES' ? (
-        <>
-          <Form.Item
-            name={['settings', 'tls', 'certificatePath']}
-            label={t('inbounds.certificatePath')}
-          >
-            <Input autoComplete="off" />
-          </Form.Item>
-          <Form.Item name={['settings', 'tls', 'keyPath']} label={t('inbounds.keyPath')}>
-            <Input autoComplete="off" />
-          </Form.Item>
-        </>
-      ) : null}
+      <TlsModeFields detailed={detailed} />
       {detailed ? (
         <>
           <Form.Item label={t('inbounds.fallback')}>
@@ -570,6 +624,8 @@ export function InboundEditor({
       publicHost: settingsQuery.data.readOnly.vpnPublicHost?.trim() ?? '',
       acmeHttpPort: settingsQuery.data.readOnly.acmeHttpPort,
       acmeTlsPort: settingsQuery.data.readOnly.acmeTlsPort,
+      tlsCertificatePath: settingsQuery.data.readOnly.tlsCertificatePath,
+      tlsKeyPath: settingsQuery.data.readOnly.tlsKeyPath,
     };
   }, [inbound, settingsQuery.data, settingsQuery.isSuccess]);
 

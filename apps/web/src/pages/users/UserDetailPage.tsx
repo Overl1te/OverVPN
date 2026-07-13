@@ -33,6 +33,7 @@ import {
 } from '@/api/users';
 import { listPlans } from '@/api/plans';
 import { addAssignment, listAssignments, listInbounds, removeAssignment } from '@/api/inbounds';
+import { getSettings } from '@/api/settings';
 import { PageHeader } from '@/components/PageHeader';
 import { UserStatusTag } from '@/components/StatusTag';
 import { CopyButton } from '@/components/CopyButton';
@@ -40,7 +41,11 @@ import { QrModal } from '@/components/QrModal';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
-import { buildSubscriptionUrl, formatBytes } from '@/utils/format';
+import {
+  buildSubscriptionClientLinks,
+  buildSubscriptionUrl,
+  formatBytes,
+} from '@/utils/format';
 
 function userHasAdvancedValues(user: UserResult): boolean {
   return (
@@ -127,6 +132,12 @@ export function UserDetailPage() {
     },
   });
 
+  const settingsQuery = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+    enabled: !isNew,
+  });
+
   const planOptions = useMemo(
     () =>
       (plansQuery.data?.items ?? []).map((plan) => ({
@@ -211,7 +222,24 @@ export function UserDetailPage() {
   });
 
   const user = userQuery.data;
-  const subUrl = user ? buildSubscriptionUrl(user.subToken) : '';
+  const subBaseUrl = settingsQuery.data?.subPublicBaseUrl;
+  const subUrl =
+    user && subBaseUrl ? buildSubscriptionUrl(user.subToken, subBaseUrl) : '';
+  const clientLinks = useMemo(
+    () => (subUrl ? buildSubscriptionClientLinks(subUrl) : []),
+    [subUrl],
+  );
+  const formatUrls = useMemo(
+    () =>
+      subUrl
+        ? {
+            links: `${subUrl}?format=links`,
+            clash: `${subUrl}?format=clash`,
+            singBox: `${subUrl}?format=sing-box`,
+          }
+        : null,
+    [subUrl],
+  );
 
   const chartData =
     usageQuery.data?.series.flatMap((point) => [
@@ -380,12 +408,18 @@ export function UserDetailPage() {
 
           {!isNew && user ? (
             <Card size="small" title={t('users.subscription')} style={{ marginTop: 12 }}>
-              <Typography.Paragraph copyable={{ text: subUrl }} style={{ wordBreak: 'break-all' }}>
-                {subUrl}
-              </Typography.Paragraph>
+              {subUrl ? (
+                <Typography.Paragraph copyable={{ text: subUrl }} style={{ wordBreak: 'break-all' }}>
+                  {subUrl}
+                </Typography.Paragraph>
+              ) : (
+                <Typography.Paragraph type="secondary">
+                  {t('users.subscriptionLoading')}
+                </Typography.Paragraph>
+              )}
               <Space wrap>
-                <CopyButton value={subUrl} />
-                <Button size="small" onClick={() => setQrOpen(true)}>
+                {subUrl ? <CopyButton value={subUrl} /> : null}
+                <Button size="small" disabled={!subUrl} onClick={() => setQrOpen(true)}>
                   {t('app.showQr')}
                 </Button>
                 <MutateOnly>
@@ -407,6 +441,36 @@ export function UserDetailPage() {
                   </Popconfirm>
                 </MutateOnly>
               </Space>
+
+              {formatUrls ? (
+                <div style={{ marginTop: 12 }}>
+                  <Typography.Text type="secondary">{t('users.subscriptionFormats')}</Typography.Text>
+                  <Space wrap style={{ marginTop: 6 }}>
+                    <CopyButton value={formatUrls.links} label={t('users.formatLinks')} />
+                    <CopyButton value={formatUrls.clash} label={t('users.formatClash')} />
+                    <CopyButton value={formatUrls.singBox} label={t('users.formatSingBox')} />
+                  </Space>
+                </div>
+              ) : null}
+
+              {clientLinks.length > 0 ? (
+                <div style={{ marginTop: 12 }}>
+                  <Typography.Text type="secondary">{t('users.clientLinks')}</Typography.Text>
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 6 }}>
+                    {t('users.clientLinksHint')}
+                  </Typography.Paragraph>
+                  <Space wrap>
+                    {clientLinks.map((link) => (
+                      <CopyButton
+                        key={link.id}
+                        value={link.href}
+                        label={t(`users.clientLink.${link.id}`)}
+                      />
+                    ))}
+                  </Space>
+                </div>
+              ) : null}
+
               <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
                 {t('users.usage')}: {formatBytes(user.usedUploadBytes)} ↑ /{' '}
                 {formatBytes(user.usedDownloadBytes)} ↓

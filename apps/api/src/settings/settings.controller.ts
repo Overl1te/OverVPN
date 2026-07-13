@@ -42,6 +42,10 @@ class SystemSettingsReadOnlyDto {
   acmeHttpPort!: number;
   @ApiProperty()
   acmeTlsPort!: number;
+  @ApiPropertyOptional({ nullable: true })
+  tlsCertificatePath!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  tlsKeyPath!: string | null;
   @ApiProperty()
   telegramEnvConfigured!: boolean;
 }

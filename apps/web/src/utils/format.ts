@@ -37,12 +37,30 @@ export function formatBytesPerSecond(value: string | number | null | undefined):
   return `${formatBytes(value)}/s`;
 }
 
-/** Build a same-origin subscription URL from a token (admin copy helper). */
+/** Build a subscription URL from a token and the configured public base URL. */
 export function buildSubscriptionUrl(
   token: string,
-  origin: string = typeof window !== 'undefined' ? window.location.origin : '',
+  baseUrl: string = typeof window !== 'undefined' ? window.location.origin : '',
 ): string {
-  return buildSubscriptionPublicUrl(origin, token);
+  return buildSubscriptionPublicUrl(baseUrl, token);
+}
+
+export type SubscriptionClientLink = {
+  id: 'happ' | 'hiddify' | 'clash' | 'v2rayng' | 'singbox';
+  href: string;
+};
+
+/** Client deep links that wrap a HTTPS subscription URL for one-tap import. */
+export function buildSubscriptionClientLinks(subscriptionUrl: string): SubscriptionClientLink[] {
+  const encoded = encodeURIComponent(subscriptionUrl);
+  return [
+    // Happ expects the plain HTTPS URL after add/ (no encoding).
+    { id: 'happ', href: `happ://add/${subscriptionUrl}` },
+    { id: 'hiddify', href: `hiddify://import/${subscriptionUrl}` },
+    { id: 'clash', href: `clash://install-config?url=${encoded}` },
+    { id: 'v2rayng', href: `v2rayng://install-config?url=${encoded}` },
+    { id: 'singbox', href: `sing-box://import-remote-profile?url=${encoded}` },
+  ];
 }
 
 export function truncateMiddle(value: string, head = 10, tail = 8): string {

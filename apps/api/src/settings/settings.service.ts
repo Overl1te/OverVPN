@@ -250,6 +250,9 @@ export class SettingsService {
         acmeTlsPort: this.config.get('SING_BOX_ACME_TLS_PORT', {
           infer: true,
         }),
+        tlsCertificatePath:
+          this.config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }) ?? null,
+        tlsKeyPath: this.config.get('VPN_TLS_KEY_PATH', { infer: true }) ?? null,
         telegramEnvConfigured: Boolean(envToken) && Boolean(envChat),
       },
     };

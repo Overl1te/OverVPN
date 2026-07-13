@@ -19,8 +19,12 @@ describe('buildDefaultInboundSettings', () => {
       acmeHttpPort: 8081,
       acmeTlsPort: 8443,
     }) as TrojanInboundSettings;
-    assert.equal(settings.tls.alternativeHttpPort, 8081);
-    assert.equal(settings.tls.alternativeTlsPort, 8443);
+    assert.equal(settings.tls.mode, 'ACME');
+    if (settings.tls.mode === 'ACME') {
+      assert.equal(settings.tls.alternativeHttpPort, 8081);
+      assert.equal(settings.tls.alternativeTlsPort, 8443);
+      assert.equal(settings.tls.disableTlsAlpnChallenge, true);
+    }
   });
 
   it('omits alternative ACME ports on standard 80/443', () => {
@@ -29,8 +33,28 @@ describe('buildDefaultInboundSettings', () => {
       acmeHttpPort: 80,
       acmeTlsPort: 443,
     }) as Hysteria2InboundSettings;
-    assert.equal(settings.tls.alternativeHttpPort, undefined);
-    assert.equal(settings.tls.alternativeTlsPort, undefined);
+    assert.equal(settings.tls.mode, 'ACME');
+    if (settings.tls.mode === 'ACME') {
+      assert.equal(settings.tls.alternativeHttpPort, undefined);
+      assert.equal(settings.tls.alternativeTlsPort, undefined);
+      assert.equal(settings.tls.disableTlsAlpnChallenge, false);
+    }
+  });
+
+  it('defaults to FILES TLS when install cert paths are provided', () => {
+    const settings = buildDefaultInboundSettings('HYSTERIA2', {
+      publicHost: 'vpn.example.org',
+      acmeHttpPort: 8081,
+      acmeTlsPort: 8443,
+      tlsCertificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
+      tlsKeyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
+    }) as Hysteria2InboundSettings;
+    assert.equal(settings.tls.mode, 'FILES');
+    if (settings.tls.mode === 'FILES') {
+      assert.equal(settings.tls.certificatePath, '/var/lib/sing-box-certs/vpn-fullchain.pem');
+      assert.equal(settings.tls.keyPath, '/var/lib/sing-box-certs/vpn-privkey.pem');
+      assert.equal(settings.tls.sni, 'vpn.example.org');
+    }
   });
 
   it('preserves listen overrides when switching presets', () => {

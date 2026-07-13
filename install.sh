@@ -20,6 +20,12 @@ BIN_PATH="/usr/local/bin/${APP_NAME}"
 NGINX_SITE="/etc/nginx/sites-available/${APP_NAME}"
 NGINX_LINK="/etc/nginx/sites-enabled/${APP_NAME}"
 LANDING_DIR="/var/www/${APP_NAME}"
+CERTBOT_DEPLOY_HOOK="/etc/letsencrypt/renewal-hooks/deploy/${APP_NAME}-sync-vpn-certs.sh"
+VPN_CERT_NAME="vpn-fullchain.pem"
+VPN_KEY_NAME="vpn-privkey.pem"
+VPN_CERT_HOST_DIR="${APP_DIR}/deploy/sing-box/certs"
+VPN_CERT_CONTAINER_PATH="/var/lib/sing-box-certs/${VPN_CERT_NAME}"
+VPN_KEY_CONTAINER_PATH="/var/lib/sing-box-certs/${VPN_KEY_NAME}"
 REPO_URL="${OVERVPN_REPO_URL:-https://github.com/Overl1te/OverVPN.git}"
 REPO_RAW_BASE="${OVERVPN_RAW_BASE:-https://raw.githubusercontent.com/Overl1te/OverVPN}"
 DEFAULT_BRANCH="${OVERVPN_BRANCH:-master}"
@@ -921,6 +927,8 @@ write_nginx_site() {
 
   local conf=""
   local host
+  local acme_http_port
+  acme_http_port="$(get_env_var SING_BOX_ACME_HTTP_PORT "$ENV_FILE" 2>/dev/null || echo 8081)"
 
   if [[ "$mode" == "https" ]]; then
     conf+="server {
@@ -928,7 +936,17 @@ write_nginx_site() {
     listen [::]:80;
     server_name ${hosts[*]};
     access_log off;
-    return 301 https://\$host\$request_uri;
+    # Forward ACME HTTP-01 to sing-box (alt port when nginx owns :80).
+    location ^~ /.well-known/acme-challenge/ {
+        proxy_pass http://127.0.0.1:${acme_http_port};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
 }
 "
   fi
@@ -1100,6 +1118,7 @@ install_nginx() {
   write_nginx_site "$base_domain" "$panel_host" "$sub_host" "$sub_path" "$vpn_host" "https"
   nginx -t
   systemctl reload nginx
+  sync_vpn_tls_certs "$panel_host"
   colorized_echo green "$(cli_t nginx_tls_ready "${hosts[*]}")"
 }
 
@@ -1146,16 +1165,67 @@ refresh_nginx() {
   ln -sfn "$NGINX_SITE" "$NGINX_LINK"
   nginx -t
   systemctl reload nginx
+  sync_vpn_tls_certs "$panel_host"
   colorized_echo green "$(cli_t nginx_refreshed "${hosts[*]}")"
 }
 
 remove_nginx_site() {
   rm -f "$NGINX_LINK" "$NGINX_SITE"
   rm -rf "$LANDING_DIR"
+  rm -f "$CERTBOT_DEPLOY_HOOK"
   if need_cmd nginx; then
     nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
   fi
 }
+
+# Copy Certbot leaf+chain into the sing-box certs bind-mount and point panel defaults at them.
+# When Nginx owns :80/:443, sing-box ACME cannot complete HTTP-01 without a challenge proxy,
+# and TLS-ALPN cannot bind TCP 443 — FILES TLS from the install certificate just works.
+sync_vpn_tls_certs() {
+  local panel_host=$1
+  local live_dir="/etc/letsencrypt/live/${panel_host}"
+  local fullchain="${live_dir}/fullchain.pem"
+  local privkey="${live_dir}/privkey.pem"
+
+  if [[ ! -f "$fullchain" || ! -f "$privkey" ]]; then
+    colorized_echo yellow "LE cert missing at ${live_dir}; skip VPN TLS sync"
+    return 0
+  fi
+
+  mkdir -p "$VPN_CERT_HOST_DIR"
+  cp -f "$fullchain" "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}"
+  cp -f "$privkey" "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}"
+  chown 1000:1000 "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}" "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}" 2>/dev/null || true
+  chmod 640 "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}" "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}"
+
+  if [[ -f "$ENV_FILE" ]]; then
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
+  fi
+
+  install_vpn_tls_renew_hook "$panel_host"
+  colorized_echo green "VPN TLS certs synced for FILES inbound defaults (${VPN_CERT_HOST_DIR})"
+}
+
+install_vpn_tls_renew_hook() {
+  local panel_host=$1
+  mkdir -p "$(dirname "$CERTBOT_DEPLOY_HOOK")"
+  cat >"$CERTBOT_DEPLOY_HOOK" <<EOF
+#!/bin/bash
+set -euo pipefail
+LIVE="/etc/letsencrypt/live/${panel_host}"
+DST="${VPN_CERT_HOST_DIR}"
+if [[ -f "\$LIVE/fullchain.pem" && -f "\$LIVE/privkey.pem" ]]; then
+  mkdir -p "\$DST"
+  cp -f "\$LIVE/fullchain.pem" "\$DST/${VPN_CERT_NAME}"
+  cp -f "\$LIVE/privkey.pem" "\$DST/${VPN_KEY_NAME}"
+  chown 1000:1000 "\$DST/${VPN_CERT_NAME}" "\$DST/${VPN_KEY_NAME}" 2>/dev/null || true
+  chmod 640 "\$DST/${VPN_CERT_NAME}" "\$DST/${VPN_KEY_NAME}"
+fi
+EOF
+  chmod 755 "$CERTBOT_DEPLOY_HOOK"
+}
+
 
 fetch_repo() {
   local branch=$1
@@ -1281,6 +1351,8 @@ sync_domains_from_install_conf() {
     set_env_var "WEB_PORT" "8080"
     set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
     set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
   else
     panel_url="http://${ip}:${web_port}"
     sub_url="$panel_url"
@@ -1387,6 +1459,8 @@ generate_env() {
     if [[ "$with_nginx" == "true" ]]; then
       set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
       set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
+      set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+      set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
     fi
   else
     panel_url="http://${ip}:${web_port}"

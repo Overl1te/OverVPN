@@ -36,15 +36,6 @@ import {
   SubscriptionsService,
 } from './subscriptions.service';
 
-class SubscriptionQueryDto implements SubscriptionQuery {
-  @ApiPropertyOptional({
-    enum: SUBSCRIPTION_FORMATS,
-    description:
-      'Explicit output format. When omitted, Accept and known client User-Agent values are considered; the default is sing-box JSON.',
-  })
-  format?: SubscriptionFormat;
-}
-
 class SubscriptionFormatUrlsDto {
   @ApiProperty({ format: 'uri' })
   singBox!: string;
@@ -225,7 +216,9 @@ export class SubscriptionsController {
   })
   async profile(
     @Param('token') token: string,
-    @ZodQuery(subscriptionQuerySchema) query: SubscriptionQueryDto,
+    // Use the Zod-inferred type (not a class) so the global ValidationPipe
+    // does not reject `?format=` via forbidNonWhitelisted.
+    @ZodQuery(subscriptionQuerySchema) query: SubscriptionQuery,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<string> {
@@ -308,10 +301,14 @@ export function negotiateSubscriptionFormat(
   }
 
   const client = userAgent?.toLowerCase() ?? '';
-  if (/(?:mihomo|clash|stash)/.test(client)) {
+  if (/(?:mihomo|clash|stash|flclash)/.test(client)) {
     return 'clash';
   }
-  if (/(?:v2rayn|shadowrocket|surge)/.test(client)) {
+  if (
+    /(?:v2rayn|v2rayng|v2raytun|shadowrocket|surge|happ|hiddify|nekoray|nekobox|streisand)/.test(
+      client,
+    )
+  ) {
     return 'links';
   }
   return 'sing-box';

@@ -10,6 +10,9 @@ export type InboundDefaultsContext = {
   publicHost: string;
   acmeHttpPort?: number;
   acmeTlsPort?: number;
+  /** Container paths from install (LE sync). Prefer FILES TLS when set. */
+  tlsCertificatePath?: string | null;
+  tlsKeyPath?: string | null;
 };
 
 export type InboundListenOverrides = {
@@ -21,6 +24,7 @@ export type InboundListenOverrides = {
 };
 
 type AcmeTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'ACME' }>;
+type FilesTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'FILES' }>;
 
 export function defaultAcmeEmail(publicHost: string): string | undefined {
   const host = publicHost.trim();
@@ -30,34 +34,68 @@ export function defaultAcmeEmail(publicHost: string): string | undefined {
   return `admin@${host}`;
 }
 
-function buildAcmeTls(publicHost: string, context: InboundDefaultsContext): AcmeTlsDefaults {
-  const email = defaultAcmeEmail(publicHost);
-  const tls: AcmeTlsDefaults = {
-    mode: 'ACME',
+function commonTlsFields(publicHost: string) {
+  return {
     sni: publicHost,
     alpn: ['h3'],
-    domains: publicHost ? [publicHost] : [],
-    dataDirectory: '/var/lib/sing-box-state/acme',
-    provider: 'letsencrypt',
-    minVersion: '1.2',
-    disableHttpChallenge: false,
-    disableTlsAlpnChallenge: false,
+    minVersion: '1.2' as const,
     cipherSuites: [],
     curvePreferences: [],
     kernelTx: false,
     kernelRx: false,
     clientInsecure: false,
-    ...(email ? { email } : {}),
   };
+}
+
+function buildFilesTls(
+  publicHost: string,
+  certificatePath: string,
+  keyPath: string,
+): FilesTlsDefaults {
+  return {
+    mode: 'FILES',
+    ...commonTlsFields(publicHost),
+    certificatePath,
+    keyPath,
+  };
+}
+
+function buildAcmeTls(publicHost: string, context: InboundDefaultsContext): AcmeTlsDefaults {
+  const email = defaultAcmeEmail(publicHost);
   const httpPort = context.acmeHttpPort;
   const tlsPort = context.acmeTlsPort;
-  if (httpPort !== undefined && httpPort !== 80) {
+  const httpRemapped = httpPort !== undefined && httpPort !== 80;
+  const tlsRemapped = tlsPort !== undefined && tlsPort !== 443;
+  const tls: AcmeTlsDefaults = {
+    mode: 'ACME',
+    ...commonTlsFields(publicHost),
+    domains: publicHost ? [publicHost] : [],
+    dataDirectory: '/var/lib/sing-box-state/acme',
+    provider: 'letsencrypt',
+    disableHttpChallenge: false,
+    // When nginx owns TCP 443, TLS-ALPN ACME cannot succeed — HTTP-01 only.
+    disableTlsAlpnChallenge: tlsRemapped,
+    ...(email ? { email } : {}),
+  };
+  if (httpRemapped) {
     tls.alternativeHttpPort = httpPort;
   }
-  if (tlsPort !== undefined && tlsPort !== 443) {
+  if (tlsRemapped) {
     tls.alternativeTlsPort = tlsPort;
   }
   return tls;
+}
+
+function buildDefaultTls(
+  publicHost: string,
+  context: InboundDefaultsContext,
+): AcmeTlsDefaults | FilesTlsDefaults {
+  const certificatePath = context.tlsCertificatePath?.trim();
+  const keyPath = context.tlsKeyPath?.trim();
+  if (certificatePath && keyPath) {
+    return buildFilesTls(publicHost, certificatePath, keyPath);
+  }
+  return buildAcmeTls(publicHost, context);
 }
 
 function listenFields(context: InboundDefaultsContext, overrides?: InboundListenOverrides) {
@@ -82,6 +120,8 @@ export function buildDefaultInboundSettings(
   const publicHost = overrides?.publicHost ?? context.publicHost;
   const common = listenFields({ ...context, publicHost }, overrides);
 
+  const tls = buildDefaultTls(publicHost, { ...context, publicHost });
+
   switch (protocol) {
     case 'HYSTERIA2':
       return {
@@ -90,7 +130,7 @@ export function buildDefaultInboundSettings(
         downMbps: null,
         ignoreClientBandwidth: false,
         obfs: null,
-        tls: buildAcmeTls(publicHost, { ...context, publicHost }),
+        tls,
         masquerade: null,
         bindInterface: null,
         routingMark: null,
@@ -120,7 +160,7 @@ export function buildDefaultInboundSettings(
     case 'TROJAN':
       return {
         ...common,
-        tls: buildAcmeTls(publicHost, { ...context, publicHost }),
+        tls,
         fallback: null,
       };
     case 'SHADOWSOCKS':
@@ -151,6 +191,9 @@ function syncTlsPublicHost(settings: Record<string, unknown>, host: string): voi
     ) {
       tlsRecord.email = nextEmail;
     }
+    settings.tls = tlsRecord;
+  } else if (tlsRecord.mode === 'FILES') {
+    tlsRecord.sni = host;
     settings.tls = tlsRecord;
   }
 }

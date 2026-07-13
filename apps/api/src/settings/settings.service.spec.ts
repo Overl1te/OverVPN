@@ -84,6 +84,8 @@ describe('SettingsService', () => {
     expect(initial.revision).toBe(1);
     expect(initial.readOnly.acmeHttpPort).toBe(8081);
     expect(initial.readOnly.acmeTlsPort).toBe(8443);
+    expect(initial.readOnly.tlsCertificatePath).toBeNull();
+    expect(initial.readOnly.tlsKeyPath).toBeNull();
     expect(initial).not.toHaveProperty('telegramBotToken');
     expect(initial.telegramBotTokenConfigured).toBe(false);
 
