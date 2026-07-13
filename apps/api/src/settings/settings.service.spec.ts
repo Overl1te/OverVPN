@@ -89,11 +89,13 @@ describe('SettingsService', () => {
     expect(initial).not.toHaveProperty('telegramBotToken');
     expect(initial.telegramBotTokenConfigured).toBe(false);
 
+    // Schema-shaped placeholder only — not a real BotFather token (avoids secret scanning).
+    const fakeTelegramBotToken = '000000000:OVERVPN_TEST_TELEGRAM_BOT_TOKEN';
     const updated = await service.update(
       {
         notifyTelegramEnabled: true,
         profileUpdateIntervalHours: 12,
-        telegramBotToken: '123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw',
+        telegramBotToken: fakeTelegramBotToken,
       },
       {
         id: '11111111-1111-4111-8111-111111111111',
@@ -111,9 +113,7 @@ describe('SettingsService', () => {
     expect(updated.profileUpdateIntervalHours).toBe(12);
     expect(updated.notifyTelegramEnabled).toBe(true);
     expect(updated.telegramBotTokenConfigured).toBe(true);
-    expect(JSON.stringify(updated)).not.toContain(
-      'AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw',
-    );
+    expect(JSON.stringify(updated)).not.toContain(fakeTelegramBotToken);
     expect(auditRecord).toHaveBeenCalled();
     const auditCalls = auditRecord.mock.calls as unknown as Array<
       [
