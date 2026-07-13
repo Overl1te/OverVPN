@@ -14,6 +14,8 @@ COMPOSE_FILE="${APP_DIR}/deploy/docker-compose.yml"
 CREDENTIALS_FILE="${APP_DIR}/.credentials"
 INSTALL_CONF="${APP_DIR}/.install.conf"
 INSTALL_MODE_FILE="${APP_DIR}/.install.mode"
+INSTALL_COMPLETE_FILE="${APP_DIR}/.install.complete"
+INSTALL_INPROGRESS_FILE="${APP_DIR}/.install.inprogress"
 BIN_PATH="/usr/local/bin/${APP_NAME}"
 NGINX_SITE="/etc/nginx/sites-available/${APP_NAME}"
 NGINX_LINK="/etc/nginx/sites-enabled/${APP_NAME}"
@@ -116,14 +118,15 @@ cli_t() {
       summary_sub_path) printf '  Подписки:     https://%s%s/{TOKEN}' "$1" "$2" ;;
       summary_vpn) printf '  VPN-хост:     %s' "$1" ;;
       summary_email) printf '  Email:        %s' "$1" ;;
-      dns_title) printf '%s' " Создайте эти DNS A-записи" ;;
+      dns_title) printf '%s' " Эти DNS A-записи должны указывать на сервер" ;;
       dns_hint) printf 'У регистратора DNS → A-записи → %s' "$1" ;;
       dns_point) printf '  %s  →  %s' "$1" "$2" ;;
       dns_cloudflare) printf '%s' "Cloudflare: серая тучка (только DNS), пока не выпущены сертификаты." ;;
       dns_firewall) printf '%s' "Также откройте UDP/443 (и TCP 80/443) в файрволе." ;;
-      prompt_dns_ready) printf '%s' "6) DNS A-записи уже созданы? [Y=ждать / s=пропустить проверку]: " ;;
-      dns_skip) printf '%s' "Проверка DNS пропущена (certbot может не сработать)." ;;
-      dns_wait_ok) printf '%s' "ОК — установщик дождётся DNS и продолжит без дополнительных вопросов." ;;
+      dns_prompt_hint) printf '%s' "Если записи УЖЕ созданы — жмите Enter (Y). Установщик просто проверит, что они указывают сюда. Пропуск (s) почти всегда ломает выпуск TLS." ;;
+      prompt_dns_ready) printf '%s' "6) Проверить DNS сейчас? [Y=да, проверить / s=пропустить]: " ;;
+      dns_skip) printf '%s' "Проверка DNS пропущена. Если записи не указывают на этот сервер — сертификаты не выпусятся, установка оборвётся." ;;
+      dns_wait_ok) printf '%s' "ОК — проверим DNS (если уже готово, это быстро) и продолжим." ;;
       prompt_start_now) printf '%s' "7) Начать установку сейчас? [Y/n]: " ;;
       aborted) printf '%s' "Отменено." ;;
       no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай ☕" ;;
@@ -188,6 +191,12 @@ cli_t() {
       unknown_option) printf 'Неизвестный параметр: %s' "$1" ;;
       already_installed) printf 'OverVPN уже установлен в %s.' "$1" ;;
       use_update_or_uninstall) printf 'Сначала выполните '\''%s update'\'' или '\''%s uninstall'\''.' "$1" "$1" ;;
+      partial_install_found) printf 'Найдена незавершённая установка в %s (прошлый запуск оборвался).' "$1" ;;
+      prompt_clean_partial) printf '%s' "Снести её и начать заново? [Y/n]: " ;;
+      partial_install_cleaning) printf '%s' "Удаляем незавершённую установку…" ;;
+      partial_aborted) printf '%s' "Ок, ничего не трогаем. Чтобы снести вручную: overvpn uninstall  (или тот же one-liner с @ uninstall)." ;;
+      install_failed_recover) printf '%s' "Установка оборвалась, но файлы уже есть. Не сносите сервер — просто запустите установщик снова: он предложит подчистить и продолжить." ;;
+      recover_uninstall_hint) printf '%s' 'Или сразу снести: sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ uninstall' ;;
       invalid_port) printf 'Некорректный --port: %s' "$1" ;;
       noninteractive_start) printf '%s' "Получены неинтерактивные флаги. Начинаем установку…" ;;
       creating_owner) printf '%s' "Создаём учётную запись владельца…" ;;
@@ -250,14 +259,15 @@ cli_t() {
       summary_sub_path) printf '  Subscription: https://%s%s/{TOKEN}' "$1" "$2" ;;
       summary_vpn) printf '  VPN host:     %s' "$1" ;;
       summary_email) printf '  Email:        %s' "$1" ;;
-      dns_title) printf '%s' " Create these DNS A records" ;;
+      dns_title) printf '%s' " These DNS A records must point at this server" ;;
       dns_hint) printf 'At your DNS provider → A records → %s' "$1" ;;
       dns_point) printf '  %s  →  %s' "$1" "$2" ;;
       dns_cloudflare) printf '%s' "Cloudflare: grey cloud (DNS only) until certs are issued." ;;
       dns_firewall) printf '%s' "Also open UDP/443 (and 80/443 TCP) on the firewall." ;;
-      prompt_dns_ready) printf '%s' "6) DNS A-records already created? [Y=wait for them / s=skip check]: " ;;
-      dns_skip) printf '%s' "DNS check will be skipped (certbot may fail)." ;;
-      dns_wait_ok) printf '%s' "OK — installer will wait for DNS, then continue without more questions." ;;
+      dns_prompt_hint) printf '%s' "If records are ALREADY created — press Enter (Y). The installer only verifies they point here. Skipping (s) usually breaks TLS issuance." ;;
+      prompt_dns_ready) printf '%s' "6) Check DNS now? [Y=yes, verify / s=skip]: " ;;
+      dns_skip) printf '%s' "DNS check skipped. If records do not point here yet, certificate issuance will fail and install will abort." ;;
+      dns_wait_ok) printf '%s' "OK — will verify DNS (fast if already ready), then continue." ;;
       prompt_start_now) printf '%s' "7) Start installation now? [Y/n]: " ;;
       aborted) printf '%s' "Aborted." ;;
       no_more_prompts) printf '%s' "No more prompts. You can go drink tea ☕" ;;
@@ -322,6 +332,12 @@ cli_t() {
       unknown_option) printf 'Unknown option: %s' "$1" ;;
       already_installed) printf 'OverVPN already installed in %s.' "$1" ;;
       use_update_or_uninstall) printf 'Use '\''%s update'\'' or '\''%s uninstall'\'' first.' "$1" "$1" ;;
+      partial_install_found) printf 'Found an incomplete install in %s (previous run aborted).' "$1" ;;
+      prompt_clean_partial) printf '%s' "Wipe it and start fresh? [Y/n]: " ;;
+      partial_install_cleaning) printf '%s' "Removing incomplete install..." ;;
+      partial_aborted) printf '%s' "Left as-is. To remove manually: overvpn uninstall  (or the same one-liner with @ uninstall)." ;;
+      install_failed_recover) printf '%s' "Install aborted, but files already exist. Do not wipe the server — re-run the installer; it will offer to clean up and continue." ;;
+      recover_uninstall_hint) printf '%s' 'Or wipe now: sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ uninstall' ;;
       invalid_port) printf 'Invalid --port: %s' "$1" ;;
       noninteractive_start) printf '%s' "Non-interactive flags received. Starting install…" ;;
       creating_owner) printf '%s' "Creating owner account..." ;;
@@ -464,8 +480,79 @@ compose_up() {
   compose up -d --force-recreate --no-deps core
 }
 
+# Finished install (safe for up/down/update).
+is_install_complete() {
+  # A crashed mid-install must never look "complete".
+  if [[ -f "$INSTALL_INPROGRESS_FILE" ]]; then
+    return 1
+  fi
+  if [[ -f "$INSTALL_COMPLETE_FILE" && -f "$ENV_FILE" && -f "$COMPOSE_FILE" ]]; then
+    return 0
+  fi
+  # Legacy installs created before install markers existed.
+  if [[ -x "$BIN_PATH" && -f "$ENV_FILE" && -f "$COMPOSE_FILE" && -f "$CREDENTIALS_FILE" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 is_installed() {
-  [[ -d "$APP_DIR" && -f "$ENV_FILE" && -f "$COMPOSE_FILE" ]]
+  is_install_complete
+}
+
+has_partial_install() {
+  if is_install_complete; then
+    return 1
+  fi
+  [[ -d "$APP_DIR" || -e "$BIN_PATH" || -e "$NGINX_SITE" || -e "$NGINX_LINK" || -f "$INSTALL_INPROGRESS_FILE" ]]
+}
+
+mark_install_inprogress() {
+  mkdir -p "$APP_DIR"
+  rm -f "$INSTALL_COMPLETE_FILE"
+  date -u +%Y-%m-%dT%H:%M:%SZ >"$INSTALL_INPROGRESS_FILE"
+}
+
+mark_install_complete() {
+  mkdir -p "$APP_DIR"
+  rm -f "$INSTALL_INPROGRESS_FILE"
+  date -u +%Y-%m-%dT%H:%M:%SZ >"$INSTALL_COMPLETE_FILE"
+}
+
+cleanup_partial_install() {
+  colorized_echo yellow "$(cli_t partial_install_cleaning)"
+  if [[ -f "$COMPOSE_FILE" && -f "$ENV_FILE" ]]; then
+    compose down -v --remove-orphans >/dev/null 2>&1 || true
+  else
+    docker ps -aq --filter "name=overvpn-" 2>/dev/null | xargs -r docker rm -f || true
+    docker network ls -q --filter "name=overvpn" 2>/dev/null | xargs -r docker network rm || true
+    docker volume ls -q --filter "name=overvpn" 2>/dev/null | xargs -r docker volume rm || true
+  fi
+  remove_nginx_site
+  rm -rf "$APP_DIR"
+  rm -f "$BIN_PATH"
+}
+
+ensure_clean_for_install() {
+  if is_install_complete; then
+    colorized_echo yellow "$(cli_t already_installed "$APP_DIR")"
+    colorized_echo yellow "$(cli_t use_update_or_uninstall "$APP_NAME")"
+    exit 1
+  fi
+  if ! has_partial_install; then
+    return 0
+  fi
+  colorized_echo yellow "$(cli_t partial_install_found "$APP_DIR")"
+  if [[ -t 0 ]]; then
+    local ans
+    read -r -p "$(cli_t prompt_clean_partial)" ans
+    ans="$(printf '%s' "${ans:-y}" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$ans" != "y" && "$ans" != "yes" ]]; then
+      colorized_echo yellow "$(cli_t partial_aborted)"
+      exit 1
+    fi
+  fi
+  cleanup_partial_install
 }
 
 rand_hex() {
@@ -647,6 +734,7 @@ prompt_install_endpoints() {
 
   show_dns_instructions "$ip" "${dns_hosts[@]}"
 
+  colorized_echo yellow "$(cli_t dns_prompt_hint)"
   read -r -p "$(cli_t prompt_dns_ready)" dns_ready
   dns_ready="$(printf '%s' "${dns_ready:-y}" | tr '[:upper:]' '[:lower:]')"
   if [[ "$dns_ready" == "s" || "$dns_ready" == "skip" ]]; then
@@ -1004,6 +1092,8 @@ install_nginx() {
     --expand || {
       colorized_echo red "$(cli_t cert_failed_install)"
       colorized_echo yellow "$(cli_t cert_failed_hint)"
+      colorized_echo yellow "$(cli_t install_failed_recover)"
+      colorized_echo cyan "$(cli_t recover_uninstall_hint)"
       exit 1
     }
 
@@ -1463,11 +1553,7 @@ cmd_install() {
     esac
   done
 
-  if is_installed; then
-    colorized_echo yellow "$(cli_t already_installed "$APP_DIR")"
-    colorized_echo yellow "$(cli_t use_update_or_uninstall "$APP_NAME")"
-    exit 1
-  fi
+  ensure_clean_for_install
 
   if [[ ! "$web_port" =~ ^[0-9]+$ ]] || [[ "$web_port" -lt 1 || "$web_port" -gt 65535 ]]; then
     colorized_echo red "$(cli_t invalid_port "$web_port")"
@@ -1524,6 +1610,9 @@ cmd_install() {
   fi
 
   deploy_source "$branch" "$do_build"
+  mark_install_inprogress
+  # Install CLI early so a failed mid-install still leaves `overvpn uninstall` usable.
+  install_cli "${APP_DIR}/install.sh"
   generate_env "$web_port" "$with_nginx" "$image_tag"
 
   if [[ "$use_ufw" == "true" ]]; then
@@ -1545,6 +1634,7 @@ cmd_install() {
 
   install_cli "${APP_DIR}/install.sh"
   apply_deploy_permissions
+  mark_install_complete
   print_success "$web_port"
 }
 
