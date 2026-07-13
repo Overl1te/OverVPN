@@ -18,12 +18,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { UserStatus } from '@overvpn/shared/constants';
 import type { UserResult } from '@overvpn/shared/schemas';
-import {
-  bulkUserAction,
-  listUsers,
-  resetUserTraffic,
-  rotateUserSub,
-} from '@/api/users';
+import { bulkUserAction, listUsers, resetUserTraffic, rotateUserSub } from '@/api/users';
 import { listPlans } from '@/api/plans';
 import { getSettings } from '@/api/settings';
 import { PageHeader } from '@/components/PageHeader';
@@ -328,11 +323,7 @@ export function UsersListPage() {
             title: t('app.actions'),
             render: (_, row: UserResult) => (
               <Space wrap size={4}>
-                <Button
-                  size="small"
-                  onClick={() => void copySub(row)}
-                  disabled={!subBaseUrl}
-                >
+                <Button size="small" onClick={() => void copySub(row)} disabled={!subBaseUrl}>
                   {t('users.copySub')}
                 </Button>
                 <Button size="small" onClick={() => navigate(`/users/${row.id}`)}>
@@ -343,18 +334,14 @@ export function UsersListPage() {
                     <Button
                       size="small"
                       loading={rowMutation.isPending}
-                      onClick={() =>
-                        rowMutation.mutate({ action: 'enable', userId: row.id })
-                      }
+                      onClick={() => rowMutation.mutate({ action: 'enable', userId: row.id })}
                     >
                       {t('app.enable')}
                     </Button>
                   ) : (
                     <Popconfirm
                       title={t('users.confirmDisable')}
-                      onConfirm={() =>
-                        rowMutation.mutate({ action: 'disable', userId: row.id })
-                      }
+                      onConfirm={() => rowMutation.mutate({ action: 'disable', userId: row.id })}
                     >
                       <Button size="small" loading={rowMutation.isPending}>
                         {t('app.disable')}
@@ -363,9 +350,7 @@ export function UsersListPage() {
                   )}
                   <Popconfirm
                     title={t('users.confirmRotateOne')}
-                    onConfirm={() =>
-                      rowMutation.mutate({ action: 'rotate-sub', userId: row.id })
-                    }
+                    onConfirm={() => rowMutation.mutate({ action: 'rotate-sub', userId: row.id })}
                   >
                     <Button size="small" loading={rowMutation.isPending}>
                       {t('app.rotateSub')}

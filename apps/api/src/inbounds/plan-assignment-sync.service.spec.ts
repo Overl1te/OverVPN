@@ -84,10 +84,9 @@ describe('PlanAssignmentSyncService', () => {
   it('loads plan inbound ids in priority order', async () => {
     const tx = {
       planInbound: {
-        findMany: jest.fn().mockResolvedValue([
-          { inboundId: 'b' },
-          { inboundId: 'a' },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ inboundId: 'b' }, { inboundId: 'a' }]),
       },
     };
     const service = new PlanAssignmentSyncService(

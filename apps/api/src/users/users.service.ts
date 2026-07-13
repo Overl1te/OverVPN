@@ -333,11 +333,7 @@ export class UsersService {
               tx,
               plan.id,
             );
-            await this.planAssignments.syncUserToInboundIds(
-              tx,
-              id,
-              inboundIds,
-            );
+            await this.planAssignments.syncUserToInboundIds(tx, id, inboundIds);
           } else {
             await this.planAssignments.syncUserToInboundIds(tx, id, []);
           }

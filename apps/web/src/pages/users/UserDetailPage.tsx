@@ -136,9 +136,7 @@ export function UserDetailPage() {
         planId: values.planId as string,
       };
 
-      return isNew
-        ? await createUser(payload as never)
-        : await updateUser(id!, payload as never);
+      return isNew ? await createUser(payload as never) : await updateUser(id!, payload as never);
     },
     onSuccess: (user) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -346,7 +344,10 @@ export function UserDetailPage() {
                 {clientLinks.length > 0 ? (
                   <div style={{ marginTop: 12 }}>
                     <Typography.Text type="secondary">{t('users.clientLinks')}</Typography.Text>
-                    <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 6 }}>
+                    <Typography.Paragraph
+                      type="secondary"
+                      style={{ marginTop: 4, marginBottom: 6 }}
+                    >
                       {t('users.clientLinksHint')}
                     </Typography.Paragraph>
                     <Space wrap>

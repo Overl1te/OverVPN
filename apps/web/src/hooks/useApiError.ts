@@ -31,10 +31,7 @@ function conflictDetailMessage(details: unknown, locale: string): string | null 
     return null;
   }
   const record = details as { reason?: unknown; message?: unknown; messageRu?: unknown };
-  if (
-    typeof record.reason !== 'string' ||
-    !record.reason.startsWith('inbound_listen_port_')
-  ) {
+  if (typeof record.reason !== 'string' || !record.reason.startsWith('inbound_listen_port_')) {
     return null;
   }
   if (locale.startsWith('ru') && typeof record.messageRu === 'string' && record.messageRu) {

@@ -76,7 +76,9 @@ export function renderSubscriptionStatusPage(info: SubscriptionInfo): string {
   const status = escapeHtml(statusLabel(info.status));
   const expire = escapeHtml(daysRemaining(info.expireAt));
   const expireExact = info.expireAt
-    ? escapeHtml(new Date(info.expireAt).toISOString().slice(0, 16).replace('T', ' '))
+    ? escapeHtml(
+        new Date(info.expireAt).toISOString().slice(0, 16).replace('T', ' '),
+      )
     : '—';
   const used = escapeHtml(formatBytes(info.totalBytes));
   const limit = escapeHtml(formatBytes(info.limitBytes));

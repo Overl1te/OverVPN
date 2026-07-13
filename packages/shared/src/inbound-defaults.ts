@@ -35,10 +35,7 @@ export type InboundPublishedTransport = 'udp' | 'tcp';
 /** Install-published listen port for a protocol (Simple mode / API guard). */
 export function publishedListenPortForProtocol(
   protocol: InboundProtocol,
-  context: Pick<
-    InboundDefaultsContext,
-    'singBoxUdpPort' | 'singBoxTcpPort' | 'xrayListenPort'
-  >,
+  context: Pick<InboundDefaultsContext, 'singBoxUdpPort' | 'singBoxTcpPort' | 'xrayListenPort'>,
 ): number {
   switch (protocol) {
     case 'HYSTERIA2':

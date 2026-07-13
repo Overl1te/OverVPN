@@ -160,7 +160,10 @@ describe('InboundsService VLESS Reality create', () => {
         inbound: { findFirst: jest.fn() },
         $transaction: jest.fn(),
       } as unknown as PrismaService,
-      { encrypt: jest.fn(), decrypt: jest.fn() } as unknown as SecretEncryptionService,
+      {
+        encrypt: jest.fn(),
+        decrypt: jest.fn(),
+      } as unknown as SecretEncryptionService,
       {
         record: jest.fn(),
         recordFailureSafely: jest.fn().mockResolvedValue(undefined),

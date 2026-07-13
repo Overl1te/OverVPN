@@ -149,7 +149,10 @@ describe('SubscriptionsController', () => {
     const response = await request(app.getHttpServer())
       .get(`/api/sub/${TOKEN}`)
       .set('Accept', 'text/html,application/xhtml+xml')
-      .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0')
+      .set(
+        'User-Agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+      )
       .expect(200);
 
     expect(response.headers['content-type']).toMatch(/^text\/html/);
