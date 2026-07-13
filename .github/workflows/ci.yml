@@ -104,13 +104,20 @@ jobs:
           mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web"
           echo "BUILDX_CACHE_ROOT=${CACHE_ROOT}" >> "$GITHUB_ENV"
 
+      - name: Remove broken buildx builder
+        run: |
+          set +e
+          docker buildx rm -f overvpn-ci 2>/dev/null || true
+          docker ps -aq --filter "name=buildx_buildkit_overvpn-ci" | xargs -r docker rm -f || true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           name: overvpn-ci
           driver: docker-container
           cleanup: true
-          buildkitd-flags: --oci-worker-gc --oci-worker-gc-keepstorage=5GB
+          # keepstorage is in MB (not "5GB") — invalid units crash buildkitd in a restart loop
+          buildkitd-flags: --oci-worker-gc --oci-worker-gc-keepstorage=5000
 
       - name: Clean stale Docker resources
         run: |
