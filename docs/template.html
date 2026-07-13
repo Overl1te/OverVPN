@@ -6,8 +6,13 @@
     <meta name="description" content="Документация OverVPN — однонодовая VPN-панель" />
     <title>{{TITLE}} — OverVPN</title>
     <link rel="icon" href="{{BASE}}static/favicon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="{{BASE}}assets/css/style.css" />
-    <link rel="stylesheet" href="{{BASE}}pagefind/pagefind-ui.css" />
   </head>
   <body class="{{BODY_CLASS}}" data-page="{{PAGE_ID}}">
     <header class="site-header">
@@ -16,50 +21,104 @@
           <img src="{{BASE}}static/logo.png" alt="" width="32" height="32" />
           <span>OverVPN</span>
         </a>
-        <nav class="header-nav">
-          <a href="{{BASE}}guide/introduction.html">Руководство</a>
-          <a href="{{BASE}}reference/cli.html">Справочник</a>
-          <a href="{{BASE}}faq.html">FAQ</a>
-          <a href="https://github.com/Overl1te/OverVPN" target="_blank" rel="noopener">GitHub</a>
+        <nav class="header-nav" aria-label="Основная навигация">
+          {{HEADER_NAV}}
         </nav>
         <div class="header-actions">
-          <div id="search"></div>
-          <button type="button" class="theme-toggle" aria-label="Переключить тему"></button>
+          <button type="button" class="search-trigger" id="search-trigger" aria-label="Открыть поиск">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+              <path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" />
+            </svg>
+            <span class="search-trigger-label">Поиск…</span>
+            <kbd class="search-kbd" id="search-kbd">Ctrl K</kbd>
+          </button>
+          <button type="button" class="theme-toggle" aria-label="Переключить тему">
+            <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+              <path
+                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+            <svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
           <button
             type="button"
             class="menu-toggle"
             aria-label="Меню"
             aria-expanded="false"
-          ></button>
+            aria-controls="sidebar"
+          >
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
         </div>
       </div>
     </header>
 
+    <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
+
     <div class="site-shell {{LAYOUT_CLASS}}">
       <aside class="sidebar" id="sidebar">{{SIDEBAR}}</aside>
-      <main class="content" data-pagefind-body>{{CONTENT}}</main>
+      <div class="doc-main">
+        <main class="content" data-pagefind-body>
+          <div class="content-inner">{{CONTENT}}</div>
+          {{PREV_NEXT}}
+        </main>
+        <aside class="toc" id="toc" aria-label="На этой странице" hidden>
+          <p class="toc-title">На этой странице</p>
+          <nav class="toc-nav" id="toc-nav"></nav>
+        </aside>
+      </div>
     </div>
 
     <footer class="site-footer">
       <p>OverVPN — AGPL-3.0-only · Copyright © 2026 Overl1te</p>
     </footer>
 
+    <div class="search-modal" id="search-modal" hidden>
+      <div class="search-backdrop" data-search-close></div>
+      <div class="search-dialog" role="dialog" aria-modal="true" aria-label="Поиск по документации">
+        <div class="search-input-wrap">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M20 20l-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" />
+          </svg>
+          <input
+            type="search"
+            id="search-input"
+            class="search-input"
+            placeholder="Поиск по документации…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <kbd class="search-esc">Esc</kbd>
+        </div>
+        <div class="search-results" id="search-results" role="listbox" aria-label="Результаты поиска"></div>
+        <div class="search-footer">
+          <span><kbd>↑</kbd><kbd>↓</kbd> навигация</span>
+          <span><kbd>Enter</kbd> открыть</span>
+          <span><kbd>Esc</kbd> закрыть</span>
+        </div>
+      </div>
+    </div>
+
     <script>
       window.DOCS_BASE = '{{BASE}}';
     </script>
-    <script src="{{BASE}}assets/js/app.js"></script>
-    <script src="{{BASE}}pagefind/pagefind-ui.js"></script>
-    <script>
-      window.addEventListener('DOMContentLoaded', function () {
-        if (typeof PagefindUI !== 'undefined') {
-          new PagefindUI({
-            element: '#search',
-            bundlePath: window.DOCS_BASE + 'pagefind/',
-            showSubResults: true,
-            resetStyles: false,
-          });
-        }
-      });
-    </script>
+    <script src="{{BASE}}assets/js/app.js" type="module"></script>
   </body>
 </html>

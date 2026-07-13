@@ -28,8 +28,8 @@
     "compose-pull": "docker compose --env-file .env -f deploy/docker-compose.yml pull",
     "compose-build": "docker compose --env-file .env -f deploy/docker-compose.yml up -d --build",
     "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml down",
-    "docs:build": "node scripts/build-docs.mjs && pagefind --site docs-dist",
-    "docs:dev": "node scripts/build-docs.mjs --dev && pagefind --site docs-dist && npx --yes serve docs-dist -l 4173",
+    "docs:build": "node scripts/build-docs.mjs && pagefind --site docs-dist --force-language ru",
+    "docs:dev": "node scripts/build-docs.mjs --dev && pagefind --site docs-dist --force-language ru && npx --yes serve docs-dist -l 4173",
     "docs:preview": "pnpm docs:build && npx --yes serve docs-dist -l 4173"
   },
   "devDependencies": {

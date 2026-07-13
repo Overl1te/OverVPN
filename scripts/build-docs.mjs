@@ -44,6 +44,8 @@ const sidebar = [
   },
 ];
 
+const flatNav = sidebar.flatMap((section) => section.items);
+
 const pages = [
   {
     id: 'index',
@@ -121,6 +123,36 @@ const pages = [
   { id: 'faq', title: 'FAQ', out: 'faq.html', content: 'pages/faq.html' },
 ];
 
+function getNavSection(pageId) {
+  if (pageId === 'faq') return 'faq';
+  if (pageId.startsWith('reference-')) return 'reference';
+  if (pageId.startsWith('guide-')) return 'guide';
+  return null;
+}
+
+function renderHeaderNav(activeSection) {
+  const items = [
+    { id: 'guide', label: 'Руководство', href: 'guide/introduction.html' },
+    { id: 'reference', label: 'Справочник', href: 'reference/cli.html' },
+    { id: 'faq', label: 'FAQ', href: 'faq.html' },
+    {
+      id: 'github',
+      label: 'GitHub',
+      href: 'https://github.com/Overl1te/OverVPN',
+      external: true,
+    },
+  ];
+
+  return items
+    .map((item) => {
+      const active = item.id === activeSection ? ' class="active"' : '';
+      const attrs = item.external ? ' target="_blank" rel="noopener"' : '';
+      const href = item.external ? item.href : `${base}${item.href}`;
+      return `<a href="${href}"${active}${attrs}>${item.label}</a>`;
+    })
+    .join('\n          ');
+}
+
 function renderSidebar(activeId) {
   return sidebar
     .map((section) => {
@@ -140,6 +172,27 @@ function renderSidebar(activeId) {
     .join('\n      ');
 }
 
+function renderPrevNext(activeId) {
+  if (!activeId || activeId === 'index') return '';
+
+  const idx = flatNav.findIndex((item) => item.id === activeId);
+  if (idx === -1) return '';
+
+  const prev = idx > 0 ? flatNav[idx - 1] : null;
+  const next = idx < flatNav.length - 1 ? flatNav[idx + 1] : null;
+  if (!prev && !next) return '';
+
+  let html = '<nav class="doc-pager" aria-label="Навигация по страницам">';
+  if (prev) {
+    html += `<a class="pager-prev" href="${base}${prev.href}"><span>Назад</span><strong>${prev.label}</strong></a>`;
+  }
+  if (next) {
+    html += `<a class="pager-next" href="${base}${next.href}"><span>Далее</span><strong>${next.label}</strong></a>`;
+  }
+  html += '</nav>';
+  return html;
+}
+
 function applyBase(text) {
   return text.replaceAll('{{BASE}}', base);
 }
@@ -155,13 +208,16 @@ function build() {
 
   for (const page of pages) {
     const content = applyBase(readFileSync(join(docsSrc, page.content), 'utf8'));
+    const navSection = getNavSection(page.id);
     const html = applyBase(template)
       .replaceAll('{{TITLE}}', page.title)
       .replaceAll('{{PAGE_ID}}', page.id)
       .replaceAll('{{BODY_CLASS}}', page.home ? 'page-home' : 'page-doc')
       .replaceAll('{{CONTENT}}', content)
       .replaceAll('{{SIDEBAR}}', page.home ? '' : renderSidebar(page.id))
-      .replaceAll('{{LAYOUT_CLASS}}', page.home ? 'layout-home' : 'layout-doc');
+      .replaceAll('{{LAYOUT_CLASS}}', page.home ? 'layout-home' : 'layout-doc')
+      .replaceAll('{{HEADER_NAV}}', renderHeaderNav(navSection))
+      .replaceAll('{{PREV_NEXT}}', page.home ? '' : renderPrevNext(page.id));
 
     const target = join(outDir, page.out);
     mkdirSync(dirname(target), { recursive: true });
