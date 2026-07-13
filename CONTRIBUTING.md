@@ -156,14 +156,14 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Потоки данных
 
-| Поток         | Путь                                                                               | Примечание                                           |
-| ------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                     | JWT access + httpOnly refresh cookie                 |
-| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                               | без админ-JWT; rate-limit по IP и fingerprint токена |
+| Поток         | Путь                                                                           | Примечание                                           |
+| ------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                 | JWT access + httpOnly refresh cookie                 |
+| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                           | без админ-JWT; rate-limit по IP и fingerprint токена |
 | Apply конфига | Admin mutation / auto-after-save → CoreModule → файл + reload handshake → core | Redis lock `CORE_APPLY_LOCK_TTL_MS`                  |
-| Трафик        | Worker → V2Ray Stats gRPC → ledger → агрегация UsageDaily                          | epoch/generation после reload                        |
-| Онлайн        | Worker → Clash API → OnlineSession                                                 | best-effort device id                                |
-| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости         |                                                      |
+| Трафик        | Worker → V2Ray Stats gRPC → ledger → агрегация UsageDaily                      | epoch/generation после reload                        |
+| Онлайн        | Worker → Clash API → OnlineSession                                             | best-effort device id                                |
+| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости     |                                                      |
 
 ### Сети Compose (упрощённо)
 
