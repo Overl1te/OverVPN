@@ -13,7 +13,7 @@
 3. [Стек и зависимости](#3-стек-и-зависимости)
 4. [Архитектура рантайма](#4-архитектура-рантайма)
 5. [API: модули и зоны ответственности](#5-api-модули-и-зоны-ответственности)
-6. [Ядро sing-box: apply / reload / rollback](#6-ядро-sing-box-apply--reload--rollback)
+6. [Ядро (apply / reload / rollback)](#6-ядро-apply--reload--rollback)
 7. [Воркеры](#7-воркеры)
 8. [Модель данных (Prisma)](#8-модель-данных-prisma)
 9. [Web-панель](#9-web-панель)
@@ -29,7 +29,7 @@
 
 ## 1. Что это за система
 
-OverVPN — **control plane** над одним процессом **sing-box** на одной машине.
+OverVPN — **control plane** над одним VPN-ядром на одной машине (сейчас это sing-box).
 
 ```mermaid
 flowchart LR
@@ -37,13 +37,13 @@ flowchart LR
   web -->|"/api/*"| api["api NestJS"]
   api --> postgres[(postgres)]
   api --> redis[(redis locks)]
-  api --> core["core sing-box"]
+  api --> core["VPN core"]
 ```
 
 Панель **не** маршрутизирует клиентский VPN-трафик сама. Она:
 
 - хранит пользователей, inbound’ы, планы, assignments;
-- рендерит desired-конфиг sing-box и применяет его атомарно;
+- рендерит desired-конфиг ядра и применяет его атомарно;
 - отдаёт subscription-профили клиентам;
 - собирает трафик/онлайн через Clash API + V2Ray Stats API;
 - enforce’ит лимиты и пишет audit.
@@ -147,7 +147,7 @@ Workspace (`pnpm-workspace.yaml`):
 | `migrate`         | api image, one-shot            | `prisma migrate deploy`                    |
 | `api`             | `ghcr.io/overl1te/overvpn-api` | NestJS                                     |
 | `web`             | `ghcr.io/overl1te/overvpn-web` | Nginx + SPA, proxy `/api`                  |
-| `core`            | sing-box в контейнере          | VPN data plane                             |
+| `core`            | VPN core container             | data plane                                 |
 | `bootstrap-admin` | profile `tools`                | создать OWNER                              |
 
 ---
@@ -160,7 +160,7 @@ Workspace (`pnpm-workspace.yaml`):
 | ------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                     | JWT access + httpOnly refresh cookie                 |
 | Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                               | без админ-JWT; rate-limit по IP и fingerprint токена |
-| Apply конфига | Admin mutation / auto-after-save → CoreModule → файл + reload handshake → sing-box | Redis lock `CORE_APPLY_LOCK_TTL_MS`                  |
+| Apply конфига | Admin mutation / auto-after-save → CoreModule → файл + reload handshake → core | Redis lock `CORE_APPLY_LOCK_TTL_MS`                  |
 | Трафик        | Worker → V2Ray Stats gRPC → ledger → агрегация UsageDaily                          | epoch/generation после reload                        |
 | Онлайн        | Worker → Clash API → OnlineSession                                                 | best-effort device id                                |
 | Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости         |                                                      |
@@ -224,7 +224,7 @@ Env валидируется при старте API в `apps/api/src/config/env
 
 ---
 
-## 6. Ядро sing-box: apply / reload / rollback
+## 6. Ядро: apply / reload / rollback
 
 Ключевой файл: `apps/api/src/core/sing-box.provider.ts` (`SingBoxProvider extends CoreProvider`).
 
@@ -236,7 +236,7 @@ Env валидируется при старте API в `apps/api/src/config/env
 
 ```text
 acquire Redis lock
-  → validate config (sing-box check)
+  → validate config (core check)
   → write config.json
   → signal reload (request/ack handshake через файлы в /var/lib/overvpn/reload)
   → verify health (Clash API)
@@ -401,7 +401,7 @@ docker compose --env-file .env -f deploy/docker-compose.yml --profile tools run 
 
 - PostgreSQL
 - Redis
-- бинарь **sing-box** (совместимая сборка; в комментариях `.env.example` фигурирует линия 1.13.x)
+- бинарь ядра (совместимая сборка; в комментариях `.env.example` — линия sing-box 1.13.x)
 - пути к config / last-known-good / reload files
 
 ```bash

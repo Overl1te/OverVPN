@@ -454,12 +454,15 @@ EOF
 }
 
 install_landing_files() {
-  mkdir -p "$LANDING_DIR"
+  mkdir -p "$LANDING_DIR/assets"
   local src="${APP_DIR}/deploy/landing"
   if [[ -d "$src" ]]; then
     cp -f "$src/index.html" "$LANDING_DIR/index.html"
     cp -f "$src/sub.html" "$LANDING_DIR/sub.html"
     cp -f "$src/vpn.html" "$LANDING_DIR/vpn.html"
+    if [[ -f "$src/assets/logo.png" ]]; then
+      cp -f "$src/assets/logo.png" "$LANDING_DIR/assets/logo.png"
+    fi
   else
     colorized_echo yellow "Landing templates missing at ${src}; writing minimal stubs."
     printf '%s\n' '<!doctype html><html><body><h1>OverVPN</h1></body></html>' >"$LANDING_DIR/index.html"
@@ -563,6 +566,9 @@ $(nginx_proxy_headers "$proto")
     location = / {
         try_files /index.html =404;
     }
+    location ^~ /assets/ {
+        try_files \$uri =404;
+    }
     location / {
         return 404;
     }
@@ -576,9 +582,12 @@ $(nginx_proxy_headers "$proto")
 "
     elif [[ "$host" == "$sub_host" ]]; then
       conf+="
+    root ${LANDING_DIR};
     location = / {
-        root ${LANDING_DIR};
         try_files /sub.html =404;
+    }
+    location ^~ /assets/ {
+        try_files \$uri =404;
     }
     location / {
         return 404;
@@ -587,9 +596,12 @@ $(nginx_proxy_headers "$proto")
     else
       # VPN public host: lightweight decoy page (not the admin panel)
       conf+="
+    root ${LANDING_DIR};
     location = / {
-        root ${LANDING_DIR};
         try_files /vpn.html =404;
+    }
+    location ^~ /assets/ {
+        try_files \$uri =404;
     }
     location / {
         return 404;
@@ -733,7 +745,7 @@ fetch_raw_file() {
 fetch_deploy_bundle() {
   local branch=$1
   colorized_echo blue "Downloading deploy bundle (${branch}) into ${APP_DIR}..."
-  mkdir -p "$APP_DIR/deploy/landing" "$APP_DIR/deploy/sing-box/certs" "$APP_DIR/deploy/proxy"
+  mkdir -p "$APP_DIR/deploy/landing/assets" "$APP_DIR/deploy/sing-box/certs" "$APP_DIR/deploy/proxy"
 
   local -a files=(
     ".env.example"
@@ -741,6 +753,7 @@ fetch_deploy_bundle() {
     "deploy/landing/index.html"
     "deploy/landing/sub.html"
     "deploy/landing/vpn.html"
+    "deploy/landing/assets/logo.png"
     "deploy/sing-box/bootstrap-config.sh"
     "deploy/sing-box/config.json"
     "deploy/sing-box/entrypoint.sh"

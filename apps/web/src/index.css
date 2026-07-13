@@ -49,19 +49,22 @@ a {
 }
 
 .brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: var(--admin-accent);
-  color: #fff;
-  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .brand-text {
   white-space: nowrap;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .admin-header {

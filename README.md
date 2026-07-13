@@ -1,8 +1,10 @@
 <div align="center">
 
+<img src="brand/logo.png" alt="OverVPN" width="120" height="120" />
+
 # OverVPN
 
-### Панель управления VPN на [sing-box](https://sing-box.sagernet.org/)
+### Однонодовая панель управления VPN
 
 Одна нода. Веб-админка. Подписки. Учёт трафика. Лимиты. Бэкапы.
 
@@ -12,7 +14,6 @@
 
 ![Node.js](https://img.shields.io/badge/Node.js-24_LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-![sing-box](https://img.shields.io/badge/core-sing--box-111111?style=flat-square)
 ![License](https://img.shields.io/badge/license-UNLICENSED-red?style=flat-square)
 
 </div>
@@ -21,20 +22,20 @@
 
 ## Что это
 
-OverVPN — **однонодовая** control plane для VPN:
+OverVPN — **однонодовая** панель для выдачи доступа, подписок и учёта:
 
 |               |                                                      |
 | :------------ | :--------------------------------------------------- |
 | **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks     |
 | **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит |
-| **Подписки**  | sing-box JSON · Clash Meta · список ссылок · QR      |
+| **Подписки**  | JSON · Clash Meta · список ссылок · QR               |
 | **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce          |
 | **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты  |
 
-Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке).
+Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Под капотом — [sing-box](https://sing-box.sagernet.org/) как VPN-ядро.
 
 > [!IMPORTANT]
-> Мульти-нода **не поддерживается**. Один сервер — одно ядро sing-box.
+> Мульти-нода **не поддерживается**. Один сервер — одно ядро.
 
 ---
 
@@ -131,7 +132,7 @@ overvpn uninstall              # удалить установку
 | API                    | внутри Compose; наружу через веб/прокси |
 | PostgreSQL             | `5432` → только `127.0.0.1`             |
 | Redis                  | `6379` → только `127.0.0.1`             |
-| sing-box (UDP inbound) | `443`                                   |
+| VPN UDP inbound        | `443`                                   |
 
 > [!WARNING]
 > Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
@@ -144,7 +145,7 @@ overvpn uninstall              # удалить установку
 
 1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks).
 2. Укажите `tag`, listen / public host и port.
-3. TLS-файлы кладите в `deploy/sing-box/certs` (в контейнере — `/var/lib/sing-box-certs`).
+3. TLS-файлы кладите в каталог сертификатов ядра (`deploy/sing-box/certs`, в контейнере — `/var/lib/sing-box-certs`).
 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
 `SING_BOX_UDP_PORT` в `.env` должен совпадать с портом inbound’а, который вы отдаёте наружу.
@@ -193,7 +194,7 @@ overvpn uninstall              # удалить установку
 | Тип           | Содержимое                                |
 | ------------- | ----------------------------------------- |
 | `DATABASE`    | `pg_dump`                                 |
-| `CORE_CONFIG` | текущий + last-known-good конфиг sing-box |
+| `CORE_CONFIG` | текущий + last-known-good конфиг ядра |
 | `FULL`        | БД + конфиг + метаданные                  |
 
 Рекомендуемый порядок:
@@ -231,7 +232,7 @@ Origin без пути:
 ### Форматы
 
 ```bash
-# sing-box JSON (по умолчанию)
+# JSON-профиль (по умолчанию)
 curl -o profile.json "$SUB_URL?format=sing-box"
 
 # список ссылок
@@ -366,11 +367,10 @@ curl -s http://localhost:8080/api/health/ready
 
 ## Ограничения
 
-1. Трафик V2Ray API — **суммарный по пользователю**, не «пользователь × inbound».
+1. Трафик через stats API — **суммарный по пользователю**, не «пользователь × inbound».
 2. Идентификация устройства онлайн — best-effort (часто `ip:порт`).
-3. Бинарник sing-box нужен с `with_v2ray_api` / Clash / QUIC / ACME.
-4. После SIGHUP счётчики пересоздаются; панель учитывает это через epoch/generation.
-5. **Одна машина, одно ядро** — мульти-нода вне скоупа.
+3. После reload счётчики ядра пересоздаются; панель учитывает это через epoch/generation.
+4. **Одна машина, одно ядро** — мульти-нода вне скоупа.
 
 ---
 
@@ -382,6 +382,6 @@ curl -s http://localhost:8080/api/health/ready
 
 <div align="center">
 
-**OverVPN** · single-node control plane for sing-box
+**OverVPN** · single-node VPN control panel
 
 </div>

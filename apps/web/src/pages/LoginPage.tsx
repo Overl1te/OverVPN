@@ -34,9 +34,12 @@ export function LoginPage() {
   return (
     <div className="login-shell">
       <Card className="login-card" bordered={false}>
-        <Typography.Title level={3} style={{ marginTop: 0 }}>
-          {PRODUCT_NAME}
-        </Typography.Title>
+        <div className="login-brand">
+          <img src="/logo.png" alt="" width={48} height={48} />
+          <Typography.Title level={3} style={{ margin: 0 }}>
+            {PRODUCT_NAME}
+          </Typography.Title>
+        </div>
         <Typography.Paragraph type="secondary">{t('auth.loginTitle')}</Typography.Paragraph>
         {totpRequired ? (
           <Alert

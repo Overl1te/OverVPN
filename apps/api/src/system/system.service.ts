@@ -8,10 +8,7 @@ import type {
   SystemHealth,
   UsageDateRangeQuery,
 } from '@overvpn/shared/schemas';
-import {
-  localizeThroughputReason,
-  localizeWorkerError,
-} from '../core/core-user-messages';
+import { localizeThroughputReason } from '../core/core-user-messages';
 import { CoreProvider } from '../core/core-provider';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';

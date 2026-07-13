@@ -58,7 +58,7 @@ export function AdminLayout() {
     <Layout className="admin-shell">
       <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} width={220} theme="dark">
         <div className="brand-block">
-          <span className="brand-mark">O</span>
+          <img className="brand-mark" src="/logo.png" alt="" width={28} height={28} />
           {!collapsed ? <span className="brand-text">{PRODUCT_NAME}</span> : null}
         </div>
         <Menu

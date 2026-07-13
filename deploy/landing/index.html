@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/assets/logo.png" />
     <title>OverVPN</title>
     <style>
       :root {
@@ -10,7 +11,7 @@
         --bg1: #121a2b;
         --text: #e8eefc;
         --muted: #9aa8c7;
-        --accent: #3d8bfd;
+        --accent: #0f766e;
         --line: rgba(232, 238, 252, 0.12);
       }
       * {
@@ -22,8 +23,8 @@
         font-family: 'Segoe UI', 'IBM Plex Sans', system-ui, sans-serif;
         color: var(--text);
         background:
-          radial-gradient(1200px 600px at 10% -10%, rgba(61, 139, 253, 0.25), transparent 60%),
-          radial-gradient(900px 500px at 100% 0%, rgba(80, 200, 180, 0.12), transparent 55%),
+          radial-gradient(1200px 600px at 10% -10%, rgba(15, 118, 110, 0.22), transparent 60%),
+          radial-gradient(900px 500px at 100% 0%, rgba(14, 116, 144, 0.12), transparent 55%),
           linear-gradient(160deg, var(--bg0), var(--bg1));
       }
       main {
@@ -31,11 +32,22 @@
         margin: 0 auto;
         padding: 18vh 1.5rem 4rem;
       }
+      .hero-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        margin-bottom: 0.75rem;
+      }
+      .hero-brand img {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+      }
       .brand {
         font-size: clamp(2.4rem, 6vw, 3.4rem);
         font-weight: 700;
         letter-spacing: -0.03em;
-        margin: 0 0 0.75rem;
+        margin: 0;
       }
       p {
         margin: 0 0 1rem;
@@ -64,7 +76,7 @@
         color: #cfe3ff;
       }
       a {
-        color: var(--accent);
+        color: #5eead4;
         text-decoration: none;
       }
       a:hover {
@@ -79,10 +91,13 @@
   </head>
   <body>
     <main>
-      <h1 class="brand">OverVPN</h1>
+      <div class="hero-brand">
+        <img src="/assets/logo.png" alt="" width="56" height="56" />
+        <h1 class="brand">OverVPN</h1>
+      </div>
       <p>
         Приватный VPN-сервис. Доступ выдаётся администратором: вы получаете ссылку подписки и
-        подключаетесь через клиент (sing-box, Hiddify, Streisand и т.п.).
+        подключаетесь через совместимый клиент.
       </p>
       <div class="steps">
         <strong>Как подключиться</strong>
