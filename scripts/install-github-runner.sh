@@ -48,7 +48,7 @@ fi
 color blue "Installing packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y curl ca-certificates tar jq git
+apt-get install -y curl ca-certificates tar xz-utils jq git
 
 if ! command -v docker >/dev/null 2>&1; then
   color blue "Installing Docker..."
@@ -63,6 +63,22 @@ if ! docker buildx version >/dev/null 2>&1; then
   color yellow "docker buildx still missing; CI will install it via setup-buildx-action."
 fi
 systemctl enable --now docker
+
+# Node.js 24 for CI verify (workflow also caches under the runner user's ~/.local/node)
+NODE_MAJOR=24
+if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" != "$NODE_MAJOR" ]]; then
+  color blue "Installing Node.js ${NODE_MAJOR}..."
+  NODE_VERSION="$(curl -fsSL https://nodejs.org/dist/index.json | jq -r --arg major "$NODE_MAJOR" '[.[] | select(.version | test("^v" + $major + "\\."))][0].version')"
+  if [[ -z "$NODE_VERSION" || "$NODE_VERSION" == "null" ]]; then
+    color red "Could not resolve Node.js ${NODE_MAJOR} from nodejs.org"
+    exit 1
+  fi
+  curl -fsSL --retry 5 --retry-delay 2 -o /tmp/node.tar.xz \
+    "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz"
+  tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+  rm -f /tmp/node.tar.xz
+fi
+color green "Node $(node -v) / npm $(npm -v)"
 
 if ! id -u "$RUNNER_USER" >/dev/null 2>&1; then
   color blue "Creating user ${RUNNER_USER}..."

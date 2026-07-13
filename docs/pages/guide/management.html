@@ -5,29 +5,29 @@
 </p>
 
 <h2>Основные команды</h2>
-<pre><code>overvpn status
-overvpn logs
-overvpn logs api
-overvpn info
-overvpn edit
-overvpn restart
-overvpn up
-overvpn down</code></pre>
+<pre><code class="language-shell">overvpn status  # статус всех сервисов
+overvpn logs  # логи всех контейнеров
+overvpn logs api  # логи только API
+overvpn info  # URL панели, подписок, учётка владельца
+overvpn edit  # открыть конфиги установки
+overvpn restart  # перезапуск стека
+overvpn up  # запустить контейнеры
+overvpn down  # остановить контейнеры</code></pre>
 
 <h2>Обновление</h2>
-<pre><code>overvpn update
-overvpn update --build</code></pre>
+<pre><code class="language-shell">overvpn update  # подтянуть образы из GHCR
+overvpn update --build  # собрать образы локально на сервере</code></pre>
 
 <h2>Nginx и сертификаты</h2>
-<pre><code>overvpn nginx
-overvpn config set-domain --base-domain example.com --panel panel.example.com
-overvpn config apply</code></pre>
+<pre><code class="language-shell">overvpn nginx  # перегенерировать vhost'ы Nginx
+overvpn config set-domain --base-domain example.com --panel panel.example.com  # сменить домены
+overvpn config apply  # применить конфигурацию</code></pre>
 
 <h2>Bootstrap владельца</h2>
-<pre><code>overvpn bootstrap</code></pre>
+<pre><code class="language-shell">overvpn bootstrap  # создать учётку владельца панели</code></pre>
 
 <h2>Удаление</h2>
-<pre><code>overvpn uninstall</code></pre>
+<pre><code class="language-shell">overvpn uninstall  # удалить OverVPN и данные установки</code></pre>
 
 <h2>Порты по умолчанию</h2>
 <table>
@@ -67,9 +67,9 @@ overvpn config apply</code></pre>
 </div>
 
 <h2>Диагностика</h2>
-<pre><code>overvpn status
-overvpn logs api
-overvpn logs core</code></pre>
+<pre><code class="language-shell">overvpn status  # контейнеры запущены?
+overvpn logs api  # ошибки API
+overvpn logs core  # ошибки sing-box</code></pre>
 
 <p>
   См. также: <a href="{{BASE}}reference/cli.html">CLI overvpn</a>,

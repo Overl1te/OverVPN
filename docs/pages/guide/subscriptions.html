@@ -4,15 +4,15 @@
 
 <h2>Формат URL</h2>
 <p>Без пути в base URL:</p>
-<pre><code>https://sub.example.com/api/sub/{TOKEN}</code></pre>
+<pre><code class="language-text">https://sub.example.com/api/sub/{TOKEN}</code></pre>
 <p>С путём (<code>SUB_PUBLIC_BASE_URL=https://example.com/sub</code>):</p>
-<pre><code>https://example.com/sub/{TOKEN}</code></pre>
+<pre><code class="language-text">https://example.com/sub/{TOKEN}</code></pre>
 
 <h2>Форматы ответа</h2>
-<pre><code>curl -o profile.json "$SUB_URL?format=sing-box"
-curl -o links.txt "$SUB_URL?format=links"
-curl -o clash.yaml "$SUB_URL?format=clash"
-curl "$SUB_URL/info"</code></pre>
+<pre><code class="language-shell">curl -o profile.json "$SUB_URL?format=sing-box"  # конфиг sing-box
+curl -o links.txt "$SUB_URL?format=links"  # список ссылок
+curl -o clash.yaml "$SUB_URL?format=clash"  # Clash Meta
+curl "$SUB_URL/info"  # метаданные подписки</code></pre>
 
 <h2>Ротация токена</h2>
 <ul>

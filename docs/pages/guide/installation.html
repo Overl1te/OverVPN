@@ -43,10 +43,10 @@
 </div>
 
 <h2>Быстрая установка</h2>
-<pre><code>sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install</code></pre>
+<pre><code class="language-shell">sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install  # установка из GHCR</code></pre>
 
 <p>Локальная сборка образов на машине:</p>
-<pre><code>sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build</code></pre>
+<pre><code class="language-shell">sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build  # сборка образов на сервере</code></pre>
 
 <h2>Мастер установки</h2>
 <p>Сначала задаются <strong>все</strong> вопросы, затем установка идёт без пауз.</p>
@@ -145,8 +145,8 @@
 </table>
 
 <h2>После установки</h2>
-<pre><code>overvpn info
-overvpn status</code></pre>
+<pre><code class="language-shell">overvpn info  # URL панели и учётные данные
+overvpn status  # убедиться, что стек запущен</code></pre>
 <ol>
   <li>Откройте URL панели из <code>overvpn info</code></li>
   <li>Войдите логином и паролем владельца</li>

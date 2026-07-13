@@ -142,6 +142,114 @@ function initToc() {
   links.forEach(({ heading }) => observer.observe(heading));
 }
 
+function splitCopyUnits(text) {
+  const lines = text.split('\n');
+  const units = [];
+  let buffer = [];
+
+  for (const line of lines) {
+    buffer.push(line);
+    if (line.trimEnd().endsWith('\\')) {
+      continue;
+    }
+    units.push(buffer.join('\n'));
+    buffer = [];
+  }
+
+  if (buffer.length) {
+    units.push(buffer.join('\n'));
+  }
+
+  return units.filter((unit) => unit.trim().length > 0);
+}
+
+function parseCommandLine(unit) {
+  const trimmed = unit.trim();
+  if (!trimmed) {
+    return { command: '', comment: '' };
+  }
+
+  if (trimmed.startsWith('#')) {
+    return { command: '', comment: trimmed.replace(/^#\s?/, '') };
+  }
+
+  let inSingle = false;
+  let inDouble = false;
+
+  for (let i = 0; i < unit.length; i += 1) {
+    const char = unit[i];
+    if (char === "'" && !inDouble) {
+      inSingle = !inSingle;
+    } else if (char === '"' && !inSingle) {
+      inDouble = !inDouble;
+    } else if (char === '#' && !inSingle && !inDouble) {
+      const command = unit.slice(0, i).trimEnd();
+      const comment = unit.slice(i + 1).trim();
+      if (command) {
+        return { command, comment };
+      }
+    }
+  }
+
+  return { command: unit.trimEnd(), comment: '' };
+}
+
+function getCopyText(unit) {
+  const lines = unit.split('\n');
+  const commands = lines.map((line) => parseCommandLine(line).command).filter(Boolean);
+  return commands.join('\n').trim();
+}
+
+function parseCommandUnit(unit) {
+  const command = getCopyText(unit);
+  let comment = '';
+
+  for (let i = unit.split('\n').length - 1; i >= 0; i -= 1) {
+    const parsed = parseCommandLine(unit.split('\n')[i]);
+    if (parsed.comment) {
+      comment = parsed.comment;
+      break;
+    }
+  }
+
+  if (!command && !comment) {
+    const parsed = parseCommandLine(unit);
+    return parsed;
+  }
+
+  return { command, comment };
+}
+
+function createLineCopyButton(getText) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'copy-btn copy-btn-line';
+  btn.setAttribute('aria-label', 'Копировать строку');
+  btn.innerHTML = `
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/>
+    </svg>
+  `;
+
+  btn.addEventListener('click', async () => {
+    const text = getText();
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.classList.add('copied');
+      btn.setAttribute('aria-label', 'Скопировано');
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.setAttribute('aria-label', 'Копировать строку');
+      }, 1500);
+    } catch {
+      btn.setAttribute('aria-label', 'Ошибка копирования');
+    }
+  });
+
+  return btn;
+}
+
 function initCopyButtons() {
   if (!content) return;
 
@@ -151,45 +259,62 @@ function initCopyButtons() {
     const wrapper = document.createElement('div');
     wrapper.className = 'code-block';
     pre.parentNode?.insertBefore(wrapper, pre);
-    wrapper.appendChild(pre);
 
     const code = pre.querySelector('code');
-    const langMatch = code?.className.match(/language-(\w+)/);
-    if (langMatch) {
-      const badge = document.createElement('span');
-      badge.className = 'code-lang';
-      badge.textContent = langMatch[1];
-      wrapper.appendChild(badge);
+    const langMatch = code?.className.match(/language-([\w-]+)/);
+    const lang = langMatch?.[1] || pre.dataset.lang;
+    const rawText = code?.textContent || pre.textContent || '';
+    const units = splitCopyUnits(rawText);
+
+    if (lang && code && !langMatch) {
+      code.classList.add(`language-${lang}`);
     }
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'copy-btn';
-    btn.setAttribute('aria-label', 'Копировать код');
-    btn.innerHTML = `
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="2"/>
-      </svg>
-      <span>Копировать</span>
-    `;
+    if (lang) {
+      const toolbar = document.createElement('div');
+      toolbar.className = 'code-toolbar';
 
-    btn.addEventListener('click', async () => {
-      const text = code?.textContent || pre.textContent || '';
-      try {
-        await navigator.clipboard.writeText(text.trim());
-        btn.classList.add('copied');
-        btn.querySelector('span').textContent = 'Скопировано';
-        setTimeout(() => {
-          btn.classList.remove('copied');
-          btn.querySelector('span').textContent = 'Копировать';
-        }, 1500);
-      } catch {
-        btn.querySelector('span').textContent = 'Ошибка';
+      const badge = document.createElement('span');
+      badge.className = 'code-lang';
+      badge.textContent = lang;
+      toolbar.appendChild(badge);
+      wrapper.appendChild(toolbar);
+    }
+
+    const linesContainer = document.createElement('div');
+    linesContainer.className = 'code-lines';
+
+    units.forEach((unit) => {
+      const row = document.createElement('div');
+      const parsed = parseCommandUnit(unit);
+      const copyText = parsed.command;
+      const isCommentOnly = !copyText && parsed.comment;
+
+      row.className = isCommentOnly ? 'code-line code-line-note' : 'code-line';
+
+      if (copyText) {
+        const textEl = document.createElement('code');
+        textEl.className = 'code-line-text';
+        textEl.textContent = copyText;
+        row.appendChild(textEl);
       }
+
+      if (parsed.comment) {
+        const commentEl = document.createElement('span');
+        commentEl.className = 'code-line-comment';
+        commentEl.textContent = parsed.comment;
+        row.appendChild(commentEl);
+      }
+
+      if (copyText) {
+        row.appendChild(createLineCopyButton(() => copyText));
+      }
+
+      linesContainer.appendChild(row);
     });
 
-    wrapper.appendChild(btn);
+    wrapper.appendChild(linesContainer);
+    pre.remove();
   });
 }
 

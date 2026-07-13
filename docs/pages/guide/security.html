@@ -45,9 +45,9 @@
 </table>
 
 <h2>Сетевая изоляция</h2>
-<pre><code>Интернет → Nginx (443) → web:8080 → api
+<pre><code class="language-text">Интернет → Nginx (443) → web:8080 → api
 Интернет → UDP 443 → sing-box
 Postgres, Redis → 127.0.0.1</code></pre>
 
 <h2>Обновления</h2>
-<pre><code>overvpn update</code></pre>
+<pre><code class="language-shell">overvpn update  # обновить образы и перезапустить стек</code></pre>

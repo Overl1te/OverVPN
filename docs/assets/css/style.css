@@ -470,24 +470,117 @@ body.sidebar-open .sidebar-overlay {
 .code-block {
   position: relative;
   margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-code);
+  transition:
+    border-color var(--duration) var(--ease),
+    box-shadow var(--duration) var(--ease);
+}
+
+.code-block:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 55%, var(--bg-code));
+}
+
+.code-lines {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.code-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  transition: background var(--duration) var(--ease);
+}
+
+.code-line-note {
+  background: color-mix(in srgb, var(--bg-soft) 40%, transparent);
+}
+
+.code-line-note .code-line-comment {
+  font-style: italic;
+}
+
+.code-line-note .code-line-comment::before {
+  content: '# ';
+  opacity: 0.65;
+  font-family: var(--mono);
+  font-style: normal;
+}
+
+.code-line-comment {
+  flex-shrink: 0;
+  margin-left: auto;
+  max-width: 42%;
+  padding-left: 1rem;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.code-line-comment::before {
+  content: '— ';
+  opacity: 0.55;
+}
+
+@media (max-width: 699px) {
+  .code-line {
+    flex-wrap: wrap;
+  }
+
+  .code-line-comment {
+    flex-basis: 100%;
+    max-width: none;
+    margin-left: 0;
+    padding-left: 0;
+    text-align: left;
+  }
+}
+
+.code-line:last-child {
+  border-bottom: 0;
+}
+
+.code-line:hover {
+  background: color-mix(in srgb, var(--brand-soft) 45%, transparent);
+}
+
+.code-line-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
 }
 
 .code-block pre {
   margin: 0;
   overflow: auto;
   padding: 1rem 1.1rem;
-  padding-top: 2.25rem;
-  border-radius: var(--radius);
-  background: var(--bg-code);
-  border: 1px solid var(--border);
-  transition:
-    border-color var(--duration) var(--ease),
-    box-shadow var(--duration) var(--ease);
-}
-
-.code-block:hover pre {
-  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
-  box-shadow: 0 0 0 3px var(--ring);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
 }
 
 .code-block pre code {
@@ -498,31 +591,26 @@ body.sidebar-open .sidebar-overlay {
 }
 
 .code-lang {
-  position: absolute;
-  top: 0.55rem;
-  left: 0.85rem;
   font-family: var(--mono);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
-  pointer-events: none;
+  font-weight: 500;
 }
 
 .copy-btn {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.55rem;
-  border: 1px solid var(--border);
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
+  background: transparent;
   color: var(--text-muted);
-  font-family: inherit;
-  font-size: 0.75rem;
   cursor: pointer;
   opacity: 0;
   transition:
@@ -532,13 +620,18 @@ body.sidebar-open .sidebar-overlay {
     background var(--duration) var(--ease);
 }
 
-.code-block:hover .copy-btn,
+.code-line:hover .copy-btn,
 .copy-btn:focus {
   opacity: 1;
 }
 
+.copy-btn-line {
+  margin-top: 0.05rem;
+}
+
 .copy-btn:hover {
-  border-color: var(--brand);
+  border-color: var(--border);
+  background: var(--surface);
   color: var(--brand);
 }
 
@@ -546,6 +639,13 @@ body.sidebar-open .sidebar-overlay {
   border-color: var(--brand);
   color: var(--brand);
   background: var(--brand-soft);
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .copy-btn {
+    opacity: 1;
+  }
 }
 
 .callout {

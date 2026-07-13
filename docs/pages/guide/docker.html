@@ -3,19 +3,19 @@
 <p>Если не используете <code>install.sh</code>, поднимите стек через Docker Compose.</p>
 
 <h2>1. Конфигурация</h2>
-<pre><code>cp .env.example .env</code></pre>
+<pre><code class="language-shell">cp .env.example .env  # создать локальный конфиг</code></pre>
 <p>Замените все <code>REPLACE_*</code>. Секреты генерируйте независимо:</p>
-<pre><code>openssl rand -hex 32
-openssl rand -hex 32
-openssl rand -base64 36</code></pre>
+<pre><code class="language-shell">openssl rand -hex 32  # JWT-секрет
+openssl rand -hex 32  # секрет подписок
+openssl rand -base64 36  # пароль Postgres</code></pre>
 
 <h2>2. Старт</h2>
-<pre><code>pnpm install
-pnpm compose-up
-# или: pnpm compose-build</code></pre>
+<pre><code class="language-shell">pnpm install  # зависимости монорепо
+pnpm compose-up  # поднять стек из GHCR
+# или: pnpm compose-build  # собрать образы локально</code></pre>
 
 <h2>3. Владелец</h2>
-<pre><code>pnpm bootstrap:admin</code></pre>
+<pre><code class="language-shell">pnpm bootstrap:admin  # создать владельца панели</code></pre>
 
 <h2>4. Проверка</h2>
 <ul>
@@ -24,6 +24,6 @@ pnpm compose-up
 </ul>
 
 <h2>5. Остановка</h2>
-<pre><code>pnpm compose-down</code></pre>
+<pre><code class="language-shell">pnpm compose-down  # остановить и удалить контейнеры</code></pre>
 
 <p>Полный список переменных — <a href="{{BASE}}reference/env.html">справочник .env</a>.</p>

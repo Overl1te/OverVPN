@@ -32,15 +32,15 @@
 
 <h2>Hysteria2</h2>
 <p>QUIC, хорош для нестабильных сетей. Нужен <strong>UDP</strong> на публичном порту.</p>
-<pre><code>hysteria2://PASSWORD@host:443/?sni=example.com&amp;obfs=salamander#LABEL</code></pre>
+<pre><code class="language-text">hysteria2://PASSWORD@host:443/?sni=example.com&amp;obfs=salamander#LABEL</code></pre>
 
 <h2>VLESS + Reality</h2>
 <p>TCP с маскировкой под реальный TLS-сайт.</p>
-<pre><code>vless://UUID@host:443?security=reality&amp;sni=...&amp;flow=xtls-rprx-vision#LABEL</code></pre>
+<pre><code class="language-text">vless://UUID@host:443?security=reality&amp;sni=...&amp;flow=xtls-rprx-vision#LABEL</code></pre>
 
 <h2>Trojan</h2>
 <p>TLS поверх TCP.</p>
-<pre><code>trojan://PASSWORD@host:443?security=tls&amp;sni=example.com#LABEL</code></pre>
+<pre><code class="language-text">trojan://PASSWORD@host:443?security=tls&amp;sni=example.com#LABEL</code></pre>
 
 <h2>Shadowsocks 2022</h2>
 <p>Пароль клиента: <code>SERVER_PASSWORD:USER_PASSWORD</code></p>
@@ -74,5 +74,5 @@
 </table>
 
 <h2>Firewall</h2>
-<pre><code>ufw allow 443/tcp
-ufw allow 443/udp</code></pre>
+<pre><code class="language-shell">ufw allow 443/tcp  # HTTPS и TCP VPN
+ufw allow 443/udp  # UDP VPN (Hysteria2 и др.)</code></pre>
