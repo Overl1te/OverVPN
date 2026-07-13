@@ -22,7 +22,16 @@ export type InboundListenOverrides = {
 
 type AcmeTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'ACME' }>;
 
+export function defaultAcmeEmail(publicHost: string): string | undefined {
+  const host = publicHost.trim();
+  if (!host || host.includes('@') || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    return undefined;
+  }
+  return `admin@${host}`;
+}
+
 function buildAcmeTls(publicHost: string, context: InboundDefaultsContext): AcmeTlsDefaults {
+  const email = defaultAcmeEmail(publicHost);
   const tls: AcmeTlsDefaults = {
     mode: 'ACME',
     sni: publicHost,
@@ -38,6 +47,7 @@ function buildAcmeTls(publicHost: string, context: InboundDefaultsContext): Acme
     kernelTx: false,
     kernelRx: false,
     clientInsecure: false,
+    ...(email ? { email } : {}),
   };
   const httpPort = context.acmeHttpPort;
   const tlsPort = context.acmeTlsPort;
@@ -129,8 +139,18 @@ function syncTlsPublicHost(settings: Record<string, unknown>, host: string): voi
   }
   const tlsRecord = { ...(tls as Record<string, unknown>) };
   if (tlsRecord.mode === 'ACME') {
+    const previousSni = typeof tlsRecord.sni === 'string' ? tlsRecord.sni : '';
+    const previousEmail = typeof tlsRecord.email === 'string' ? tlsRecord.email : '';
+    const previousDefaultEmail = defaultAcmeEmail(previousSni);
     tlsRecord.sni = host;
     tlsRecord.domains = [host];
+    const nextEmail = defaultAcmeEmail(host);
+    if (
+      nextEmail &&
+      (!previousEmail || (previousDefaultEmail && previousEmail === previousDefaultEmail))
+    ) {
+      tlsRecord.email = nextEmail;
+    }
     settings.tls = tlsRecord;
   }
 }

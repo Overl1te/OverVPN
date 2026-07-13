@@ -57,24 +57,38 @@ load_cli_lang() {
   fi
 }
 
-ensure_ru_locale() {
-  if locale -a 2>/dev/null | grep -qiE 'ru(_|-)ru'; then
+# Install UTF-8 locale bits so Cyrillic in our CLI renders correctly.
+# Do NOT switch LANG/LC_ALL to Russian — apt/docker/system tools stay on the host default.
+ensure_cyrillic_utf8() {
+  local charmap
+  charmap="$(locale charmap 2>/dev/null || true)"
+  if locale -a 2>/dev/null | grep -qiE '^(C|POSIX|en_US|ru_RU)\.utf-?8$' \
+    && [[ "${charmap,,}" == "utf-8" || "${charmap,,}" == "utf8" ]]; then
     return 0
   fi
+
   detect_os
-  colorized_echo blue "$(cli_t installing_ru_locale)"
+  colorized_echo blue "$(cli_t ensuring_utf8_locale)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
-  apt-get install -y language-pack-ru locales
+  apt-get install -y locales language-pack-ru
+  locale-gen C.UTF-8 2>/dev/null || true
+  locale-gen en_US.UTF-8 2>/dev/null || true
   locale-gen ru_RU.UTF-8 2>/dev/null || true
-  update-locale LANG=ru_RU.UTF-8 2>/dev/null || true
+
+  charmap="$(locale charmap 2>/dev/null || true)"
+  if [[ "${charmap,,}" != "utf-8" && "${charmap,,}" != "utf8" ]]; then
+    if locale -a 2>/dev/null | grep -qiE '^C\.utf-?8$'; then
+      export LC_CTYPE=C.UTF-8
+    elif locale -a 2>/dev/null | grep -qiE '^en_US\.utf-?8$'; then
+      export LC_CTYPE=en_US.UTF-8
+    fi
+  fi
 }
 
 apply_cli_lang() {
   if [[ "$CLI_LANG" == ru ]]; then
-    ensure_ru_locale
-    export LANG=ru_RU.UTF-8
-    export LC_ALL=ru_RU.UTF-8
+    ensure_cyrillic_utf8
   fi
 }
 
@@ -113,7 +127,7 @@ cli_t() {
       prompt_start_now) printf '%s' "7) Начать установку сейчас? [Y/n]: " ;;
       aborted) printf '%s' "Отменено." ;;
       no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай ☕" ;;
-      installing_ru_locale) printf '%s' "Устанавливаем поддержку русской локали…" ;;
+      ensuring_utf8_locale) printf '%s' "Устанавливаем поддержку UTF-8 для кириллицы в терминале…" ;;
       install_success_title) printf '%s' "║      OverVPN успешно установлен              ║" ;;
       install_success_site) printf 'Сайт:         https://%s' "$1" ;;
       install_success_panel) printf 'Панель:       %s' "$1" ;;
@@ -123,6 +137,96 @@ cli_t() {
       install_success_vpn) printf 'VPN-хост:     %s  (publicHost для новых входящих)' "$1" ;;
       install_success_credentials) printf 'Учётные данные: %s' "$1" ;;
       install_success_manage) printf 'Управление: %s status | logs | config | update | restart' "$1" ;;
+      unsupported_os) printf '%s' "Неподдерживаемая ОС: /etc/os-release не найден." ;;
+      os_warning) printf 'Внимание: проверено на Ubuntu/Debian. Обнаружено: %s.' "$1" ;;
+      installing_packages) printf '%s' "Устанавливаем необходимые пакеты…" ;;
+      docker_already) printf '%s' "Docker и Compose уже установлены." ;;
+      installing_docker) printf '%s' "Устанавливаем Docker Engine + Compose…" ;;
+      docker_compose_missing) printf '%s' "Плагин docker compose отсутствует после установки Docker." ;;
+      docker_installed) printf '%s' "Docker установлен." ;;
+      building_images) printf '%s' "Собираем образы локально (это может занять несколько минут)…" ;;
+      pulling_images) printf '%s' "Скачиваем образы из GHCR…" ;;
+      starting_containers) printf '%s' "Запускаем контейнеры…" ;;
+      refreshing_core_config) printf '%s' "Обновляем bootstrap-конфиг VPN-ядра…" ;;
+      installing_cli) printf 'Устанавливаем CLI в %s…' "$1" ;;
+      cli_installed) printf 'CLI установлен. Команда: %s <command>' "$1" ;;
+      invalid_hostname) printf 'Некорректный hostname: %s' "$1" ;;
+      empty_host_endpoint) printf 'Пустой хост в endpoint: %s' "$1" ;;
+      paths_not_supported) printf 'Пути для этого endpoint не поддерживаются (нужен поддомен): %s' "$1" ;;
+      endpoint_example) printf 'Пример: panel.%s' "$1" ;;
+      invalid_path_endpoint) printf 'Некорректный путь в endpoint: %s' "$1" ;;
+      skipping_dns) printf '%s' "Проверка DNS пропущена." ;;
+      waiting_dns) printf 'Ожидание DNS (до %s мин, каждые %s с)…' "$1" "$2" ;;
+      dns_host_ok) printf '  ✓ %s → %s' "$1" "$2" ;;
+      dns_host_wait) printf '  … %s → [%s] (нужен %s) [%s/%s]' "$1" "$2" "$3" "$4" "$5" ;;
+      dns_none) printf '%s' "нет" ;;
+      dns_looks_good) printf '%s' "DNS в порядке." ;;
+      dns_timeout) printf '%s' "DNS не успел обновиться за отведённое время." ;;
+      dns_timeout_hint) printf '%s' "Исправьте A-записи и запустите установку снова, либо используйте --skip-dns." ;;
+      configuring_ufw) printf '%s' "Настраиваем файрвол UFW…" ;;
+      landing_missing) printf 'Шаблоны лендинга не найдены в %s; пишем минимальные заглушки.' "$1" ;;
+      installing_nginx) printf '%s' "Устанавливаем Nginx + Certbot…" ;;
+      requesting_cert) printf 'Запрашиваем сертификат Let'\''s Encrypt для: %s' "$1" ;;
+      cert_failed_install) printf '%s' "Не удалось выпустить сертификат во время установки." ;;
+      cert_failed_hint) printf '%s' "Проверьте DNS (серая тучка в Cloudflare) и что все хосты указывают на этот сервер." ;;
+      nginx_tls_ready) printf 'Nginx + TLS готовы для: %s' "$1" ;;
+      no_install_conf_skip) printf 'Нет %s; пропускаем обновление nginx.' "$1" ;;
+      incomplete_hosts_skip) printf '%s' "Неполные хосты в install.conf; пропускаем обновление nginx." ;;
+      refreshing_nginx) printf '%s' "Обновляем сайт Nginx + сертификаты…" ;;
+      nginx_refreshed) printf 'Nginx обновлён для: %s' "$1" ;;
+      fetching_repo) printf 'Скачиваем OverVPN (%s) в %s…' "$1" "$2" ;;
+      downloading_bundle) printf 'Скачиваем deploy-бандл (%s) в %s…' "$1" "$2" ;;
+      missing_install_conf) printf 'Отсутствует %s' "$1" ;;
+      certbot_missing) printf '%s' "certbot не установлен." ;;
+      requesting_expand_cert) printf '%s' "Запрашиваем/расширяем сертификат Let'\''s Encrypt…" ;;
+      cert_failed) printf '%s' "Не удалось выпустить сертификат." ;;
+      cert_failed_hint2) printf '%s' "Проверьте DNS (серая тучка в Cloudflare), порт 80 и резолв хостов." ;;
+      generating_env) printf '%s' "Генерируем секреты .env…" ;;
+      waiting_api_health) printf '%s' "Ждём готовности API…" ;;
+      api_ready) printf '%s' "API готов." ;;
+      health_timeout) printf 'Таймаут проверки здоровья. Смотрите: %s logs' "$1" ;;
+      unknown_option) printf 'Неизвестный параметр: %s' "$1" ;;
+      already_installed) printf 'OverVPN уже установлен в %s.' "$1" ;;
+      use_update_or_uninstall) printf 'Сначала выполните '\''%s update'\'' или '\''%s uninstall'\''.' "$1" "$1" ;;
+      invalid_port) printf 'Некорректный --port: %s' "$1" ;;
+      noninteractive_start) printf '%s' "Получены неинтерактивные флаги. Начинаем установку…" ;;
+      creating_owner) printf '%s' "Создаём учётную запись владельца…" ;;
+      not_installed) printf '%s' "OverVPN не установлен." ;;
+      started) printf '%s' "OverVPN запущен." ;;
+      stopped) printf '%s' "OverVPN остановлен." ;;
+      restarted) printf '%s' "OverVPN перезапущен." ;;
+      updating) printf 'Обновляем OverVPN (%s)…' "$1" ;;
+      update_complete) printf '%s' "Обновление завершено." ;;
+      uninstall_warn) printf '%s' "Будут удалены контейнеры OverVPN, /opt/overvpn, сайт nginx и CLI." ;;
+      prompt_wipe_volumes) printf '%s' "Удалить Docker volumes (БД/данные)? [Y/n] " ;;
+      prompt_purge_certs) printf '%s' "Удалить сертификаты Let'\''s Encrypt для panel/sub/vpn? [Y/n] " ;;
+      prompt_purge_nginx) printf '%s' "Удалить пакеты Nginx + Certbot из системы? [y/N] " ;;
+      removing_nginx_pkgs) printf '%s' "Удаляем пакеты Nginx и Certbot…" ;;
+      nginx_pkgs_removed) printf '%s' "Пакеты Nginx и Certbot удалены." ;;
+      fully_removed) printf '%s' "OverVPN полностью удалён." ;;
+      nginx_left_installed) printf '%s' "Пакеты Nginx/Certbot оставлены (могут использоваться другими сайтами)." ;;
+      nginx_remove_hint) printf '%s' "Удалить вручную при необходимости: apt-get remove -y nginx certbot python3-certbot-nginx" ;;
+      reinstall) printf '%s' "Переустановка:" ;;
+      restart_to_apply) printf 'Чтобы применить: %s restart' "$1" ;;
+      bootstrap_finished) printf '%s' "Bootstrap завершён (пароль взят из .env)." ;;
+      synced_domains) printf '%s' "Домены синхронизированы из .install.conf → .env и .credentials" ;;
+      provide_base_domain) printf '%s' "Укажите --base-domain или задайте BASE_DOMAIN в .install.conf" ;;
+      domains_updated) printf 'Домены обновлены. Выполните: %s config apply' "$1" ;;
+      domain_mode_not_configured_refresh) printf '%s' "Режим домена не настроен; обновлять нечего." ;;
+      nginx_site_refreshed) printf '%s' "Сайт Nginx обновлён (существующие сертификаты)." ;;
+      domain_mode_not_configured) printf '%s' "Режим домена не настроен." ;;
+      incomplete_host_list) printf '%s' "Неполный список хостов в .install.conf" ;;
+      certs_issued) printf 'Сертификаты выпущены/расширены для: %s' "$1" ;;
+      config_applied) printf '%s' "Конфигурация применена (sync + nginx + certs + containers)." ;;
+      unknown_config_command) printf 'Неизвестная команда config: %s' "$1" ;;
+      config_usage) printf 'Использование: %s config show|sync|set-domain|nginx|certs|apply' "$1" ;;
+      unknown_command) printf 'Неизвестная команда: %s' "$1" ;;
+      info_install_dir) printf 'Каталог установки:  %s' "$1" ;;
+      info_panel_url) printf 'URL панели:    %s' "$1" ;;
+      info_sub_base) printf 'База подписок: %s' "$1" ;;
+      info_vpn_host) printf 'VPN-хост:     %s' "$1" ;;
+      info_admin_user) printf 'Админ:        %s' "$1" ;;
+      info_password) printf 'Пароль:       %s' "$1" ;;
       *) printf '%s' "$key" ;;
     esac
   else
@@ -157,7 +261,7 @@ cli_t() {
       prompt_start_now) printf '%s' "7) Start installation now? [Y/n]: " ;;
       aborted) printf '%s' "Aborted." ;;
       no_more_prompts) printf '%s' "No more prompts. You can go drink tea ☕" ;;
-      installing_ru_locale) printf '%s' "Installing Russian locale support..." ;;
+      ensuring_utf8_locale) printf '%s' "Ensuring UTF-8 support for Cyrillic in the terminal..." ;;
       install_success_title) printf '%s' "║         OverVPN installed successfully       ║" ;;
       install_success_site) printf 'Site:         https://%s' "$1" ;;
       install_success_panel) printf 'Panel:        %s' "$1" ;;
@@ -167,6 +271,96 @@ cli_t() {
       install_success_vpn) printf 'VPN host:     %s  (default publicHost for new inbounds)' "$1" ;;
       install_success_credentials) printf 'Credentials: %s' "$1" ;;
       install_success_manage) printf 'Manage with: %s status | logs | config | update | restart' "$1" ;;
+      unsupported_os) printf '%s' "Unsupported OS: /etc/os-release not found." ;;
+      os_warning) printf 'Warning: tested on Ubuntu/Debian. Detected: %s.' "$1" ;;
+      installing_packages) printf '%s' "Installing required packages..." ;;
+      docker_already) printf '%s' "Docker and Compose already installed." ;;
+      installing_docker) printf '%s' "Installing Docker Engine + Compose..." ;;
+      docker_compose_missing) printf '%s' "docker compose plugin is missing after Docker install." ;;
+      docker_installed) printf '%s' "Docker installed." ;;
+      building_images) printf '%s' "Building images locally (this can take several minutes)..." ;;
+      pulling_images) printf '%s' "Pulling images from GHCR..." ;;
+      starting_containers) printf '%s' "Starting containers..." ;;
+      refreshing_core_config) printf '%s' "Refreshing VPN core bootstrap config..." ;;
+      installing_cli) printf 'Installing CLI to %s...' "$1" ;;
+      cli_installed) printf 'CLI installed. Use: %s <command>' "$1" ;;
+      invalid_hostname) printf 'Invalid hostname: %s' "$1" ;;
+      empty_host_endpoint) printf 'Empty host in endpoint: %s' "$1" ;;
+      paths_not_supported) printf 'Paths are not supported for this endpoint (use a subdomain): %s' "$1" ;;
+      endpoint_example) printf 'Example: panel.%s' "$1" ;;
+      invalid_path_endpoint) printf 'Invalid path in endpoint: %s' "$1" ;;
+      skipping_dns) printf '%s' "Skipping DNS verification." ;;
+      waiting_dns) printf 'Waiting for DNS (up to %s min, every %s s)…' "$1" "$2" ;;
+      dns_host_ok) printf '  ✓ %s → %s' "$1" "$2" ;;
+      dns_host_wait) printf '  … %s → [%s] (want %s) [%s/%s]' "$1" "$2" "$3" "$4" "$5" ;;
+      dns_none) printf '%s' "none" ;;
+      dns_looks_good) printf '%s' "DNS looks good." ;;
+      dns_timeout) printf '%s' "DNS did not propagate in time." ;;
+      dns_timeout_hint) printf '%s' "Fix A-records and re-run install, or use --skip-dns." ;;
+      configuring_ufw) printf '%s' "Configuring UFW firewall..." ;;
+      landing_missing) printf 'Landing templates missing at %s; writing minimal stubs.' "$1" ;;
+      installing_nginx) printf '%s' "Installing Nginx + Certbot..." ;;
+      requesting_cert) printf 'Requesting Let'\''s Encrypt certificate for: %s' "$1" ;;
+      cert_failed_install) printf '%s' "Certificate issuance failed during install." ;;
+      cert_failed_hint) printf '%s' "Check DNS (grey cloud on Cloudflare) and that all hosts resolve to this server." ;;
+      nginx_tls_ready) printf 'Nginx + TLS ready for: %s' "$1" ;;
+      no_install_conf_skip) printf 'No %s; skip nginx refresh.' "$1" ;;
+      incomplete_hosts_skip) printf '%s' "Incomplete install.conf hosts; skip nginx refresh." ;;
+      refreshing_nginx) printf '%s' "Refreshing Nginx site + certificates..." ;;
+      nginx_refreshed) printf 'Nginx refreshed for: %s' "$1" ;;
+      fetching_repo) printf 'Fetching OverVPN (%s) into %s...' "$1" "$2" ;;
+      downloading_bundle) printf 'Downloading deploy bundle (%s) into %s...' "$1" "$2" ;;
+      missing_install_conf) printf 'Missing %s' "$1" ;;
+      certbot_missing) printf '%s' "certbot is not installed." ;;
+      requesting_expand_cert) printf '%s' "Requesting/expanding Let'\''s Encrypt certificate..." ;;
+      cert_failed) printf '%s' "Certificate issuance failed." ;;
+      cert_failed_hint2) printf '%s' "Check DNS (grey cloud on Cloudflare), port 80, and host resolution." ;;
+      generating_env) printf '%s' "Generating .env secrets..." ;;
+      waiting_api_health) printf '%s' "Waiting for API health..." ;;
+      api_ready) printf '%s' "API is ready." ;;
+      health_timeout) printf 'Health check timed out. Check: %s logs' "$1" ;;
+      unknown_option) printf 'Unknown option: %s' "$1" ;;
+      already_installed) printf 'OverVPN already installed in %s.' "$1" ;;
+      use_update_or_uninstall) printf 'Use '\''%s update'\'' or '\''%s uninstall'\'' first.' "$1" "$1" ;;
+      invalid_port) printf 'Invalid --port: %s' "$1" ;;
+      noninteractive_start) printf '%s' "Non-interactive flags received. Starting install…" ;;
+      creating_owner) printf '%s' "Creating owner account..." ;;
+      not_installed) printf '%s' "OverVPN is not installed." ;;
+      started) printf '%s' "OverVPN started." ;;
+      stopped) printf '%s' "OverVPN stopped." ;;
+      restarted) printf '%s' "OverVPN restarted." ;;
+      updating) printf 'Updating OverVPN (%s)...' "$1" ;;
+      update_complete) printf '%s' "Update complete." ;;
+      uninstall_warn) printf '%s' "This removes OverVPN containers, /opt/overvpn, nginx site, and CLI." ;;
+      prompt_wipe_volumes) printf '%s' "Delete Docker volumes (DB/data)? [Y/n] " ;;
+      prompt_purge_certs) printf '%s' "Delete Let'\''s Encrypt certs for panel/sub/vpn hosts? [Y/n] " ;;
+      prompt_purge_nginx) printf '%s' "Remove Nginx + Certbot packages from the system? [y/N] " ;;
+      removing_nginx_pkgs) printf '%s' "Removing Nginx and Certbot packages..." ;;
+      nginx_pkgs_removed) printf '%s' "Nginx and Certbot packages removed." ;;
+      fully_removed) printf '%s' "OverVPN fully removed." ;;
+      nginx_left_installed) printf '%s' "Nginx/Certbot packages were left installed (shared with other sites)." ;;
+      nginx_remove_hint) printf '%s' "Remove manually if needed: apt-get remove -y nginx certbot python3-certbot-nginx" ;;
+      reinstall) printf '%s' "Reinstall:" ;;
+      restart_to_apply) printf 'Restart to apply: %s restart' "$1" ;;
+      bootstrap_finished) printf '%s' "Bootstrap finished (password taken from .env)." ;;
+      synced_domains) printf '%s' "Synced domains from .install.conf → .env and .credentials" ;;
+      provide_base_domain) printf '%s' "Provide --base-domain or set BASE_DOMAIN in .install.conf" ;;
+      domains_updated) printf 'Domains updated. Run: %s config apply' "$1" ;;
+      domain_mode_not_configured_refresh) printf '%s' "Domain mode is not configured; nothing to refresh." ;;
+      nginx_site_refreshed) printf '%s' "Nginx site refreshed (existing certificates)." ;;
+      domain_mode_not_configured) printf '%s' "Domain mode is not configured." ;;
+      incomplete_host_list) printf '%s' "Incomplete host list in .install.conf" ;;
+      certs_issued) printf 'Certificates issued/expanded for: %s' "$1" ;;
+      config_applied) printf '%s' "Configuration applied (sync + nginx + certs + containers)." ;;
+      unknown_config_command) printf 'Unknown config command: %s' "$1" ;;
+      config_usage) printf 'Use: %s config show|sync|set-domain|nginx|certs|apply' "$1" ;;
+      unknown_command) printf 'Unknown command: %s' "$1" ;;
+      info_install_dir) printf 'Install dir:  %s' "$1" ;;
+      info_panel_url) printf 'Panel URL:    %s' "$1" ;;
+      info_sub_base) printf 'Sub base:     %s' "$1" ;;
+      info_vpn_host) printf 'VPN host:     %s' "$1" ;;
+      info_admin_user) printf 'Admin user:   %s' "$1" ;;
+      info_password) printf 'Password:     %s' "$1" ;;
       *) printf '%s' "$key" ;;
     esac
   fi
@@ -206,7 +400,7 @@ detect_os() {
     OS_ID="${ID:-unknown}"
     OS_LIKE="${ID_LIKE:-}"
   else
-    colorized_echo red "Unsupported OS: /etc/os-release not found."
+    colorized_echo red "$(cli_t unsupported_os)"
     exit 1
   fi
 
@@ -214,7 +408,7 @@ detect_os() {
     ubuntu|debian) ;;
     *)
       if [[ "$OS_LIKE" != *debian* && "$OS_LIKE" != *ubuntu* ]]; then
-        colorized_echo yellow "Warning: tested on Ubuntu/Debian. Detected: ${PRETTY_NAME:-$OS_ID}."
+        colorized_echo yellow "$(cli_t os_warning "${PRETTY_NAME:-$OS_ID}")"
       fi
       ;;
   esac
@@ -226,7 +420,7 @@ need_cmd() {
 
 install_packages() {
   detect_os
-  colorized_echo blue "Installing required packages..."
+  colorized_echo blue "$(cli_t installing_packages)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
   apt-get install -y ca-certificates curl git openssl ufw dnsutils
@@ -234,19 +428,19 @@ install_packages() {
 
 ensure_docker() {
   if need_cmd docker && docker compose version >/dev/null 2>&1; then
-    colorized_echo green "Docker and Compose already installed."
+    colorized_echo green "$(cli_t docker_already)"
     systemctl enable --now docker >/dev/null 2>&1 || true
     return
   fi
 
-  colorized_echo blue "Installing Docker Engine + Compose..."
+  colorized_echo blue "$(cli_t installing_docker)"
   curl -fsSL https://get.docker.com | sh
   systemctl enable --now docker
   if ! docker compose version >/dev/null 2>&1; then
-    colorized_echo red "docker compose plugin is missing after Docker install."
+    colorized_echo red "$(cli_t docker_compose_missing)"
     exit 1
   fi
-  colorized_echo green "Docker installed."
+  colorized_echo green "$(cli_t docker_installed)"
 }
 
 compose() {
@@ -256,16 +450,16 @@ compose() {
 compose_up() {
   local do_build=${1:-false}
   if [[ "$do_build" == "true" ]]; then
-    colorized_echo blue "Building images locally (this can take several minutes)..."
+    colorized_echo blue "$(cli_t building_images)"
     compose up -d --build
   else
-    colorized_echo blue "Pulling images from GHCR..."
+    colorized_echo blue "$(cli_t pulling_images)"
     compose pull
-    colorized_echo blue "Starting containers..."
+    colorized_echo blue "$(cli_t starting_containers)"
     compose up -d --pull missing
   fi
   # Oneshot init does not re-run on plain `up`; force it so management APIs are present.
-  colorized_echo blue "Refreshing VPN core bootstrap config..."
+  colorized_echo blue "$(cli_t refreshing_core_config)"
   compose up -d --force-recreate --no-deps core-config-init
   compose up -d --force-recreate --no-deps core
 }
@@ -315,20 +509,20 @@ get_env_var() {
 
 install_cli() {
   local source_script=$1
-  colorized_echo blue "Installing CLI to ${BIN_PATH}..."
+  colorized_echo blue "$(cli_t installing_cli "$BIN_PATH")"
   if [[ -f "$source_script" ]]; then
     install -m 755 "$source_script" "$BIN_PATH"
   else
     curl -fsSL "${REPO_RAW_BASE}/${DEFAULT_BRANCH}/install.sh" -o "$BIN_PATH"
     chmod 755 "$BIN_PATH"
   fi
-  colorized_echo green "CLI installed. Use: ${APP_NAME} <command>"
+  colorized_echo green "$(cli_t cli_installed "$APP_NAME")"
 }
 
 validate_hostname() {
   local host=$1
   if [[ ! "$host" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
-    colorized_echo red "Invalid hostname: ${host}"
+    colorized_echo red "$(cli_t invalid_hostname "$host")"
     exit 1
   fi
 }
@@ -354,19 +548,19 @@ parse_endpoint() {
   fi
 
   if [[ -z "$host" ]]; then
-    colorized_echo red "Empty host in endpoint: $1"
+    colorized_echo red "$(cli_t empty_host_endpoint "$1")"
     exit 1
   fi
   validate_hostname "$host"
 
   if [[ -n "$path" && "$allow_path" != "true" ]]; then
-    colorized_echo red "Paths are not supported for this endpoint (use a subdomain): $1"
-    colorized_echo yellow "Example: panel.${CFG_BASE_DOMAIN:-example.com}"
+    colorized_echo red "$(cli_t paths_not_supported "$1")"
+    colorized_echo yellow "$(cli_t endpoint_example "${CFG_BASE_DOMAIN:-example.com}")"
     exit 1
   fi
 
   if [[ -n "$path" && ! "$path" =~ ^(/[a-z0-9._~-]+)+$ ]]; then
-    colorized_echo red "Invalid path in endpoint: $1"
+    colorized_echo red "$(cli_t invalid_path_endpoint "$1")"
     exit 1
   fi
 
@@ -537,33 +731,33 @@ wait_for_dns() {
   local i
 
   if [[ "${CFG_SKIP_DNS:-false}" == "true" ]]; then
-    colorized_echo yellow "Skipping DNS verification."
+    colorized_echo yellow "$(cli_t skipping_dns)"
     return 0
   fi
 
-  colorized_echo blue "Waiting for DNS (up to $((tries * sleep_s / 60)) min, every ${sleep_s}s)…"
+  colorized_echo blue "$(cli_t waiting_dns "$((tries * sleep_s / 60))" "$sleep_s")"
 
   for ((i = 1; i <= tries; i++)); do
     local all_ok=true
     for host in "${hosts[@]}"; do
       resolved="$(resolve_host_ips "$host" | tr '\n' ' ')"
       if printf '%s' "$resolved" | grep -qw "$ip"; then
-        colorized_echo green "  ✓ ${host} → ${ip}"
+        colorized_echo green "$(cli_t dns_host_ok "$host" "$ip")"
       else
         all_ok=false
-        colorized_echo yellow "  … ${host} → [${resolved:-none}] (want ${ip}) [${i}/${tries}]"
+        colorized_echo yellow "$(cli_t dns_host_wait "$host" "${resolved:-$(cli_t dns_none)}" "$ip" "$i" "$tries")"
       fi
     done
 
     if [[ "$all_ok" == true ]]; then
-      colorized_echo green "DNS looks good."
+      colorized_echo green "$(cli_t dns_looks_good)"
       return 0
     fi
     sleep "$sleep_s"
   done
 
-  colorized_echo red "DNS did not propagate in time."
-  colorized_echo yellow "Fix A-records and re-run install, or use --skip-dns."
+  colorized_echo red "$(cli_t dns_timeout)"
+  colorized_echo yellow "$(cli_t dns_timeout_hint)"
   exit 1
 }
 
@@ -575,7 +769,7 @@ configure_firewall() {
     return
   fi
 
-  colorized_echo blue "Configuring UFW firewall..."
+  colorized_echo blue "$(cli_t configuring_ufw)"
   ufw allow OpenSSH >/dev/null 2>&1 || true
   ufw allow 443/udp >/dev/null 2>&1 || true
 
@@ -618,7 +812,7 @@ install_landing_files() {
       cp -f "$src/assets/logo.png" "$LANDING_DIR/assets/logo.png"
     fi
   else
-    colorized_echo yellow "Landing templates missing at ${src}; writing minimal stubs."
+    colorized_echo yellow "$(cli_t landing_missing "$src")"
     printf '%s\n' '<!doctype html><html><body><h1>OverVPN</h1></body></html>' >"$LANDING_DIR/index.html"
     printf '%s\n' '<!doctype html><html><body><p>Subscription host. Use /api/sub/TOKEN</p></body></html>' >"$LANDING_DIR/sub.html"
     printf '%s\n' '<!doctype html><html><body><p>OK</p></body></html>' >"$LANDING_DIR/vpn.html"
@@ -778,7 +972,7 @@ install_nginx() {
   local vpn_host=$5
   local email=$6
 
-  colorized_echo blue "Installing Nginx + Certbot..."
+  colorized_echo blue "$(cli_t installing_nginx)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y nginx certbot python3-certbot-nginx
 
@@ -798,7 +992,7 @@ install_nginx() {
     cert_args+=(-d "$host")
   done
 
-  colorized_echo blue "Requesting Let's Encrypt certificate for: ${hosts[*]}"
+  colorized_echo blue "$(cli_t requesting_cert "${hosts[*]}")"
   certbot --nginx \
     "${cert_args[@]}" \
     --non-interactive \
@@ -808,21 +1002,21 @@ install_nginx() {
     --no-eff-email \
     --cert-name "$panel_host" \
     --expand || {
-      colorized_echo red "Certificate issuance failed during install."
-      colorized_echo yellow "Check DNS (grey cloud on Cloudflare) and that all hosts resolve to this server."
+      colorized_echo red "$(cli_t cert_failed_install)"
+      colorized_echo yellow "$(cli_t cert_failed_hint)"
       exit 1
     }
 
   write_nginx_site "$base_domain" "$panel_host" "$sub_host" "$sub_path" "$vpn_host" "https"
   nginx -t
   systemctl reload nginx
-  colorized_echo green "Nginx + TLS ready for: ${hosts[*]}"
+  colorized_echo green "$(cli_t nginx_tls_ready "${hosts[*]}")"
 }
 
 # Re-apply nginx + expand LE certs from .install.conf (safe for existing installs).
 refresh_nginx() {
   if [[ ! -f "$INSTALL_CONF" ]]; then
-    colorized_echo yellow "No ${INSTALL_CONF}; skip nginx refresh."
+    colorized_echo yellow "$(cli_t no_install_conf_skip "$INSTALL_CONF")"
     return 0
   fi
   local mode panel_host sub_host sub_path vpn_host base_domain email
@@ -837,14 +1031,14 @@ refresh_nginx() {
   vpn_host="$(get_env_var VPN_HOST "$INSTALL_CONF" 2>/dev/null || true)"
   email="$(get_env_var EMAIL "$INSTALL_CONF" 2>/dev/null || true)"
   if [[ -z "$panel_host" || -z "$sub_host" || -z "$vpn_host" ]]; then
-    colorized_echo yellow "Incomplete install.conf hosts; skip nginx refresh."
+    colorized_echo yellow "$(cli_t incomplete_hosts_skip)"
     return 0
   fi
   if [[ -z "$email" ]]; then
     email="admin@${base_domain:-${panel_host}}"
   fi
 
-  colorized_echo blue "Refreshing Nginx site + certificates..."
+  colorized_echo blue "$(cli_t refreshing_nginx)"
   install_landing_files
 
   local -a hosts=()
@@ -862,7 +1056,7 @@ refresh_nginx() {
   ln -sfn "$NGINX_SITE" "$NGINX_LINK"
   nginx -t
   systemctl reload nginx
-  colorized_echo green "Nginx refreshed for: ${hosts[*]}"
+  colorized_echo green "$(cli_t nginx_refreshed "${hosts[*]}")"
 }
 
 remove_nginx_site() {
@@ -875,7 +1069,7 @@ remove_nginx_site() {
 
 fetch_repo() {
   local branch=$1
-  colorized_echo blue "Fetching OverVPN (${branch}) into ${APP_DIR}..."
+  colorized_echo blue "$(cli_t fetching_repo "$branch" "$APP_DIR")"
   mkdir -p "$(dirname "$APP_DIR")"
 
   if [[ -d "$APP_DIR/.git" ]]; then
@@ -898,7 +1092,7 @@ fetch_raw_file() {
 
 fetch_deploy_bundle() {
   local branch=$1
-  colorized_echo blue "Downloading deploy bundle (${branch}) into ${APP_DIR}..."
+  colorized_echo blue "$(cli_t downloading_bundle "$branch" "$APP_DIR")"
   mkdir -p "$APP_DIR/deploy/landing/assets" "$APP_DIR/deploy/sing-box/certs" "$APP_DIR/deploy/proxy"
 
   local -a files=(
@@ -966,7 +1160,7 @@ set_install_conf_var() {
 
 sync_domains_from_install_conf() {
   if [[ ! -f "$INSTALL_CONF" ]]; then
-    colorized_echo red "Missing ${INSTALL_CONF}"
+    colorized_echo red "$(cli_t missing_install_conf "$INSTALL_CONF")"
     exit 1
   fi
 
@@ -1023,11 +1217,11 @@ issue_certificates_strict() {
   local -a cert_args=("$@")
 
   if ! need_cmd certbot; then
-    colorized_echo red "certbot is not installed."
+    colorized_echo red "$(cli_t certbot_missing)"
     exit 1
   fi
 
-  colorized_echo blue "Requesting/expanding Let's Encrypt certificate..."
+  colorized_echo blue "$(cli_t requesting_expand_cert)"
   if ! certbot certonly --nginx \
     "${cert_args[@]}" \
     --non-interactive \
@@ -1037,8 +1231,8 @@ issue_certificates_strict() {
     --cert-name "$panel_host" \
     --expand \
     --keep-until-expiring; then
-    colorized_echo red "Certificate issuance failed."
-    colorized_echo yellow "Check DNS (grey cloud on Cloudflare), port 80, and host resolution."
+    colorized_echo red "$(cli_t cert_failed)"
+    colorized_echo yellow "$(cli_t cert_failed_hint2)"
     exit 1
   fi
 }
@@ -1060,7 +1254,7 @@ generate_env() {
   local ip
   ip="$(public_ip)"
 
-  colorized_echo blue "Generating .env secrets..."
+  colorized_echo blue "$(cli_t generating_env)"
   cp "$APP_DIR/.env.example" "$ENV_FILE"
 
   local pg_pass redis_pass jwt_secret master_key clash_secret admin_pass admin_user
@@ -1145,15 +1339,15 @@ wait_for_health() {
   local url=$1
   local tries=${2:-60}
   local i
-  colorized_echo blue "Waiting for API health..."
+  colorized_echo blue "$(cli_t waiting_api_health)"
   for ((i = 1; i <= tries; i++)); do
     if curl -fsS "$url" >/dev/null 2>&1; then
-      colorized_echo green "API is ready."
+      colorized_echo green "$(cli_t api_ready)"
       return 0
     fi
     sleep 2
   done
-  colorized_echo yellow "Health check timed out. Check: ${APP_NAME} logs"
+  colorized_echo yellow "$(cli_t health_timeout "$APP_NAME")"
   return 1
 }
 
@@ -1265,18 +1459,18 @@ cmd_install() {
       --no-nginx) with_nginx="false"; shift ;;
       --no-ufw) use_ufw="false"; shift ;;
       -h|--help) usage; exit 0 ;;
-      *) colorized_echo red "Unknown option: $1"; usage; exit 1 ;;
+      *) colorized_echo red "$(cli_t unknown_option "$1")"; usage; exit 1 ;;
     esac
   done
 
   if is_installed; then
-    colorized_echo yellow "OverVPN already installed in ${APP_DIR}."
-    colorized_echo yellow "Use '${APP_NAME} update' or '${APP_NAME} uninstall' first."
+    colorized_echo yellow "$(cli_t already_installed "$APP_DIR")"
+    colorized_echo yellow "$(cli_t use_update_or_uninstall "$APP_NAME")"
     exit 1
   fi
 
   if [[ ! "$web_port" =~ ^[0-9]+$ ]] || [[ "$web_port" -lt 1 || "$web_port" -gt 65535 ]]; then
-    colorized_echo red "Invalid --port: ${web_port}"
+    colorized_echo red "$(cli_t invalid_port "$web_port")"
     exit 1
   fi
 
@@ -1301,7 +1495,7 @@ cmd_install() {
     parse_endpoint "${flag_vpn:-vpn.${flag_base}}" false
     CFG_VPN_HOST="$PARSE_HOST"
     CFG_EMAIL="${flag_email:-admin@${flag_base}}"
-    colorized_echo green "Non-interactive flags received. Starting install…"
+    colorized_echo green "$(cli_t noninteractive_start)"
   else
     prompt_install_endpoints
     if [[ -n "$flag_email" ]]; then
@@ -1346,7 +1540,7 @@ cmd_install() {
     install_nginx "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_SUB_PATH" "$CFG_VPN_HOST" "$CFG_EMAIL"
   fi
 
-  colorized_echo blue "Creating owner account..."
+  colorized_echo blue "$(cli_t creating_owner)"
   compose --profile tools run --rm bootstrap-admin
 
   install_cli "${APP_DIR}/install.sh"
@@ -1356,34 +1550,34 @@ cmd_install() {
 
 cmd_up() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   compose up -d
-  colorized_echo green "OverVPN started."
+  colorized_echo green "$(cli_t started)"
 }
 
 cmd_down() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   compose down
-  colorized_echo green "OverVPN stopped."
+  colorized_echo green "$(cli_t stopped)"
 }
 
 cmd_restart() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   compose restart
-  colorized_echo green "OverVPN restarted."
+  colorized_echo green "$(cli_t restarted)"
 }
 
 cmd_status() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   compose ps
 }
 
 cmd_logs() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   if [[ $# -gt 0 ]]; then
     compose logs -f --tail=200 "$@"
   else
@@ -1393,14 +1587,14 @@ cmd_logs() {
 
 cmd_update() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
 
   local do_build="false" image_tag=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --build) do_build="true"; shift ;;
       --tag|--version) image_tag="${2:-}"; shift 2 ;;
-      *) colorized_echo red "Unknown option: $1"; exit 1 ;;
+      *) colorized_echo red "$(cli_t unknown_option "$1")"; exit 1 ;;
     esac
   done
 
@@ -1409,7 +1603,7 @@ cmd_update() {
     branch="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
   fi
 
-  colorized_echo blue "Updating OverVPN (${branch})..."
+  colorized_echo blue "$(cli_t updating "$branch")"
   deploy_source "$branch" "$do_build"
   install_cli "${APP_DIR}/install.sh"
   sync_domains_from_install_conf
@@ -1423,7 +1617,7 @@ cmd_update() {
   refresh_nginx
   apply_deploy_permissions
   wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
-  colorized_echo green "Update complete."
+  colorized_echo green "$(cli_t update_complete)"
 }
 
 install_oneliner() {
@@ -1436,13 +1630,13 @@ cmd_uninstall() {
   local wipe="y"
   local purge_certs="y"
   local purge_nginx="n"
-  colorized_echo yellow "This removes OverVPN containers, /opt/overvpn, nginx site, and CLI."
+  colorized_echo yellow "$(cli_t uninstall_warn)"
   if [[ -t 0 ]]; then
-    read -r -p "Delete Docker volumes (DB/data)? [Y/n] " wipe
+    read -r -p "$(cli_t prompt_wipe_volumes)" wipe
     wipe="${wipe:-y}"
-    read -r -p "Delete Let's Encrypt certs for panel/sub/vpn hosts? [Y/n] " purge_certs
+    read -r -p "$(cli_t prompt_purge_certs)" purge_certs
     purge_certs="${purge_certs:-y}"
-    read -r -p "Remove Nginx + Certbot packages from the system? [y/N] " purge_nginx
+    read -r -p "$(cli_t prompt_purge_nginx)" purge_nginx
     purge_nginx="${purge_nginx:-n}"
   fi
 
@@ -1489,7 +1683,7 @@ cmd_uninstall() {
   rm -f "$BIN_PATH"
 
   if [[ "${purge_nginx,,}" == "y" || "${purge_nginx,,}" == "yes" ]]; then
-    colorized_echo blue "Removing Nginx and Certbot packages..."
+    colorized_echo blue "$(cli_t removing_nginx_pkgs)"
     if need_cmd systemctl; then
       systemctl stop nginx 2>/dev/null || true
       systemctl disable nginx 2>/dev/null || true
@@ -1497,56 +1691,56 @@ cmd_uninstall() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get remove -y nginx certbot python3-certbot-nginx 2>/dev/null || true
     apt-get autoremove -y 2>/dev/null || true
-    colorized_echo green "Nginx and Certbot packages removed."
+    colorized_echo green "$(cli_t nginx_pkgs_removed)"
   fi
 
-  colorized_echo green "OverVPN fully removed."
+  colorized_echo green "$(cli_t fully_removed)"
   if [[ "${purge_nginx,,}" != "y" && "${purge_nginx,,}" != "yes" ]]; then
-    colorized_echo yellow "Nginx/Certbot packages were left installed (shared with other sites)."
-    colorized_echo yellow "Remove manually if needed: apt-get remove -y nginx certbot python3-certbot-nginx"
+    colorized_echo yellow "$(cli_t nginx_left_installed)"
+    colorized_echo yellow "$(cli_t nginx_remove_hint)"
   fi
-  colorized_echo yellow "Reinstall:"
+  colorized_echo yellow "$(cli_t reinstall)"
   colorized_echo cyan "  $(install_oneliner)"
 }
 
 cmd_info() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
 
-  echo "Install dir:  ${APP_DIR}"
+  echo "$(cli_t info_install_dir "$APP_DIR")"
   if [[ -f "$CREDENTIALS_FILE" ]]; then
-    echo "Panel URL:    $(get_env_var PANEL_URL "$CREDENTIALS_FILE")"
-    echo "Sub base:     $(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")"
-    echo "VPN host:     $(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE")"
-    echo "Admin user:   $(get_env_var BOOTSTRAP_ADMIN_USER "$CREDENTIALS_FILE")"
-    echo "Password:     $(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$CREDENTIALS_FILE")"
+    echo "$(cli_t info_panel_url "$(get_env_var PANEL_URL "$CREDENTIALS_FILE")")"
+    echo "$(cli_t info_sub_base "$(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")")"
+    echo "$(cli_t info_vpn_host "$(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE")")"
+    echo "$(cli_t info_admin_user "$(get_env_var BOOTSTRAP_ADMIN_USER "$CREDENTIALS_FILE")")"
+    echo "$(cli_t info_password "$(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$CREDENTIALS_FILE")")"
   fi
   compose ps
 }
 
 cmd_edit() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   "${EDITOR:-nano}" "$ENV_FILE"
-  colorized_echo yellow "Restart to apply: ${APP_NAME} restart"
+  colorized_echo yellow "$(cli_t restart_to_apply "$APP_NAME")"
 }
 
 cmd_bootstrap() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   compose --profile tools run --rm bootstrap-admin
-  colorized_echo green "Bootstrap finished (password taken from .env)."
+  colorized_echo green "$(cli_t bootstrap_finished)"
 }
 
 cmd_nginx() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   refresh_nginx
 }
 
 cmd_config_show() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
 
   echo "Install dir: ${APP_DIR}"
   echo "Install mode: $(cat "$INSTALL_MODE_FILE" 2>/dev/null || echo unknown)"
@@ -1556,7 +1750,7 @@ cmd_config_show() {
     cat "$INSTALL_CONF"
     echo
   else
-    colorized_echo yellow "Missing ${INSTALL_CONF}"
+    colorized_echo yellow "$(cli_t missing_install_conf "$INSTALL_CONF")"
   fi
   echo "=== runtime .env ==="
   echo "CORS_ORIGINS=$(get_env_var CORS_ORIGINS)"
@@ -1575,15 +1769,15 @@ cmd_config_show() {
 
 cmd_config_sync() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   sync_domains_from_install_conf
-  colorized_echo green "Synced domains from .install.conf → .env and .credentials"
+  colorized_echo green "$(cli_t synced_domains)"
 }
 
 cmd_config_set_domain() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
-  [[ -f "$INSTALL_CONF" ]] || { colorized_echo red "Missing ${INSTALL_CONF}"; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
+  [[ -f "$INSTALL_CONF" ]] || { colorized_echo red "$(cli_t missing_install_conf "$INSTALL_CONF")"; exit 1; }
 
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
   while [[ $# -gt 0 ]]; do
@@ -1593,7 +1787,7 @@ cmd_config_set_domain() {
       --subscription) flag_sub="${2:-}"; shift 2 ;;
       --vpn-host) flag_vpn="${2:-}"; shift 2 ;;
       --email) flag_email="${2:-}"; shift 2 ;;
-      *) colorized_echo red "Unknown option: $1"; exit 1 ;;
+      *) colorized_echo red "$(cli_t unknown_option "$1")"; exit 1 ;;
     esac
   done
 
@@ -1605,7 +1799,7 @@ cmd_config_set_domain() {
   local email="${flag_email:-$INSTALL_EMAIL}"
 
   if [[ -z "$base" ]]; then
-    colorized_echo red "Provide --base-domain or set BASE_DOMAIN in .install.conf"
+    colorized_echo red "$(cli_t provide_base_domain)"
     exit 1
   fi
 
@@ -1645,15 +1839,15 @@ cmd_config_set_domain() {
   set_install_conf_var "EMAIL" "$email"
 
   sync_domains_from_install_conf
-  colorized_echo green "Domains updated. Run: ${APP_NAME} config apply"
+  colorized_echo green "$(cli_t domains_updated "$APP_NAME")"
 }
 
 cmd_config_nginx() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   read_install_hosts
   if [[ "$INSTALL_MODE" != "domain" ]]; then
-    colorized_echo yellow "Domain mode is not configured; nothing to refresh."
+    colorized_echo yellow "$(cli_t domain_mode_not_configured_refresh)"
     return 0
   fi
   install_landing_files
@@ -1661,19 +1855,19 @@ cmd_config_nginx() {
   ln -sfn "$NGINX_SITE" "$NGINX_LINK"
   nginx -t
   systemctl reload nginx
-  colorized_echo green "Nginx site refreshed (existing certificates)."
+  colorized_echo green "$(cli_t nginx_site_refreshed)"
 }
 
 cmd_config_certs() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   read_install_hosts
   if [[ "$INSTALL_MODE" != "domain" ]]; then
-    colorized_echo yellow "Domain mode is not configured."
+    colorized_echo yellow "$(cli_t domain_mode_not_configured)"
     return 0
   fi
   if [[ -z "$INSTALL_PANEL_HOST" || -z "$INSTALL_SUB_HOST" || -z "$INSTALL_VPN_HOST" ]]; then
-    colorized_echo red "Incomplete host list in .install.conf"
+    colorized_echo red "$(cli_t incomplete_host_list)"
     exit 1
   fi
   local email="${INSTALL_EMAIL:-admin@${INSTALL_BASE_DOMAIN:-$INSTALL_PANEL_HOST}}"
@@ -1685,17 +1879,17 @@ cmd_config_certs() {
     cert_args+=(-d "$host")
   done
   issue_certificates_strict "$email" "$INSTALL_PANEL_HOST" "${cert_args[@]}"
-  colorized_echo green "Certificates issued/expanded for: ${hosts[*]}"
+  colorized_echo green "$(cli_t certs_issued "${hosts[*]}")"
 }
 
 cmd_config_apply() {
   check_root
-  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   sync_domains_from_install_conf
   refresh_nginx
   compose_up false
   wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
-  colorized_echo green "Configuration applied (sync + nginx + certs + containers)."
+  colorized_echo green "$(cli_t config_applied)"
 }
 
 cmd_config() {
@@ -1711,8 +1905,8 @@ cmd_config() {
     certs) cmd_config_certs ;;
     apply) cmd_config_apply ;;
     *)
-      colorized_echo red "Unknown config command: ${subcmd}"
-      echo "Use: ${APP_NAME} config show|sync|set-domain|nginx|certs|apply"
+      colorized_echo red "$(cli_t unknown_config_command "$subcmd")"
+      echo "$(cli_t config_usage "$APP_NAME")"
       exit 1
       ;;
   esac
@@ -1753,7 +1947,7 @@ main() {
     install-script) cmd_install_script ;;
     ""|-h|--help|help) usage ;;
     *)
-      colorized_echo red "Unknown command: ${cmd}"
+      colorized_echo red "$(cli_t unknown_command "$cmd")"
       usage
       exit 1
       ;;

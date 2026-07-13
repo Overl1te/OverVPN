@@ -49,6 +49,17 @@ describe('buildDefaultInboundSettings', () => {
     assert.equal(settings.enabled, false);
     assert.equal(settings.publicHost, 'vpn.host.test');
   });
+
+  it('sets a default Let\'s Encrypt contact email from the public host', () => {
+    const settings = buildDefaultInboundSettings('HYSTERIA2', {
+      publicHost: 'vpn.example.org',
+    }) as Hysteria2InboundSettings;
+    assert.equal(settings.tls.mode, 'ACME');
+    if (settings.tls.mode === 'ACME') {
+      assert.equal(settings.tls.email, 'admin@vpn.example.org');
+      assert.equal(settings.tls.provider, 'letsencrypt');
+    }
+  });
 });
 
 describe('applyVpnPublicHostFallback', () => {

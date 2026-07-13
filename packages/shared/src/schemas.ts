@@ -748,6 +748,11 @@ const acmeProviderSchema = z
     'ACME provider must be letsencrypt, zerossl, or an HTTPS directory URL',
   );
 
+const optionalEmailSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.email().max(320).optional(),
+);
+
 export const hysteria2TlsAcmeInputSchema = z
   .object({
     mode: z.literal('ACME'),
@@ -755,7 +760,7 @@ export const hysteria2TlsAcmeInputSchema = z
     domains: z.array(singBoxHostSchema).min(1).max(100),
     dataDirectory: singBoxPathSchema,
     defaultServerName: singBoxHostSchema.optional(),
-    email: z.email().max(320).optional(),
+    email: optionalEmailSchema,
     provider: acmeProviderSchema.default('letsencrypt'),
     disableHttpChallenge: z.boolean().default(false),
     disableTlsAlpnChallenge: z.boolean().default(false),
@@ -787,10 +792,15 @@ export const hysteria2TlsInputSchema = z.discriminatedUnion('mode', [
   hysteria2TlsAcmeInputSchema,
 ]);
 
+const optionalCredentialPasswordSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  credentialPasswordSchema.optional(),
+);
+
 export const hysteria2ObfsInputSchema = z
   .object({
     type: z.literal('SALAMANDER'),
-    password: credentialPasswordSchema.optional(),
+    password: optionalCredentialPasswordSchema,
   })
   .strict();
 
