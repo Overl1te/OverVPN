@@ -1,7 +1,7 @@
 name: Вопрос
 description: Вопрос по использованию (лучше Discussions Q&A)
-title: "[question] "
-labels: ["question"]
+title: '[question] '
+labels: ['question']
 body:
   - type: markdown
     attributes:

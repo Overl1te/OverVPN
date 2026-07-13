@@ -1,7 +1,7 @@
 name: Баг
 description: Что-то работает не так
-title: "[bug] "
-labels: ["type: bug"]
+title: '[bug] '
+labels: ['type: bug']
 body:
   - type: markdown
     attributes:
