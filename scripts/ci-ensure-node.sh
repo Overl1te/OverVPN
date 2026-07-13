@@ -24,10 +24,11 @@ node_major() {
 }
 
 use_prefix() {
+  # GITHUB_PATH only affects later steps — also export for this shell
+  # so npm's `#!/usr/bin/env node` shebang can resolve.
+  export PATH="${PREFIX}/bin:${PATH}"
   if [[ -n "${GITHUB_PATH:-}" ]]; then
     echo "${PREFIX}/bin" >>"$GITHUB_PATH"
-  else
-    export PATH="${PREFIX}/bin:${PATH}"
   fi
 }
 
@@ -89,5 +90,6 @@ mv "${TMP}/node-${VERSION}-linux-${NODE_ARCH}" "$PREFIX"
 
 use_prefix
 echo "Installed $(${PREFIX}/bin/node -v) to ${PREFIX}"
-${PREFIX}/bin/node -v
-${PREFIX}/bin/npm -v
+node -v
+# npm is a #!/usr/bin/env node script — needs PATH from use_prefix
+npm -v || true

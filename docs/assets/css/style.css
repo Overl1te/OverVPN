@@ -480,8 +480,8 @@ body.sidebar-open .sidebar-overlay {
 }
 
 .code-block:hover {
-  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
-  box-shadow: 0 0 0 3px var(--ring);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 .code-toolbar {
@@ -501,15 +501,20 @@ body.sidebar-open .sidebar-overlay {
 
 .code-line {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
-  padding: 0.45rem 0.55rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
-  transition: background var(--duration) var(--ease);
+  padding: 0.5rem 0.65rem;
+  padding-left: calc(0.65rem - 2px);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-left: 2px solid transparent;
+  transition:
+    background var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
 }
 
 .code-line-note {
-  background: color-mix(in srgb, var(--bg-soft) 40%, transparent);
+  background: color-mix(in srgb, var(--bg-soft) 35%, transparent);
+  border-left-color: color-mix(in srgb, var(--text-muted) 35%, transparent);
 }
 
 .code-line-note .code-line-comment {
@@ -558,10 +563,18 @@ body.sidebar-open .sidebar-overlay {
   border-bottom: 0;
 }
 
-.code-line:hover {
-  background: color-mix(in srgb, var(--brand-soft) 45%, transparent);
+.code-line:hover,
+.code-line:focus-within {
+  background: color-mix(in srgb, var(--brand-soft) 70%, var(--bg-code));
+  border-left-color: var(--brand);
 }
 
+.code-line:hover .code-line-comment,
+.code-line:focus-within .code-line-comment {
+  color: color-mix(in srgb, var(--text) 72%, var(--text-muted));
+}
+
+.content .code-line-text,
 .code-line-text {
   flex: 1;
   min-width: 0;
@@ -569,6 +582,7 @@ body.sidebar-open .sidebar-overlay {
   word-break: break-word;
   background: none;
   padding: 0;
+  border-radius: 0;
   font-family: inherit;
   font-size: inherit;
   color: var(--text);
@@ -621,12 +635,13 @@ body.sidebar-open .sidebar-overlay {
 }
 
 .code-line:hover .copy-btn,
+.code-line:focus-within .copy-btn,
 .copy-btn:focus {
   opacity: 1;
 }
 
 .copy-btn-line {
-  margin-top: 0.05rem;
+  margin-top: 0;
 }
 
 .copy-btn:hover {
