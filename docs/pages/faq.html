@@ -1,0 +1,65 @@
+<h1>FAQ</h1>
+
+<h2>Установка</h2>
+
+<h3>Не открывается панель после install</h3>
+<ol>
+  <li><code>overvpn status</code> — контейнеры Up?</li>
+  <li><code>overvpn info</code> — правильный URL?</li>
+  <li>DNS A-запись на IP сервера?</li>
+  <li>Порты 80/443 открыты?</li>
+  <li><code>overvpn logs web</code> и <code>overvpn logs api</code></li>
+</ol>
+
+<h3>Сертификаты Let's Encrypt не выпускаются</h3>
+<ul>
+  <li>A-записи резолвятся до выпуска</li>
+  <li>Порт 80 доступен с интернета</li>
+  <li><code>overvpn config certs</code> или <code>overvpn nginx</code></li>
+</ul>
+
+<h2>Панель и API</h2>
+
+<h3>Не могу войти</h3>
+<ul>
+  <li>Учётка из <code>overvpn info</code></li>
+  <li><code>overvpn bootstrap</code></li>
+  <li><code>CORS_ORIGINS</code> совпадает с URL панели</li>
+  <li>В проде <code>AUTH_COOKIE_SECURE=true</code> только по HTTPS</li>
+</ul>
+
+<h3>502 Bad Gateway</h3>
+<pre><code>overvpn status
+overvpn restart
+overvpn logs web</code></pre>
+
+<h2>VPN и ядро</h2>
+
+<h3>Клиент не подключается</h3>
+<ol>
+  <li>Inbound создан, apply успешен</li>
+  <li>Пользователь <code>ACTIVE</code></li>
+  <li>Inbound назначен (assignment)</li>
+  <li>UDP/TCP порт открыт в firewall</li>
+  <li><code>SING_BOX_UDP_PORT</code> совпадает с inbound</li>
+</ol>
+
+<h3>Apply откатывается (rollback)</h3>
+<p>Смотрите Config в UI и <code>overvpn logs core</code>.</p>
+
+<h2>Подписки</h2>
+
+<h3>429 Too Many Requests</h3>
+<p>Rate limit. Увеличьте <code>SUB_RATE_LIMIT_*</code> в <code>.env</code>.</p>
+
+<h3>Clash не импортирует</h3>
+<p>Используйте <code>?format=clash</code> и Clash Meta / Mihomo.</p>
+
+<h2>Документация</h2>
+<p>Сайт: <code>https://overl1te.github.io/OverVPN/</code>. Поиск — Pagefind, локально в браузере.</p>
+
+<h2>Разработка</h2>
+<p><a href="https://github.com/Overl1te/OverVPN/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a></p>
+
+<h2>Не нашли ответ?</h2>
+<p><a href="https://github.com/Overl1te/OverVPN/issues" target="_blank" rel="noopener">Issues на GitHub</a></p>

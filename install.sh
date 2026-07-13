@@ -49,10 +49,12 @@ load_cli_lang() {
       CLI_LANG="$saved"
     fi
   fi
-  case "${OVERVPN_CLI_LANG,,}" in
-    ru|ru_ru|ru-ru|russian) CLI_LANG=ru ;;
-    en|english) CLI_LANG=en ;;
-  esac
+  if [[ -n "${OVERVPN_CLI_LANG:-}" ]]; then
+    case "${OVERVPN_CLI_LANG,,}" in
+      ru|ru_ru|ru-ru|russian) CLI_LANG=ru ;;
+      en|english) CLI_LANG=en ;;
+    esac
+  fi
 }
 
 ensure_ru_locale() {

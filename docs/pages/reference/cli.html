@@ -1,0 +1,38 @@
+<h1>CLI overvpn</h1>
+
+<p>Справочник команд CLI (<code>/usr/local/bin/overvpn</code>).</p>
+
+<h2>Синтаксис</h2>
+<pre><code>overvpn &lt;команда&gt; [опции]</code></pre>
+
+<h2>Жизненный цикл</h2>
+<pre><code>overvpn install [опции]
+overvpn up | down | restart
+overvpn status
+overvpn logs [service]
+overvpn update [--build]
+overvpn uninstall</code></pre>
+
+<h2>Информация</h2>
+<pre><code>overvpn info
+overvpn edit
+overvpn bootstrap
+overvpn nginx</code></pre>
+
+<h2 id="config">config</h2>
+<pre><code>overvpn config show
+overvpn config sync
+overvpn config set-domain --base-domain example.com --panel panel.example.com
+overvpn config nginx
+overvpn config certs
+overvpn config apply</code></pre>
+
+<h2>Файлы установки</h2>
+<table>
+  <thead><tr><th>Путь</th><th>Назначение</th></tr></thead>
+  <tbody>
+    <tr><td><code>/opt/overvpn/.env</code></td><td>Runtime для Compose</td></tr>
+    <tr><td><code>/opt/overvpn/.install.conf</code></td><td>Домены и TLS</td></tr>
+    <tr><td><code>/opt/overvpn/.credentials</code></td><td>URL и bootstrap-учётка</td></tr>
+  </tbody>
+</table>

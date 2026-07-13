@@ -1,0 +1,44 @@
+<h1>Протоколы</h1>
+
+<p>Четыре типа inbound'ов через sing-box.</p>
+
+<h2>Общие поля</h2>
+<table>
+  <thead><tr><th>Поле</th><th>Описание</th></tr></thead>
+  <tbody>
+    <tr><td><strong>tag</strong></td><td>Идентификатор в конфиге</td></tr>
+    <tr><td><strong>listen</strong></td><td>Адрес/порт на сервере</td></tr>
+    <tr><td><strong>public host</strong></td><td>Хост для клиентов</td></tr>
+    <tr><td><strong>port</strong></td><td>Обычно 443</td></tr>
+  </tbody>
+</table>
+
+<h2>Hysteria2</h2>
+<p>QUIC, хорош для нестабильных сетей. Нужен <strong>UDP</strong> на публичном порту.</p>
+<pre><code>hysteria2://PASSWORD@host:443/?sni=example.com&amp;obfs=salamander#LABEL</code></pre>
+
+<h2>VLESS + Reality</h2>
+<p>TCP с маскировкой под реальный TLS-сайт.</p>
+<pre><code>vless://UUID@host:443?security=reality&amp;sni=...&amp;flow=xtls-rprx-vision#LABEL</code></pre>
+
+<h2>Trojan</h2>
+<p>TLS поверх TCP.</p>
+<pre><code>trojan://PASSWORD@host:443?security=tls&amp;sni=example.com#LABEL</code></pre>
+
+<h2>Shadowsocks 2022</h2>
+<p>Пароль клиента: <code>SERVER_PASSWORD:USER_PASSWORD</code></p>
+
+<h2>Выбор протокола</h2>
+<table>
+  <thead><tr><th>Сценарий</th><th>Рекомендация</th></tr></thead>
+  <tbody>
+    <tr><td>Мобильные сети</td><td>Hysteria2</td></tr>
+    <tr><td>Строгий DPI</td><td>VLESS Reality</td></tr>
+    <tr><td>Старые клиенты</td><td>Trojan</td></tr>
+    <tr><td>SS-клиенты</td><td>Shadowsocks 2022</td></tr>
+  </tbody>
+</table>
+
+<h2>Firewall</h2>
+<pre><code>ufw allow 443/tcp
+ufw allow 443/udp</code></pre>

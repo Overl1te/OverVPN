@@ -6,6 +6,8 @@ node_modules/
 dist/
 coverage/
 .turbo/
+docs-dist/
+docs/.vitepress/
 *.tsbuildinfo
 apps/api/src/generated/prisma/
 

@@ -1,0 +1,33 @@
+<h1>Безопасность</h1>
+
+<h2>Чеклист перед запуском</h2>
+<ul>
+  <li>Все <code>REPLACE_*</code> заменены уникальными секретами</li>
+  <li><code>CORS_ORIGINS</code> — точные origin'ы, без <code>*</code></li>
+  <li><code>SUB_PUBLIC_BASE_URL</code> — отдельный HTTPS</li>
+  <li>Postgres / Redis только на <code>127.0.0.1</code></li>
+  <li>Панель за reverse proxy с TLS</li>
+  <li>Владелец с сильным паролем + TOTP</li>
+  <li>Регулярные <code>FULL</code> бэкапы вне сервера</li>
+  <li><code>SWAGGER_ENABLED=false</code> в проде</li>
+</ul>
+
+<h2>Секреты</h2>
+<table>
+  <thead><tr><th>Секрет</th><th>Назначение</th></tr></thead>
+  <tbody>
+    <tr><td><code>POSTGRES_PASSWORD</code></td><td>БД</td></tr>
+    <tr><td><code>REDIS_PASSWORD</code></td><td>Redis</td></tr>
+    <tr><td><code>JWT_ACCESS_SECRET</code></td><td>Access JWT</td></tr>
+    <tr><td><code>SECRETS_MASTER_KEY</code></td><td>Шифрование секретов и бэкапов</td></tr>
+    <tr><td><code>SING_BOX_CLASH_API_SECRET</code></td><td>Clash API</td></tr>
+  </tbody>
+</table>
+
+<h2>Сетевая изоляция</h2>
+<pre><code>Интернет → Nginx (443) → web:8080 → api
+Интернет → UDP 443 → sing-box
+Postgres, Redis → 127.0.0.1</code></pre>
+
+<h2>Обновления</h2>
+<pre><code>overvpn update</code></pre>

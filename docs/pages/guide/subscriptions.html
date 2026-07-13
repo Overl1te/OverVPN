@@ -1,0 +1,44 @@
+<h1>Подписки клиентов</h1>
+
+<p>Подписка — публичный HTTPS URL для скачивания профиля. Токен в URL — секрет.</p>
+
+<h2>Формат URL</h2>
+<p>Без пути в base URL:</p>
+<pre><code>https://sub.example.com/api/sub/{TOKEN}</code></pre>
+<p>С путём (<code>SUB_PUBLIC_BASE_URL=https://example.com/sub</code>):</p>
+<pre><code>https://example.com/sub/{TOKEN}</code></pre>
+
+<h2>Форматы ответа</h2>
+<pre><code>curl -o profile.json "$SUB_URL?format=sing-box"
+curl -o links.txt "$SUB_URL?format=links"
+curl -o clash.yaml "$SUB_URL?format=clash"
+curl "$SUB_URL/info"</code></pre>
+
+<h2>Ротация токена</h2>
+<ul>
+  <li>В UI — <strong>Rotate subscription</strong></li>
+  <li>API — <code>POST /api/admin/users/:id/rotate-sub</code></li>
+</ul>
+
+<h2>Rate limiting</h2>
+<table>
+  <thead><tr><th>Переменная</th><th>По умолчанию</th></tr></thead>
+  <tbody>
+    <tr><td><code>SUB_RATE_LIMIT_IP_LIMIT</code></td><td>60</td></tr>
+    <tr><td><code>SUB_RATE_LIMIT_TOKEN_LIMIT</code></td><td>120</td></tr>
+    <tr><td><code>SUB_RATE_LIMIT_WINDOW_SECONDS</code></td><td>60</td></tr>
+  </tbody>
+</table>
+
+<h2>Импорт в клиенты</h2>
+<table>
+  <thead><tr><th>Клиент</th><th>Способ</th></tr></thead>
+  <tbody>
+    <tr><td>sing-box</td><td>Subscription URL или JSON</td></tr>
+    <tr><td>Clash Meta / Mihomo</td><td><code>?format=clash</code></td></tr>
+    <tr><td>Hiddify, Nekoray</td><td>Subscription URL или links</td></tr>
+    <tr><td>QR</td><td>Со страницы пользователя в панели</td></tr>
+  </tbody>
+</table>
+
+<p>См. <a href="{{BASE}}reference/protocols.html">протоколы</a> и <a href="{{BASE}}reference/env.html#subscriptions">переменные подписок</a>.</p>

@@ -27,9 +27,13 @@
     "compose-up": "docker compose --env-file .env -f deploy/docker-compose.yml up -d",
     "compose-pull": "docker compose --env-file .env -f deploy/docker-compose.yml pull",
     "compose-build": "docker compose --env-file .env -f deploy/docker-compose.yml up -d --build",
-    "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml down"
+    "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml down",
+    "docs:build": "node scripts/build-docs.mjs && pagefind --site docs-dist",
+    "docs:dev": "node scripts/build-docs.mjs --dev && pagefind --site docs-dist && npx --yes serve docs-dist -l 4173",
+    "docs:preview": "pnpm docs:build && npx --yes serve docs-dist -l 4173"
   },
   "devDependencies": {
+    "pagefind": "^1.3.0",
     "prettier": "^3.9.5",
     "turbo": "^2.10.4",
     "typescript": "^6.0.3"

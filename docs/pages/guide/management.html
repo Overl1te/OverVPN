@@ -1,0 +1,52 @@
+<h1>Управление сервером</h1>
+
+<p>Вместе с панелью устанавливается CLI <code>overvpn</code> — обёртка над Docker Compose и Nginx.</p>
+
+<h2>Основные команды</h2>
+<pre><code>overvpn status
+overvpn logs
+overvpn logs api
+overvpn info
+overvpn edit
+overvpn restart
+overvpn up
+overvpn down</code></pre>
+
+<h2>Обновление</h2>
+<pre><code>overvpn update
+overvpn update --build</code></pre>
+
+<h2>Nginx и сертификаты</h2>
+<pre><code>overvpn nginx
+overvpn config set-domain --base-domain example.com --panel panel.example.com
+overvpn config apply</code></pre>
+
+<h2>Bootstrap владельца</h2>
+<pre><code>overvpn bootstrap</code></pre>
+
+<h2>Удаление</h2>
+<pre><code>overvpn uninstall</code></pre>
+
+<h2>Порты по умолчанию</h2>
+<table>
+  <thead><tr><th>Компонент</th><th>Порт / доступ</th></tr></thead>
+  <tbody>
+    <tr><td>Веб-панель</td><td><code>8000</code> / <code>443</code> через Nginx</td></tr>
+    <tr><td>API</td><td>внутри Compose</td></tr>
+    <tr><td>PostgreSQL</td><td><code>5432</code> → <code>127.0.0.1</code></td></tr>
+    <tr><td>Redis</td><td><code>6379</code> → <code>127.0.0.1</code></td></tr>
+    <tr><td>VPN UDP</td><td><code>443</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout warning">
+  <strong>Внимание</strong>
+  Не публикуйте Postgres, Redis и API напрямую в интернет.
+</div>
+
+<h2>Диагностика</h2>
+<pre><code>overvpn status
+overvpn logs api
+overvpn logs core</code></pre>
+
+<p>См. также: <a href="{{BASE}}reference/cli.html">CLI overvpn</a>, <a href="{{BASE}}reference/env.html">переменные окружения</a>.</p>
