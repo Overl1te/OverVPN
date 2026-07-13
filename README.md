@@ -23,13 +23,13 @@
 
 OverVPN — **однонодовая** control plane для VPN:
 
-| | |
-| :--- | :--- |
-| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks |
-| **Панель** | пользователи, inbound’ы, планы, онлайн-сессии, аудит |
-| **Подписки** | sing-box JSON · Clash Meta · список ссылок · QR |
-| **Учёт** | трафик, сроки, лимиты устройств/IP, enforce |
-| **Операции** | apply конфига с rollback · бэкапы · Telegram-алерты |
+|               |                                                      |
+| :------------ | :--------------------------------------------------- |
+| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks     |
+| **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит |
+| **Подписки**  | sing-box JSON · Clash Meta · список ссылок · QR      |
+| **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce          |
+| **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты  |
 
 Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке).
 
@@ -64,19 +64,19 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 <details>
 <summary><strong>Флаги установщика</strong></summary>
 
-| Флаг | Назначение |
-| --- | --- |
-| `--base-domain <host>` | Базовый домен (лендинг + TLS) |
-| `--panel <host>` | Хост панели |
-| `--subscription <spec>` | Хост или `хост/путь` для подписок |
-| `--vpn-host <host>` | Публичный VPN-endpoint для клиентов |
-| `--email <email>` | Let’s Encrypt |
-| `--port <port>` | Порт панели без домена (по умолчанию `8000`) |
-| `--tag <tag>` | Тег образов GHCR |
-| `--build` | Собрать образы локально |
-| `--skip-dns` | Не ждать DNS перед сертификатами |
-| `--no-nginx` | Без Nginx/TLS |
-| `--no-ufw` | Не трогать UFW |
+| Флаг                    | Назначение                                   |
+| ----------------------- | -------------------------------------------- |
+| `--base-domain <host>`  | Базовый домен (лендинг + TLS)                |
+| `--panel <host>`        | Хост панели                                  |
+| `--subscription <spec>` | Хост или `хост/путь` для подписок            |
+| `--vpn-host <host>`     | Публичный VPN-endpoint для клиентов          |
+| `--email <email>`       | Let’s Encrypt                                |
+| `--port <port>`         | Порт панели без домена (по умолчанию `8000`) |
+| `--tag <tag>`           | Тег образов GHCR                             |
+| `--build`               | Собрать образы локально                      |
+| `--skip-dns`            | Не ждать DNS перед сертификатами             |
+| `--no-nginx`            | Без Nginx/TLS                                |
+| `--no-ufw`              | Не трогать UFW                               |
 
 </details>
 
@@ -125,13 +125,13 @@ overvpn uninstall              # удалить установку
 
 ### Порты
 
-| Компонент | По умолчанию |
-| --- | --- |
-| Веб-панель | `8000` (без домена) / `443` через Nginx |
-| API | внутри Compose; наружу через веб/прокси |
-| PostgreSQL | `5432` → только `127.0.0.1` |
-| Redis | `6379` → только `127.0.0.1` |
-| sing-box (UDP inbound) | `443` |
+| Компонент              | По умолчанию                            |
+| ---------------------- | --------------------------------------- |
+| Веб-панель             | `8000` (без домена) / `443` через Nginx |
+| API                    | внутри Compose; наружу через веб/прокси |
+| PostgreSQL             | `5432` → только `127.0.0.1`             |
+| Redis                  | `6379` → только `127.0.0.1`             |
+| sing-box (UDP inbound) | `443`                                   |
 
 > [!WARNING]
 > Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
@@ -155,12 +155,12 @@ overvpn uninstall              # удалить установку
 2. Назначьте inbound (assignments) — появятся учётные данные протокола.
 3. Скопируйте **subscription URL** или QR со страницы пользователя.
 
-| Статус | Смысл |
-| --- | --- |
-| `ACTIVE` | доступ разрешён |
-| `DISABLED` | выключен вручную |
-| `EXPIRED` | истёк срок |
-| `LIMITED` | квота / устройство / IP |
+| Статус     | Смысл                   |
+| ---------- | ----------------------- |
+| `ACTIVE`   | доступ разрешён         |
+| `DISABLED` | выключен вручную        |
+| `EXPIRED`  | истёк срок              |
+| `LIMITED`  | квота / устройство / IP |
 
 Причина отключения видна в UI (`statusReason`).
 
@@ -178,11 +178,11 @@ overvpn uninstall              # удалить установку
 
 ### 5. Роли
 
-| Роль | Права |
-| --- | --- |
-| `OWNER` | полный доступ, удаление пользователей, restore бэкапов |
-| `ADMIN` | обычные мутации (users / inbounds / apply / backups create) |
-| `READONLY` | только чтение; мутации скрыты |
+| Роль       | Права                                                       |
+| ---------- | ----------------------------------------------------------- |
+| `OWNER`    | полный доступ, удаление пользователей, restore бэкапов      |
+| `ADMIN`    | обычные мутации (users / inbounds / apply / backups create) |
+| `READONLY` | только чтение; мутации скрыты                               |
 
 В профиле можно включить **TOTP 2FA** (enable → confirm кодом).
 
@@ -190,11 +190,11 @@ overvpn uninstall              # удалить установку
 
 Раздел **Backups**:
 
-| Тип | Содержимое |
-| --- | --- |
-| `DATABASE` | `pg_dump` |
+| Тип           | Содержимое                                |
+| ------------- | ----------------------------------------- |
+| `DATABASE`    | `pg_dump`                                 |
 | `CORE_CONFIG` | текущий + last-known-good конфиг sing-box |
-| `FULL` | БД + конфиг + метаданные |
+| `FULL`        | БД + конфиг + метаданные                  |
 
 Рекомендуемый порядок:
 
@@ -301,16 +301,16 @@ openssl rand -base64 36       # пароль владельца (≥ 16 симв
 
 Обязательно:
 
-| Переменная | Зачем |
-| --- | --- |
-| `POSTGRES_PASSWORD` / `DATABASE_URL` | БД (пароль в URL = пароль Postgres) |
-| `REDIS_PASSWORD` / `REDIS_URL` | Redis |
-| `JWT_ACCESS_SECRET` | подпись access JWT |
-| `SECRETS_MASTER_KEY` | шифрование секретов протоколов и бэкапов |
-| `SING_BOX_CLASH_API_SECRET` | внутренний Clash API |
-| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | первый владелец |
-| `CORS_ORIGINS` | точный origin панели |
-| `SUB_PUBLIC_BASE_URL` | публичный HTTPS URL подписок |
+| Переменная                                          | Зачем                                    |
+| --------------------------------------------------- | ---------------------------------------- |
+| `POSTGRES_PASSWORD` / `DATABASE_URL`                | БД (пароль в URL = пароль Postgres)      |
+| `REDIS_PASSWORD` / `REDIS_URL`                      | Redis                                    |
+| `JWT_ACCESS_SECRET`                                 | подпись access JWT                       |
+| `SECRETS_MASTER_KEY`                                | шифрование секретов протоколов и бэкапов |
+| `SING_BOX_CLASH_API_SECRET`                         | внутренний Clash API                     |
+| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | первый владелец                          |
+| `CORS_ORIGINS`                                      | точный origin панели                     |
+| `SUB_PUBLIC_BASE_URL`                               | публичный HTTPS URL подписок             |
 
 Локально можно временно:
 

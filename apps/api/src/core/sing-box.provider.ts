@@ -360,10 +360,7 @@ export class SingBoxProvider extends CoreProvider {
           : code === 14 || code === 4
             ? 'UNAVAILABLE'
             : 'QUERY_FAILED';
-      const localized = localizeCoreStatsError(
-        errorCode,
-        errorMessage(error),
-      );
+      const localized = localizeCoreStatsError(errorCode, errorMessage(error));
       return {
         supported: false,
         capturedAt,

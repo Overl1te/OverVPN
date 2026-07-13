@@ -229,7 +229,11 @@ export function SystemPage() {
           pagination={false}
           dataSource={health?.workers ?? dashboard?.workers ?? []}
           columns={[
-            { title: t('app.name'), dataIndex: 'name', render: (name: string) => t(`enums.workerName.${name}`, { defaultValue: name }) },
+            {
+              title: t('app.name'),
+              dataIndex: 'name',
+              render: (name: string) => t(`enums.workerName.${name}`, { defaultValue: name }),
+            },
             {
               title: t('dashboard.workerState'),
               dataIndex: 'state',

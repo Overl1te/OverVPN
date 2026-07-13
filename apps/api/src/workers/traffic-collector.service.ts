@@ -74,7 +74,8 @@ export class TrafficCollectorService {
               `${snapshot.error.code}: ${snapshot.error.message}`,
             );
             const workerError =
-              localized?.en ?? `${snapshot.error.code}: ${snapshot.error.message}`;
+              localized?.en ??
+              `${snapshot.error.code}: ${snapshot.error.message}`;
             await this.health.markDegraded(
               WORKER_NAME,
               startedAt,

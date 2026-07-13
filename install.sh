@@ -1068,7 +1068,7 @@ Default install downloads only deploy files (no full git clone).
 Use --build to clone the repository and build images locally.
 
 One-liner:
-  sudo bash -c "\$(curl -fsSL ${REPO_RAW_BASE}/${DEFAULT_BRANCH}/install.sh)" @ install
+  $(install_oneliner)
 EOF
 }
 
@@ -1258,17 +1258,24 @@ cmd_update() {
   colorized_echo green "Update complete."
 }
 
+install_oneliner() {
+  printf 'sudo bash -c "$(curl -fsSL %s/%s/install.sh)" @ install' "$REPO_RAW_BASE" "$DEFAULT_BRANCH"
+}
+
 cmd_uninstall() {
   check_root
 
   local wipe="y"
   local purge_certs="y"
+  local purge_nginx="n"
   colorized_echo yellow "This removes OverVPN containers, /opt/overvpn, nginx site, and CLI."
   if [[ -t 0 ]]; then
     read -r -p "Delete Docker volumes (DB/data)? [Y/n] " wipe
     wipe="${wipe:-y}"
     read -r -p "Delete Let's Encrypt certs for panel/sub/vpn hosts? [Y/n] " purge_certs
     purge_certs="${purge_certs:-y}"
+    read -r -p "Remove Nginx + Certbot packages from the system? [y/N] " purge_nginx
+    purge_nginx="${purge_nginx:-n}"
   fi
 
   if [[ -f "$COMPOSE_FILE" && -f "$ENV_FILE" ]]; then
@@ -1313,10 +1320,25 @@ cmd_uninstall() {
   rm -rf "$APP_DIR"
   rm -f "$BIN_PATH"
 
+  if [[ "${purge_nginx,,}" == "y" || "${purge_nginx,,}" == "yes" ]]; then
+    colorized_echo blue "Removing Nginx and Certbot packages..."
+    if need_cmd systemctl; then
+      systemctl stop nginx 2>/dev/null || true
+      systemctl disable nginx 2>/dev/null || true
+    fi
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get remove -y nginx certbot python3-certbot-nginx 2>/dev/null || true
+    apt-get autoremove -y 2>/dev/null || true
+    colorized_echo green "Nginx and Certbot packages removed."
+  fi
+
   colorized_echo green "OverVPN fully removed."
-  colorized_echo yellow "Nginx/Docker packages left installed (shared). Remove manually if needed:"
-  colorized_echo yellow "  apt-get remove -y nginx certbot python3-certbot-nginx"
-  colorized_echo yellow "Reinstall: curl … install.sh @ install"
+  if [[ "${purge_nginx,,}" != "y" && "${purge_nginx,,}" != "yes" ]]; then
+    colorized_echo yellow "Nginx/Certbot packages were left installed (shared with other sites)."
+    colorized_echo yellow "Remove manually if needed: apt-get remove -y nginx certbot python3-certbot-nginx"
+  fi
+  colorized_echo yellow "Reinstall:"
+  colorized_echo cyan "  $(install_oneliner)"
 }
 
 cmd_info() {

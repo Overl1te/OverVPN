@@ -94,45 +94,45 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Runtime / tooling (корень)
 
-| Что | Версия / пакет | Зачем |
-| --- | --- | --- |
-| Node.js | `>=24 <25` | runtime |
-| pnpm | `11.12.0` (`packageManager`) | monorepo |
-| Turbo | `^2.10` | parallel build/dev/test |
-| TypeScript | `^6` | общий toolchain |
-| Prettier | `^3.9` | единый формат |
+| Что        | Версия / пакет               | Зачем                   |
+| ---------- | ---------------------------- | ----------------------- |
+| Node.js    | `>=24 <25`                   | runtime                 |
+| pnpm       | `11.12.0` (`packageManager`) | monorepo                |
+| Turbo      | `^2.10`                      | parallel build/dev/test |
+| TypeScript | `^6`                         | общий toolchain         |
+| Prettier   | `^3.9`                       | единый формат           |
 
 ### `@overvpn/api`
 
-| Слой | Пакеты |
-| --- | --- |
-| HTTP framework | `@nestjs/common/core/platform-express` `^11` |
-| Config | `@nestjs/config` + **Zod** (`validateEnvironment`) |
-| Auth | `@nestjs/jwt`, `argon2`, `otplib` (TOTP), `cookie-parser` |
-| DB | `prisma` / `@prisma/client` `^7`, `@prisma/adapter-pg`, `pg` |
-| Cache / locks | `ioredis` |
-| Logging | `pino`, `nestjs-pino`, `pino-http` |
-| Validation (DTO) | `class-validator` + `class-transformer` |
-| Docs | `@nestjs/swagger` (флаг `SWAGGER_ENABLED`) |
-| Rate limit | `@nestjs/throttler` |
-| gRPC (V2Ray stats) | `@grpc/grpc-js`, `@grpc/proto-loader` |
-| Misc | `helmet`, `yaml`, `rxjs` |
-| Shared contracts | `@overvpn/shared` (workspace) |
+| Слой               | Пакеты                                                       |
+| ------------------ | ------------------------------------------------------------ |
+| HTTP framework     | `@nestjs/common/core/platform-express` `^11`                 |
+| Config             | `@nestjs/config` + **Zod** (`validateEnvironment`)           |
+| Auth               | `@nestjs/jwt`, `argon2`, `otplib` (TOTP), `cookie-parser`    |
+| DB                 | `prisma` / `@prisma/client` `^7`, `@prisma/adapter-pg`, `pg` |
+| Cache / locks      | `ioredis`                                                    |
+| Logging            | `pino`, `nestjs-pino`, `pino-http`                           |
+| Validation (DTO)   | `class-validator` + `class-transformer`                      |
+| Docs               | `@nestjs/swagger` (флаг `SWAGGER_ENABLED`)                   |
+| Rate limit         | `@nestjs/throttler`                                          |
+| gRPC (V2Ray stats) | `@grpc/grpc-js`, `@grpc/proto-loader`                        |
+| Misc               | `helmet`, `yaml`, `rxjs`                                     |
+| Shared contracts   | `@overvpn/shared` (workspace)                                |
 
 Тесты API: **Jest** + `ts-jest` + `supertest` (e2e).
 
 ### `@overvpn/web`
 
-| Слой | Пакеты |
-| --- | --- |
-| UI | React `19`, Ant Design `5`, `@ant-design/icons/charts` |
-| Router | `react-router-dom` `7` |
-| Data | `@tanstack/react-query` `5` |
-| i18n | `i18next` + `react-i18next` (RU default / EN) |
-| Build | Vite `8`, `@vitejs/plugin-react` |
-| Lint | **oxlint** (не ESLint) |
-| Tests | **Vitest** |
-| QR | `qrcode.react` |
+| Слой   | Пакеты                                                 |
+| ------ | ------------------------------------------------------ |
+| UI     | React `19`, Ant Design `5`, `@ant-design/icons/charts` |
+| Router | `react-router-dom` `7`                                 |
+| Data   | `@tanstack/react-query` `5`                            |
+| i18n   | `i18next` + `react-i18next` (RU default / EN)          |
+| Build  | Vite `8`, `@vitejs/plugin-react`                       |
+| Lint   | **oxlint** (не ESLint)                                 |
+| Tests  | **Vitest**                                             |
+| QR     | `qrcode.react`                                         |
 
 ### `@overvpn/shared`
 
@@ -140,15 +140,15 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Инфраструктура (Compose)
 
-| Сервис | Образ / бинарь | Роль |
-| --- | --- | --- |
-| `postgres` | `postgres:18-alpine` | состояние панели |
-| `redis` | `redis:8-alpine` | throttle, distributed locks воркеров/apply |
-| `migrate` | api image, one-shot | `prisma migrate deploy` |
-| `api` | `ghcr.io/overl1te/overvpn-api` | NestJS |
-| `web` | `ghcr.io/overl1te/overvpn-web` | Nginx + SPA, proxy `/api` |
-| `core` | sing-box в контейнере | VPN data plane |
-| `bootstrap-admin` | profile `tools` | создать OWNER |
+| Сервис            | Образ / бинарь                 | Роль                                       |
+| ----------------- | ------------------------------ | ------------------------------------------ |
+| `postgres`        | `postgres:18-alpine`           | состояние панели                           |
+| `redis`           | `redis:8-alpine`               | throttle, distributed locks воркеров/apply |
+| `migrate`         | api image, one-shot            | `prisma migrate deploy`                    |
+| `api`             | `ghcr.io/overl1te/overvpn-api` | NestJS                                     |
+| `web`             | `ghcr.io/overl1te/overvpn-web` | Nginx + SPA, proxy `/api`                  |
+| `core`            | sing-box в контейнере          | VPN data plane                             |
+| `bootstrap-admin` | profile `tools`                | создать OWNER                              |
 
 ---
 
@@ -156,14 +156,14 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Потоки данных
 
-| Поток | Путь | Примечание |
-| --- | --- | --- |
-| Админ UI | Browser → web → `POST/GET /api/admin/*` → Nest | JWT access + httpOnly refresh cookie |
-| Подписка | Client → `GET /api/sub/:token` → SubscriptionsModule | без админ-JWT; rate-limit по IP и fingerprint токена |
-| Apply конфига | Admin mutation / auto-after-save → CoreModule → файл + reload handshake → sing-box | Redis lock `CORE_APPLY_LOCK_TTL_MS` |
-| Трафик | Worker → V2Ray Stats gRPC → ledger → агрегация UsageDaily | epoch/generation после reload |
-| Онлайн | Worker → Clash API → OnlineSession | best-effort device id |
-| Enforce | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости | |
+| Поток         | Путь                                                                               | Примечание                                           |
+| ------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                     | JWT access + httpOnly refresh cookie                 |
+| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                               | без админ-JWT; rate-limit по IP и fingerprint токена |
+| Apply конфига | Admin mutation / auto-after-save → CoreModule → файл + reload handshake → sing-box | Redis lock `CORE_APPLY_LOCK_TTL_MS`                  |
+| Трафик        | Worker → V2Ray Stats gRPC → ledger → агрегация UsageDaily                          | epoch/generation после reload                        |
+| Онлайн        | Worker → Clash API → OnlineSession                                                 | best-effort device id                                |
+| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости         |                                                      |
 
 ### Сети Compose (упрощённо)
 
@@ -193,22 +193,22 @@ Env валидируется при старте API в `apps/api/src/config/env
 - Pino с redact секретов (пароли, cookie, PEM, obfs, …)
 - `ThrottlerModule` для login window
 
-| Модуль | Каталог | Зачем |
-| --- | --- | --- |
-| **Infrastructure** | `infrastructure/` | Prisma, Redis клиенты |
-| **Auth** | `auth/` | login/refresh/logout, TOTP, bootstrap-совместимая модель AdminUser |
-| **Users** | `users/` | CRUD пользователей, assignments, rotate-sub, статусы |
-| **Plans** | `plans/` | тарифы / шаблоны лимитов и привязка inbound’ов |
-| **Inbounds** | `inbounds/` | протоколы Hysteria2 / VLESS Reality / Trojan / SS, settings |
-| **Subscriptions** | `subscriptions/` | публичные профили `sing-box` / `clash` / `links` / `info` |
-| **Core** | `core/` | абстракция `CoreProvider`, `SingBoxProvider`, diff/apply/health/stats |
-| **Workers** | `workers/` | фоновые циклы (см. ниже) |
-| **System** | `system/` | dashboard snapshots, health агрегаты |
-| **Settings** | `settings/` | SystemConfig (Telegram и пр.; секреты не отдаются наружу) |
-| **Backups** | `backups/` | DATABASE / CORE_CONFIG / FULL, encrypt, restore (OWNER) |
-| **Audit** | `audit/` | журнал админ-действий |
-| **Health** | `health/` | `/api/health`, `/api/health/ready` |
-| **Notifications** | `notifications/` | Telegram (EN/RU) при enforcement / core-apply fail |
+| Модуль             | Каталог           | Зачем                                                                 |
+| ------------------ | ----------------- | --------------------------------------------------------------------- |
+| **Infrastructure** | `infrastructure/` | Prisma, Redis клиенты                                                 |
+| **Auth**           | `auth/`           | login/refresh/logout, TOTP, bootstrap-совместимая модель AdminUser    |
+| **Users**          | `users/`          | CRUD пользователей, assignments, rotate-sub, статусы                  |
+| **Plans**          | `plans/`          | тарифы / шаблоны лимитов и привязка inbound’ов                        |
+| **Inbounds**       | `inbounds/`       | протоколы Hysteria2 / VLESS Reality / Trojan / SS, settings           |
+| **Subscriptions**  | `subscriptions/`  | публичные профили `sing-box` / `clash` / `links` / `info`             |
+| **Core**           | `core/`           | абстракция `CoreProvider`, `SingBoxProvider`, diff/apply/health/stats |
+| **Workers**        | `workers/`        | фоновые циклы (см. ниже)                                              |
+| **System**         | `system/`         | dashboard snapshots, health агрегаты                                  |
+| **Settings**       | `settings/`       | SystemConfig (Telegram и пр.; секреты не отдаются наружу)             |
+| **Backups**        | `backups/`        | DATABASE / CORE_CONFIG / FULL, encrypt, restore (OWNER)               |
+| **Audit**          | `audit/`          | журнал админ-действий                                                 |
+| **Health**         | `health/`         | `/api/health`, `/api/health/ready`                                    |
+| **Notifications**  | `notifications/`  | Telegram (EN/RU) при enforcement / core-apply fail                    |
 
 Паттерн типичного feature-модуля:
 
@@ -249,14 +249,14 @@ on failure
 
 В Compose пути задаются так (см. `deploy/docker-compose.yml`):
 
-| Env | Назначение |
-| --- | --- |
-| `SING_BOX_BINARY_PATH` | бинарь |
-| `SING_BOX_CONFIG_PATH` | живой конфиг |
-| `SING_BOX_LAST_KNOWN_GOOD_PATH` | откат |
+| Env                                          | Назначение                  |
+| -------------------------------------------- | --------------------------- |
+| `SING_BOX_BINARY_PATH`                       | бинарь                      |
+| `SING_BOX_CONFIG_PATH`                       | живой конфиг                |
+| `SING_BOX_LAST_KNOWN_GOOD_PATH`              | откат                       |
 | `SING_BOX_RELOAD_REQUEST_PATH` / `_ACK_PATH` | handshake с entrypoint ядра |
-| `SING_BOX_CLASH_API_URL` | health / online |
-| `SING_BOX_V2RAY_API_ADDRESS` | traffic counters |
+| `SING_BOX_CLASH_API_URL`                     | health / online             |
+| `SING_BOX_V2RAY_API_ADDRESS`                 | traffic counters            |
 
 Entrypoint ядра: `deploy/sing-box/entrypoint.sh` — слушает reload-request и шлёт SIGHUP/рестарт по контракту панели.
 
@@ -276,15 +276,15 @@ Entrypoint ядра: `deploy/sing-box/entrypoint.sh` — слушает reload-r
 
 Включаются флагом `WORKERS_ENABLED=true`. В unit/e2e/one-shot скриптах и migrate-контейнере держи **`false`**, иначе фоновые циклы мешают тестам и гоняются за lock’ами.
 
-| Сервис | Роль | Интервалы (env) |
-| --- | --- | --- |
-| `WorkerSchedulerService` | регистрация тиков | — |
-| `TrafficCollectorService` | снимок counters → deltas/ledger | `TRAFFIC_COLLECTION_INTERVAL_MS` |
-| `DailyUsageAggregatorService` | агрегация в `UsageDaily` | `TRAFFIC_AGGREGATION_*` |
-| `OnlineSessionCollectorService` | активные клиенты | `ONLINE_COLLECTION_INTERVAL_MS` |
-| `OnlineSessionSweeperService` | закрытие протухших сессий | `ONLINE_SWEEP_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS` |
-| `LimitEnforcerService` | expire / quota / device / IP → статусы + side effects | `ENFORCEMENT_INTERVAL_MS` |
-| `WorkerHealthService` | статусы для dashboard | — |
+| Сервис                          | Роль                                                  | Интервалы (env)                                         |
+| ------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| `WorkerSchedulerService`        | регистрация тиков                                     | —                                                       |
+| `TrafficCollectorService`       | снимок counters → deltas/ledger                       | `TRAFFIC_COLLECTION_INTERVAL_MS`                        |
+| `DailyUsageAggregatorService`   | агрегация в `UsageDaily`                              | `TRAFFIC_AGGREGATION_*`                                 |
+| `OnlineSessionCollectorService` | активные клиенты                                      | `ONLINE_COLLECTION_INTERVAL_MS`                         |
+| `OnlineSessionSweeperService`   | закрытие протухших сессий                             | `ONLINE_SWEEP_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS` |
+| `LimitEnforcerService`          | expire / quota / device / IP → статусы + side effects | `ENFORCEMENT_INTERVAL_MS`                               |
+| `WorkerHealthService`           | статусы для dashboard                                 | —                                                       |
 
 Распределённые lock’и через Redis (`WORKER_LOCK_TTL_MS`), чтобы при случайном втором инстансе API не дублировать работу (в проде всё равно ожидается один api-контейнер).
 
@@ -298,20 +298,20 @@ Entrypoint ядра: `deploy/sing-box/entrypoint.sh` — слушает reload-r
 
 ### Основные сущности
 
-| Model | Смысл |
-| --- | --- |
-| `AdminUser` / `RefreshToken` | админы и сессии |
-| `User` | VPN-пользователь, лимиты, статус, sub token |
-| `Plan` / `PlanInbound` | тариф и набор inbound’ов |
-| `Inbound` | слушатель протокола + encrypted settings |
-| `UserInboundAssignment` | credentials пользователя на inbound |
-| `UsageDaily` | дневная агрегация трафика |
-| `TrafficCursor` / `TrafficDelta` / `TrafficCheckpoint` | ledger с учётом reload epoch |
-| `OnlineSession` | онлайн/история |
-| `AuditLog` | действия админов |
-| `SystemConfig` | key/value настроек |
-| `CoreApplyRecord` / `CoreState` | история apply и текущее поколение конфига |
-| `BackupArtifact` | метаданные бэкапов |
+| Model                                                  | Смысл                                       |
+| ------------------------------------------------------ | ------------------------------------------- |
+| `AdminUser` / `RefreshToken`                           | админы и сессии                             |
+| `User`                                                 | VPN-пользователь, лимиты, статус, sub token |
+| `Plan` / `PlanInbound`                                 | тариф и набор inbound’ов                    |
+| `Inbound`                                              | слушатель протокола + encrypted settings    |
+| `UserInboundAssignment`                                | credentials пользователя на inbound         |
+| `UsageDaily`                                           | дневная агрегация трафика                   |
+| `TrafficCursor` / `TrafficDelta` / `TrafficCheckpoint` | ledger с учётом reload epoch                |
+| `OnlineSession`                                        | онлайн/история                              |
+| `AuditLog`                                             | действия админов                            |
+| `SystemConfig`                                         | key/value настроек                          |
+| `CoreApplyRecord` / `CoreState`                        | история apply и текущее поколение конфига   |
+| `BackupArtifact`                                       | метаданные бэкапов                          |
 
 Миграции только через Prisma:
 
@@ -342,18 +342,18 @@ src/
 
 Маршруты зеркалят домен:
 
-| Path | Страница |
-| --- | --- |
-| `/login` | LoginPage |
-| `/dashboard` | DashboardPage |
+| Path                   | Страница                   |
+| ---------------------- | -------------------------- |
+| `/login`               | LoginPage                  |
+| `/dashboard`           | DashboardPage              |
 | `/users`, `/users/:id` | список / карточка + sub QR |
-| `/inbounds` | inbound’ы |
-| `/plans` | планы |
-| `/online` | сессии |
-| `/config` | preview/apply |
-| `/audit` | журнал |
-| `/system` | settings + system |
-| `/backups` | бэкапы |
+| `/inbounds`            | inbound’ы                  |
+| `/plans`               | планы                      |
+| `/online`              | сессии                     |
+| `/config`              | preview/apply              |
+| `/audit`               | журнал                     |
+| `/system`              | settings + system          |
+| `/backups`             | бэкапы                     |
 
 В dev Vite проксирует `/api` → `:3000`. В проде тот же path обслуживает Nginx внутри web-образа (`apps/web/nginx.conf`).
 
@@ -432,16 +432,16 @@ pnpm bootstrap:admin
 
 ### Полезные make/pnpm цели
 
-| Команда | Эффект |
-| --- | --- |
-| `pnpm install` / `make install` | зависимости |
-| `pnpm dev` | параллельный dev |
-| `pnpm build` | production build всех пакетов |
-| `pnpm migrate` / `migrate:dev` | Prisma deploy / dev |
-| `pnpm bootstrap:admin` | OWNER |
-| `pnpm compose-up/pull/build/down` | Docker стек |
-| `pnpm test` / `test:e2e` | unit / e2e API |
-| `pnpm lint` / `typecheck` / `format` | качество |
+| Команда                              | Эффект                        |
+| ------------------------------------ | ----------------------------- |
+| `pnpm install` / `make install`      | зависимости                   |
+| `pnpm dev`                           | параллельный dev              |
+| `pnpm build`                         | production build всех пакетов |
+| `pnpm migrate` / `migrate:dev`       | Prisma deploy / dev           |
+| `pnpm bootstrap:admin`               | OWNER                         |
+| `pnpm compose-up/pull/build/down`    | Docker стек                   |
+| `pnpm test` / `test:e2e`             | unit / e2e API                |
+| `pnpm lint` / `typecheck` / `format` | качество                      |
 
 ---
 
@@ -505,10 +505,10 @@ Workflow: `.github/workflows/ci.yml`.
 
 ### Jobs
 
-| Job | Когда | Что делает |
-| --- | --- | --- |
-| `verify` | PR + push + dispatch | install → prisma generate → format → lint → typecheck → test → build |
-| `publish` | push в `master` / тег `v*` / `workflow_dispatch` после verify | build+push api/web в GHCR |
+| Job       | Когда                                                         | Что делает                                                           |
+| --------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `verify`  | PR + push + dispatch                                          | install → prisma generate → format → lint → typecheck → test → build |
+| `publish` | push в `master` / тег `v*` / `workflow_dispatch` после verify | build+push api/web в GHCR                                            |
 
 Оба job’а бегут на labels:
 
@@ -594,16 +594,16 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 ## Быстрый «где смотреть, если …»
 
-| Задача | Куда идти |
-| --- | --- |
-| Новый протокол inbound | `inbounds/` + `core/sing-box.provider.ts` + shared schemas + web Inbounds page |
-| Баг в подписке Clash | `subscriptions/` |
-| Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor`, provider generation |
-| Пользователь не режется по квоте | `limit-enforcer` / `limit-enforcement.ts` |
-| Не логинится / cookie | `auth/`, `AUTH_COOKIE_*`, `CORS_ORIGINS` |
-| Apply откатывается | логи api + `CoreApplyRecord`, entrypoint reload handshake |
-| Нет кнопки в UI у readonly | `MutateOnly` + RolesGuard |
-| Установка на сервере | `install.sh`, не Nest |
+| Задача                               | Куда идти                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| Новый протокол inbound               | `inbounds/` + `core/sing-box.provider.ts` + shared schemas + web Inbounds page |
+| Баг в подписке Clash                 | `subscriptions/`                                                               |
+| Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor`, provider generation                      |
+| Пользователь не режется по квоте     | `limit-enforcer` / `limit-enforcement.ts`                                      |
+| Не логинится / cookie                | `auth/`, `AUTH_COOKIE_*`, `CORS_ORIGINS`                                       |
+| Apply откатывается                   | логи api + `CoreApplyRecord`, entrypoint reload handshake                      |
+| Нет кнопки в UI у readonly           | `MutateOnly` + RolesGuard                                                      |
+| Установка на сервере                 | `install.sh`, не Nest                                                          |
 
 ---
 

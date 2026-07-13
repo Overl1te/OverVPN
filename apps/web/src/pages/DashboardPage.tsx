@@ -62,11 +62,11 @@ export function DashboardPage() {
                   message={t('dashboard.throughputUnavailable')}
                   description={
                     data?.traffic.throughput.available === false
-                      ? localizedRuntimeError(
+                      ? (localizedRuntimeError(
                           data.traffic.throughput.reason,
                           i18n.language,
                           data.traffic.throughput.reasonRu,
-                        ) ?? undefined
+                        ) ?? undefined)
                       : undefined
                   }
                 />
@@ -164,7 +164,11 @@ export function DashboardPage() {
           pagination={false}
           dataSource={health?.workers ?? data?.workers ?? []}
           columns={[
-            { title: t('app.name'), dataIndex: 'name', render: (name: string) => t(`enums.workerName.${name}`, { defaultValue: name }) },
+            {
+              title: t('app.name'),
+              dataIndex: 'name',
+              render: (name: string) => t(`enums.workerName.${name}`, { defaultValue: name }),
+            },
             {
               title: t('dashboard.workerState'),
               dataIndex: 'state',
@@ -182,8 +186,7 @@ export function DashboardPage() {
               title: t('app.error'),
               dataIndex: 'error',
               ellipsis: true,
-              render: (value: string | null) =>
-                localizedRuntimeError(value, i18n.language) || '—',
+              render: (value: string | null) => localizedRuntimeError(value, i18n.language) || '—',
             },
           ]}
         />

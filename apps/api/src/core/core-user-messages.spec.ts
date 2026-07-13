@@ -16,7 +16,9 @@ describe('core-user-messages', () => {
   });
 
   it('localizes core health DNS failures', () => {
-    const msg = localizeCoreHealthError('Name resolution failed for dns:core:9090');
+    const msg = localizeCoreHealthError(
+      'Name resolution failed for dns:core:9090',
+    );
     expect(msg.en).toContain('VPN core service is not responding');
     expect(msg.ru).toContain('VPN-ядро не отвечает');
   });

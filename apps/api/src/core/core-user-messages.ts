@@ -97,7 +97,9 @@ export function localizeThroughputReason(
   };
 }
 
-export function localizeWorkerError(raw: string | null | undefined): LocalizedMessage | null {
+export function localizeWorkerError(
+  raw: string | null | undefined,
+): LocalizedMessage | null {
   if (!raw) {
     return null;
   }
