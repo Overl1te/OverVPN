@@ -6,9 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const docsSrc = join(root, 'docs');
 const outDir = join(root, 'docs-dist');
-const base = process.argv.includes('--dev')
-  ? '/'
-  : (process.env.DOCS_BASE ?? '/OverVPN/');
+const base = process.argv.includes('--dev') ? '/' : (process.env.DOCS_BASE ?? '/OverVPN/');
 
 const sidebar = [
   {
@@ -30,9 +28,7 @@ const sidebar = [
   },
   {
     title: 'Продвинутое',
-    items: [
-      { id: 'guide-docker', label: 'Ручной запуск (Docker)', href: 'guide/docker.html' },
-    ],
+    items: [{ id: 'guide-docker', label: 'Ручной запуск (Docker)', href: 'guide/docker.html' }],
   },
   {
     title: 'Справочник',
@@ -44,25 +40,84 @@ const sidebar = [
   },
   {
     title: 'Прочее',
-    items: [
-      { id: 'faq', label: 'FAQ', href: 'faq.html' },
-    ],
+    items: [{ id: 'faq', label: 'FAQ', href: 'faq.html' }],
   },
 ];
 
 const pages = [
-  { id: 'index', title: 'Документация', out: 'index.html', content: 'pages/index.html', home: true },
-  { id: 'guide-introduction', title: 'Введение', out: 'guide/introduction.html', content: 'pages/guide/introduction.html' },
-  { id: 'guide-installation', title: 'Установка', out: 'guide/installation.html', content: 'pages/guide/installation.html' },
-  { id: 'guide-management', title: 'Управление сервером', out: 'guide/management.html', content: 'pages/guide/management.html' },
-  { id: 'guide-panel', title: 'Работа в панели', out: 'guide/panel.html', content: 'pages/guide/panel.html' },
-  { id: 'guide-subscriptions', title: 'Подписки клиентов', out: 'guide/subscriptions.html', content: 'pages/guide/subscriptions.html' },
-  { id: 'guide-docker', title: 'Ручной запуск (Docker)', out: 'guide/docker.html', content: 'pages/guide/docker.html' },
-  { id: 'guide-security', title: 'Безопасность', out: 'guide/security.html', content: 'pages/guide/security.html' },
-  { id: 'guide-limitations', title: 'Ограничения', out: 'guide/limitations.html', content: 'pages/guide/limitations.html' },
-  { id: 'reference-cli', title: 'CLI overvpn', out: 'reference/cli.html', content: 'pages/reference/cli.html' },
-  { id: 'reference-env', title: 'Переменные окружения', out: 'reference/env.html', content: 'pages/reference/env.html' },
-  { id: 'reference-protocols', title: 'Протоколы', out: 'reference/protocols.html', content: 'pages/reference/protocols.html' },
+  {
+    id: 'index',
+    title: 'Документация',
+    out: 'index.html',
+    content: 'pages/index.html',
+    home: true,
+  },
+  {
+    id: 'guide-introduction',
+    title: 'Введение',
+    out: 'guide/introduction.html',
+    content: 'pages/guide/introduction.html',
+  },
+  {
+    id: 'guide-installation',
+    title: 'Установка',
+    out: 'guide/installation.html',
+    content: 'pages/guide/installation.html',
+  },
+  {
+    id: 'guide-management',
+    title: 'Управление сервером',
+    out: 'guide/management.html',
+    content: 'pages/guide/management.html',
+  },
+  {
+    id: 'guide-panel',
+    title: 'Работа в панели',
+    out: 'guide/panel.html',
+    content: 'pages/guide/panel.html',
+  },
+  {
+    id: 'guide-subscriptions',
+    title: 'Подписки клиентов',
+    out: 'guide/subscriptions.html',
+    content: 'pages/guide/subscriptions.html',
+  },
+  {
+    id: 'guide-docker',
+    title: 'Ручной запуск (Docker)',
+    out: 'guide/docker.html',
+    content: 'pages/guide/docker.html',
+  },
+  {
+    id: 'guide-security',
+    title: 'Безопасность',
+    out: 'guide/security.html',
+    content: 'pages/guide/security.html',
+  },
+  {
+    id: 'guide-limitations',
+    title: 'Ограничения',
+    out: 'guide/limitations.html',
+    content: 'pages/guide/limitations.html',
+  },
+  {
+    id: 'reference-cli',
+    title: 'CLI overvpn',
+    out: 'reference/cli.html',
+    content: 'pages/reference/cli.html',
+  },
+  {
+    id: 'reference-env',
+    title: 'Переменные окружения',
+    out: 'reference/env.html',
+    content: 'pages/reference/env.html',
+  },
+  {
+    id: 'reference-protocols',
+    title: 'Протоколы',
+    out: 'reference/protocols.html',
+    content: 'pages/reference/protocols.html',
+  },
   { id: 'faq', title: 'FAQ', out: 'faq.html', content: 'pages/faq.html' },
 ];
 

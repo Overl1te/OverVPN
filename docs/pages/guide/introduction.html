@@ -2,21 +2,40 @@
 
 <p>
   OverVPN — <strong>однонодовая</strong> панель управления VPN на базе
-  <a href="https://sing-box.sagernet.org/" target="_blank" rel="noopener">sing-box</a>. Она не маршрутизирует трафик сама: это control plane над одним VPN-ядром на одной машине.
+  <a href="https://sing-box.sagernet.org/" target="_blank" rel="noopener">sing-box</a>. Она не
+  маршрутизирует трафик сама: это control plane над одним VPN-ядром на одной машине.
 </p>
 
 <h2>Что умеет</h2>
 
 <table>
   <thead>
-    <tr><th>Область</th><th>Возможности</th></tr>
+    <tr>
+      <th>Область</th>
+      <th>Возможности</th>
+    </tr>
   </thead>
   <tbody>
-    <tr><td><strong>Протоколы</strong></td><td>Hysteria2, VLESS Reality, Trojan, Shadowsocks</td></tr>
-    <tr><td><strong>Панель</strong></td><td>Пользователи, inbound'ы, планы, онлайн-сессии, аудит</td></tr>
-    <tr><td><strong>Подписки</strong></td><td>JSON (sing-box), Clash Meta / Mihomo YAML, список ссылок, QR</td></tr>
-    <tr><td><strong>Учёт</strong></td><td>Трафик, сроки, лимиты устройств и IP, автоматический enforce</td></tr>
-    <tr><td><strong>Операции</strong></td><td>Apply конфига с rollback, бэкапы, Telegram-алерты</td></tr>
+    <tr>
+      <td><strong>Протоколы</strong></td>
+      <td>Hysteria2, VLESS Reality, Trojan, Shadowsocks</td>
+    </tr>
+    <tr>
+      <td><strong>Панель</strong></td>
+      <td>Пользователи, inbound'ы, планы, онлайн-сессии, аудит</td>
+    </tr>
+    <tr>
+      <td><strong>Подписки</strong></td>
+      <td>JSON (sing-box), Clash Meta / Mihomo YAML, список ссылок, QR</td>
+    </tr>
+    <tr>
+      <td><strong>Учёт</strong></td>
+      <td>Трафик, сроки, лимиты устройств и IP, автоматический enforce</td>
+    </tr>
+    <tr>
+      <td><strong>Операции</strong></td>
+      <td>Apply конфига с rollback, бэкапы, Telegram-алерты</td>
+    </tr>
   </tbody>
 </table>
 
@@ -32,12 +51,14 @@
 </div>
 
 <p>
-  Панель хранит желаемое состояние (пользователи, inbound'ы, assignments), рендерит конфиг ядра и применяет его атомарно. Клиенты получают профили через публичный subscription URL.
+  Панель хранит желаемое состояние (пользователи, inbound'ы, assignments), рендерит конфиг ядра и
+  применяет его атомарно. Клиенты получают профили через публичный subscription URL.
 </p>
 
 <div class="callout warning">
   <strong>Важно</strong>
-  Мульти-нода не поддерживается. Один сервер — одно ядро. Федерация, шардинг и «панель как прокси» вне скоупа проекта.
+  Мульти-нода не поддерживается. Один сервер — одно ядро. Федерация, шардинг и «панель как прокси»
+  вне скоупа проекта.
 </div>
 
 <h2>Кому подходит</h2>
@@ -49,13 +70,24 @@
 
 <h2>Что дальше</h2>
 <ol>
-  <li><a href="{{BASE}}guide/installation.html">Установка</a> — одна команда через <code>install.sh</code> или ручной Docker Compose</li>
-  <li><a href="{{BASE}}guide/management.html">Управление сервером</a> — CLI <code>overvpn</code></li>
+  <li>
+    <a href="{{BASE}}guide/installation.html">Установка</a> — одна команда через
+    <code>install.sh</code> или ручной Docker Compose
+  </li>
+  <li>
+    <a href="{{BASE}}guide/management.html">Управление сервером</a> — CLI <code>overvpn</code>
+  </li>
   <li><a href="{{BASE}}guide/panel.html">Работа в панели</a> — inbound'ы, пользователи, бэкапы</li>
   <li><a href="{{BASE}}guide/subscriptions.html">Подписки клиентов</a> — форматы и URL</li>
 </ol>
 
 <p>
   Для разработчиков: архитектура, стек и локальная разработка —
-  <a href="https://github.com/Overl1te/OverVPN/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a> в репозитории.
+  <a
+    href="https://github.com/Overl1te/OverVPN/blob/master/CONTRIBUTING.md"
+    target="_blank"
+    rel="noopener"
+    >CONTRIBUTING.md</a
+  >
+  в репозитории.
 </p>

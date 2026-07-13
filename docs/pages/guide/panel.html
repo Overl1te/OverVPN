@@ -13,7 +13,8 @@
 
 <div class="callout warning">
   <strong>Важно</strong>
-  <code>SING_BOX_UDP_PORT</code> в <code>.env</code> должен совпадать с портом inbound'а (обычно <code>443</code>).
+  <code>SING_BOX_UDP_PORT</code> в <code>.env</code> должен совпадать с портом inbound'а (обычно
+  <code>443</code>).
 </div>
 
 <h2>2. Создать пользователя</h2>
@@ -24,12 +25,29 @@
 </ol>
 
 <table>
-  <thead><tr><th>Статус</th><th>Смысл</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Статус</th>
+      <th>Смысл</th>
+    </tr>
+  </thead>
   <tbody>
-    <tr><td><code>ACTIVE</code></td><td>доступ разрешён</td></tr>
-    <tr><td><code>DISABLED</code></td><td>выключен вручную</td></tr>
-    <tr><td><code>EXPIRED</code></td><td>истёк срок</td></tr>
-    <tr><td><code>LIMITED</code></td><td>квота / устройство / IP</td></tr>
+    <tr>
+      <td><code>ACTIVE</code></td>
+      <td>доступ разрешён</td>
+    </tr>
+    <tr>
+      <td><code>DISABLED</code></td>
+      <td>выключен вручную</td>
+    </tr>
+    <tr>
+      <td><code>EXPIRED</code></td>
+      <td>истёк срок</td>
+    </tr>
+    <tr>
+      <td><code>LIMITED</code></td>
+      <td>квота / устройство / IP</td>
+    </tr>
   </tbody>
 </table>
 
@@ -45,21 +63,49 @@
 
 <h2>5. Роли</h2>
 <table>
-  <thead><tr><th>Роль</th><th>Права</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Роль</th>
+      <th>Права</th>
+    </tr>
+  </thead>
   <tbody>
-    <tr><td><code>OWNER</code></td><td>полный доступ, restore бэкапов</td></tr>
-    <tr><td><code>ADMIN</code></td><td>users / inbounds / apply / backups</td></tr>
-    <tr><td><code>READONLY</code></td><td>только чтение</td></tr>
+    <tr>
+      <td><code>OWNER</code></td>
+      <td>полный доступ, restore бэкапов</td>
+    </tr>
+    <tr>
+      <td><code>ADMIN</code></td>
+      <td>users / inbounds / apply / backups</td>
+    </tr>
+    <tr>
+      <td><code>READONLY</code></td>
+      <td>только чтение</td>
+    </tr>
   </tbody>
 </table>
 
 <h2>6. Бэкапы</h2>
 <table>
-  <thead><tr><th>Тип</th><th>Содержимое</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Тип</th>
+      <th>Содержимое</th>
+    </tr>
+  </thead>
   <tbody>
-    <tr><td><code>DATABASE</code></td><td><code>pg_dump</code></td></tr>
-    <tr><td><code>CORE_CONFIG</code></td><td>конфиг ядра + last-known-good</td></tr>
-    <tr><td><code>FULL</code></td><td>БД + конфиг + метаданные</td></tr>
+    <tr>
+      <td><code>DATABASE</code></td>
+      <td><code>pg_dump</code></td>
+    </tr>
+    <tr>
+      <td><code>CORE_CONFIG</code></td>
+      <td>конфиг ядра + last-known-good</td>
+    </tr>
+    <tr>
+      <td><code>FULL</code></td>
+      <td>БД + конфиг + метаданные</td>
+    </tr>
   </tbody>
 </table>
 
