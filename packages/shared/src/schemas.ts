@@ -1790,6 +1790,7 @@ export const systemSettingsReadOnlySchema = z
     nodeEnv: z.enum(['development', 'test', 'production']),
     swaggerEnabled: z.boolean(),
     subPublicBaseUrlEnv: z.string().min(1),
+    vpnPublicHost: z.string().nullable(),
     telegramEnvConfigured: z.boolean(),
   })
   .strict();

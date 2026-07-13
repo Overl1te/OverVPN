@@ -25,6 +25,7 @@ x-api-environment: &api-environment
   LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-5}
   LOGIN_THROTTLE_TTL_MS: ${LOGIN_THROTTLE_TTL_MS:-60000}
   SUB_PUBLIC_BASE_URL: ${SUB_PUBLIC_BASE_URL:?Set SUB_PUBLIC_BASE_URL in .env}
+  VPN_PUBLIC_HOST: ${VPN_PUBLIC_HOST:-}
   SUB_PROFILE_UPDATE_INTERVAL_HOURS: ${SUB_PROFILE_UPDATE_INTERVAL_HOURS:-6}
   SUB_RATE_LIMIT_IP_LIMIT: ${SUB_RATE_LIMIT_IP_LIMIT:-60}
   SUB_RATE_LIMIT_TOKEN_LIMIT: ${SUB_RATE_LIMIT_TOKEN_LIMIT:-120}
@@ -119,13 +120,13 @@ services:
     image: busybox:1.37
     restart: 'no'
     network_mode: none
-    command:
-      [
-        'sh',
-        '-ec',
-        'mkdir -p /reload /state; if [ ! -s /shared/config.json ]; then cp /seed/config.json /shared/config.json; fi; chmod 600 /shared/config.json; chown -R 1000:1000 /shared /reload /state',
-      ]
+    environment:
+      SING_BOX_CLASH_API_LISTEN: 0.0.0.0:9090
+      SING_BOX_CLASH_API_SECRET: ${SING_BOX_CLASH_API_SECRET:?Set SING_BOX_CLASH_API_SECRET in .env}
+      SING_BOX_V2RAY_API_LISTEN: 0.0.0.0:8080
+    entrypoint: ['/bin/sh', '/seed/bootstrap-config.sh']
     volumes:
+      - ./sing-box/bootstrap-config.sh:/seed/bootstrap-config.sh:ro
       - ./sing-box/config.json:/seed/config.json:ro
       - singbox_config:/shared
       - singbox_reload:/reload

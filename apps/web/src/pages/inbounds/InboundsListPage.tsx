@@ -27,17 +27,18 @@ import {
   rotateAssignmentCredential,
   updateInbound,
 } from '@/api/inbounds';
+import { getSettings } from '@/api/settings';
 import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 
-function defaultSettings(protocol: InboundProtocol) {
+function defaultSettings(protocol: InboundProtocol, publicHost: string) {
   const common = {
     listenHost: '0.0.0.0',
     listenPort: 443,
-    publicHost: 'vpn.example.com',
+    publicHost,
     enabled: true,
   };
   switch (protocol) {
@@ -50,9 +51,9 @@ function defaultSettings(protocol: InboundProtocol) {
         obfs: null,
         tls: {
           mode: 'ACME',
-          sni: 'vpn.example.com',
+          sni: publicHost,
           alpn: ['h3'],
-          domains: ['vpn.example.com'],
+          domains: [publicHost],
           dataDirectory: '/var/lib/sing-box-state/acme',
           provider: 'letsencrypt',
           disableHttpChallenge: false,
@@ -94,9 +95,9 @@ function defaultSettings(protocol: InboundProtocol) {
         ...common,
         tls: {
           mode: 'ACME',
-          sni: 'vpn.example.com',
+          sni: publicHost,
           alpn: ['h3'],
-          domains: ['vpn.example.com'],
+          domains: [publicHost],
           dataDirectory: '/var/lib/sing-box-state/acme',
           provider: 'letsencrypt',
           disableHttpChallenge: false,
@@ -132,6 +133,12 @@ function InboundEditor({
   const onError = useApiErrorHandler();
   const [form] = Form.useForm();
   const protocol = Form.useWatch('protocol', form) as InboundProtocol | undefined;
+  const settingsQuery = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+    enabled: open && !inbound,
+  });
+  const publicHost = settingsQuery.data?.readOnly.vpnPublicHost?.trim() || 'vpn.example.com';
 
   const saveMutation = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
@@ -170,11 +177,12 @@ function InboundEditor({
       <Form
         form={form}
         layout="vertical"
+        key={inbound?.id ?? `new-${publicHost}-${settingsQuery.isFetched ? 'ready' : 'loading'}`}
         initialValues={{
           tag: inbound?.tag ?? '',
           protocol: initialProtocol,
           settingsJson: JSON.stringify(
-            inbound?.settings ?? defaultSettings(initialProtocol),
+            inbound?.settings ?? defaultSettings(initialProtocol, publicHost),
             null,
             2,
           ),
@@ -193,7 +201,10 @@ function InboundEditor({
             }))}
             onChange={(value: InboundProtocol) => {
               if (!inbound) {
-                form.setFieldValue('settingsJson', JSON.stringify(defaultSettings(value), null, 2));
+                form.setFieldValue(
+                  'settingsJson',
+                  JSON.stringify(defaultSettings(value, publicHost), null, 2),
+                );
               }
             }}
           />

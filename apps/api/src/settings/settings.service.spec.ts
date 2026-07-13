@@ -128,6 +128,7 @@ describe('SettingsService', () => {
 function testConfig(): ConfigService<AppEnvironment, true> {
   const values: Record<string, unknown> = {
     SUB_PUBLIC_BASE_URL: 'https://vpn.example.com',
+    VPN_PUBLIC_HOST: 'vpn.example.com',
     SUB_PROFILE_UPDATE_INTERVAL_HOURS: 6,
     TELEGRAM_ENABLED: false,
     TELEGRAM_BOT_TOKEN: undefined,

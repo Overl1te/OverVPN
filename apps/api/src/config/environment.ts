@@ -153,6 +153,22 @@ export const environmentSchema = z
       .max(3_600_000)
       .default(60_000),
     SUB_PUBLIC_BASE_URL: publicBaseUrlSchema,
+    VPN_PUBLIC_HOST: z.preprocess(
+      (value) => (value === '' || value === undefined ? undefined : value),
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(255)
+        .refine(
+          (value) =>
+            !/[\s/?#@]/.test(value) &&
+            !value.includes('://') &&
+            !value.includes('\0'),
+          'VPN_PUBLIC_HOST must be a hostname or IP without scheme or port',
+        )
+        .optional(),
+    ),
     SUB_PROFILE_UPDATE_INTERVAL_HOURS: z.coerce
       .number()
       .int()

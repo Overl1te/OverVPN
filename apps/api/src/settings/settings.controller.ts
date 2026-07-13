@@ -36,6 +36,8 @@ class SystemSettingsReadOnlyDto {
   swaggerEnabled!: boolean;
   @ApiProperty()
   subPublicBaseUrlEnv!: string;
+  @ApiPropertyOptional({ nullable: true })
+  vpnPublicHost!: string | null;
   @ApiProperty()
   telegramEnvConfigured!: boolean;
 }

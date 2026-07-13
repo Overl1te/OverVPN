@@ -242,6 +242,7 @@ export class SettingsService {
         nodeEnv: this.config.get('NODE_ENV', { infer: true }),
         swaggerEnabled: this.config.get('SWAGGER_ENABLED', { infer: true }),
         subPublicBaseUrlEnv: envSub,
+        vpnPublicHost: this.config.get('VPN_PUBLIC_HOST', { infer: true }) ?? null,
         telegramEnvConfigured: Boolean(envToken) && Boolean(envChat),
       },
     };
