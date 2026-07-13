@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Hysteria2InboundSettings, TrojanInboundSettings } from './schemas.ts';
-import {
-  applyVpnPublicHostFallback,
-  buildDefaultInboundSettings,
-} from './inbound-defaults.ts';
+import { applyVpnPublicHostFallback, buildDefaultInboundSettings } from './inbound-defaults.ts';
 
 describe('buildDefaultInboundSettings', () => {
   it('uses configured public host instead of example.com', () => {

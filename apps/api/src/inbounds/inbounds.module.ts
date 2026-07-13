@@ -11,6 +11,10 @@ import { InboundsService } from './inbounds.service';
 @Module({
   imports: [AuthModule, CoreModule],
   controllers: [InboundsController],
-  providers: [InboundsService, InboundCreateValidationPipe, InboundUpdateValidationPipe],
+  providers: [
+    InboundsService,
+    InboundCreateValidationPipe,
+    InboundUpdateValidationPipe,
+  ],
 })
 export class InboundsModule {}

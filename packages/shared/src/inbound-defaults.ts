@@ -20,15 +20,9 @@ export type InboundListenOverrides = {
   enabled?: boolean;
 };
 
-type AcmeTlsDefaults = Extract<
-  Hysteria2InboundSettings['tls'],
-  { mode: 'ACME' }
->;
+type AcmeTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'ACME' }>;
 
-function buildAcmeTls(
-  publicHost: string,
-  context: InboundDefaultsContext,
-): AcmeTlsDefaults {
+function buildAcmeTls(publicHost: string, context: InboundDefaultsContext): AcmeTlsDefaults {
   const tls: AcmeTlsDefaults = {
     mode: 'ACME',
     sni: publicHost,
@@ -56,10 +50,7 @@ function buildAcmeTls(
   return tls;
 }
 
-function listenFields(
-  context: InboundDefaultsContext,
-  overrides?: InboundListenOverrides,
-) {
+function listenFields(context: InboundDefaultsContext, overrides?: InboundListenOverrides) {
   return {
     listenHost: overrides?.listenHost ?? '0.0.0.0',
     listenPort: overrides?.listenPort ?? 443,
@@ -131,10 +122,7 @@ export function buildDefaultInboundSettings(
   }
 }
 
-function syncTlsPublicHost(
-  settings: Record<string, unknown>,
-  host: string,
-): void {
+function syncTlsPublicHost(settings: Record<string, unknown>, host: string): void {
   const tls = settings.tls;
   if (typeof tls !== 'object' || tls === null) {
     return;
@@ -162,9 +150,7 @@ export function applyVpnPublicHostFallback(
   }
   const settingsRecord = { ...(settings as Record<string, unknown>) };
   const currentHost =
-    typeof settingsRecord.publicHost === 'string'
-      ? settingsRecord.publicHost.trim()
-      : '';
+    typeof settingsRecord.publicHost === 'string' ? settingsRecord.publicHost.trim() : '';
   if (currentHost) {
     return body;
   }

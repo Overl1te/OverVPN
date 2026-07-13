@@ -25,12 +25,7 @@ import { createInbound, updateInbound } from '@/api/inbounds';
 import { getSettings } from '@/api/settings';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 
-const PROTOCOLS: InboundProtocol[] = [
-  'HYSTERIA2',
-  'VLESS_REALITY',
-  'TROJAN',
-  'SHADOWSOCKS',
-];
+const PROTOCOLS: InboundProtocol[] = ['HYSTERIA2', 'VLESS_REALITY', 'TROJAN', 'SHADOWSOCKS'];
 
 const VLESS_FLOWS = ['', 'xtls-rprx-vision'] as const;
 const REALITY_FINGERPRINTS = [
@@ -103,7 +98,11 @@ function Hysteria2Fields() {
       </Form.Item>
       {tlsMode === 'ACME' ? (
         <>
-          <Form.Item name={['settings', 'tls', 'sni']} label={t('inbounds.tlsSni')} rules={[{ required: true }]}>
+          <Form.Item
+            name={['settings', 'tls', 'sni']}
+            label={t('inbounds.tlsSni')}
+            rules={[{ required: true }]}
+          >
             <Input />
           </Form.Item>
           <Form.Item
@@ -186,7 +185,11 @@ function TrojanFields() {
       </Form.Item>
       {tlsMode === 'ACME' ? (
         <>
-          <Form.Item name={['settings', 'tls', 'sni']} label={t('inbounds.tlsSni')} rules={[{ required: true }]}>
+          <Form.Item
+            name={['settings', 'tls', 'sni']}
+            label={t('inbounds.tlsSni')}
+            rules={[{ required: true }]}
+          >
             <Input />
           </Form.Item>
           <Form.Item
@@ -294,9 +297,7 @@ function VlessRealityFields() {
           />
         </Form.Item>
         <Form.Item name={['settings', 'fingerprint']} label={t('inbounds.realityFingerprint')}>
-          <Select
-            options={REALITY_FINGERPRINTS.map((value) => ({ value, label: value }))}
-          />
+          <Select options={REALITY_FINGERPRINTS.map((value) => ({ value, label: value }))} />
         </Form.Item>
       </Space>
     </>
@@ -408,8 +409,7 @@ export function InboundEditor({
       return;
     }
     const initialSettings =
-      inbound?.settings ??
-      buildDefaultInboundSettings(initialProtocol, defaultsContext);
+      inbound?.settings ?? buildDefaultInboundSettings(initialProtocol, defaultsContext);
     form.setFieldsValue({
       tag: inbound?.tag ?? '',
       protocol: initialProtocol,
@@ -486,11 +486,7 @@ export function InboundEditor({
         </div>
       ) : null}
       {formReady ? (
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={(values) => saveMutation.mutate(values)}
-        >
+        <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="tag" label={t('inbounds.tag')} rules={[{ required: true }]}>
             <Input disabled={!!inbound} />
           </Form.Item>
@@ -530,10 +526,18 @@ export function InboundEditor({
               label={t('inbounds.publicHost')}
               rules={[{ required: true, message: t('inbounds.publicHostRequired') }]}
             >
-              <Input style={{ width: 280 }} onChange={(event) => handlePublicHostChange(event.target.value)} />
+              <Input
+                style={{ width: 280 }}
+                onChange={(event) => handlePublicHostChange(event.target.value)}
+              />
             </Form.Item>
             <Form.Item name={['settings', 'publicPort']} label={t('inbounds.publicPort')}>
-              <InputNumber min={1} max={65535} style={{ width: 140 }} placeholder={t('inbounds.sameAsListen')} />
+              <InputNumber
+                min={1}
+                max={65535}
+                style={{ width: 140 }}
+                placeholder={t('inbounds.sameAsListen')}
+              />
             </Form.Item>
           </Space>
           {!defaultsContext?.publicHost && !inbound ? (
@@ -578,11 +582,7 @@ export function InboundEditor({
                       onBlur={applyAdvancedJson}
                       style={{ fontFamily: 'monospace', fontSize: 12 }}
                     />
-                    <Button
-                      size="small"
-                      style={{ marginTop: 8 }}
-                      onClick={applyAdvancedJson}
-                    >
+                    <Button size="small" style={{ marginTop: 8 }} onClick={applyAdvancedJson}>
                       {t('inbounds.applyAdvanced')}
                     </Button>
                   </>
