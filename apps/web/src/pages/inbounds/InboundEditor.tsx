@@ -101,10 +101,77 @@ function isProbablyEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function sanitizeInboundForm(values: InboundEditorForm): InboundEditorForm {
-  const settings = structuredClone(values.settings);
+function sanitizeInboundForm(
+  values: InboundEditorForm,
+  defaultsContext: InboundDefaultsContext,
+): InboundEditorForm {
+  let settings = structuredClone(values.settings);
+  const host = settings.publicHost?.trim() ?? '';
 
-  if ('tls' in settings && settings.tls.mode === 'ACME') {
+  // Ant Design onFinish only returns registered fields; simple mode hides most TLS
+  // keys, so rebuild ACME defaults and overlay whatever the form still has.
+  if (
+    (values.protocol === 'HYSTERIA2' || values.protocol === 'TROJAN') &&
+    'tls' in settings &&
+    (!settings.tls || settings.tls.mode === 'ACME' || settings.tls.mode === undefined)
+  ) {
+    const preset = buildDefaultInboundSettings(
+      values.protocol,
+      {
+        publicHost: host || defaultsContext.publicHost,
+        acmeHttpPort: defaultsContext.acmeHttpPort,
+        acmeTlsPort: defaultsContext.acmeTlsPort,
+      },
+      listenOverrides(settings),
+    );
+    if ('tls' in preset && preset.tls.mode === 'ACME') {
+      const formTls =
+        settings.tls && typeof settings.tls === 'object' ? settings.tls : { mode: 'ACME' as const };
+      const formDomains =
+        'domains' in formTls && Array.isArray(formTls.domains) ? formTls.domains : undefined;
+      const formSni = 'sni' in formTls && typeof formTls.sni === 'string' ? formTls.sni : undefined;
+      const formEmail =
+        'email' in formTls && typeof formTls.email === 'string' ? formTls.email.trim() : undefined;
+      const formProvider =
+        'provider' in formTls && typeof formTls.provider === 'string'
+          ? formTls.provider.trim()
+          : undefined;
+
+      settings = {
+        ...preset,
+        ...settings,
+        tls: {
+          ...preset.tls,
+          ...formTls,
+          mode: 'ACME',
+          sni: formSni || host || preset.tls.sni,
+          domains: formDomains?.length ? formDomains : host ? [host] : preset.tls.domains,
+          provider: formProvider || 'letsencrypt',
+          dataDirectory:
+            ('dataDirectory' in formTls && typeof formTls.dataDirectory === 'string'
+              ? formTls.dataDirectory
+              : undefined) || preset.tls.dataDirectory,
+        },
+      };
+
+      const acmeTls = settings.tls;
+      if (acmeTls.mode !== 'ACME') {
+        return { ...values, settings };
+      }
+
+      const email = formEmail;
+      if (email && isProbablyEmail(email)) {
+        acmeTls.email = email;
+      } else {
+        const fallback = defaultAcmeEmail(settings.publicHost);
+        if (fallback) {
+          acmeTls.email = fallback;
+        } else {
+          delete acmeTls.email;
+        }
+      }
+    }
+  } else if ('tls' in settings && settings.tls.mode === 'ACME') {
     const email = settings.tls.email?.trim();
     settings.tls.provider = settings.tls.provider?.trim() || 'letsencrypt';
     if (email && isProbablyEmail(email)) {
@@ -159,6 +226,9 @@ function AcmeTlsFields({ detailed }: { detailed: boolean }) {
       <Form.Item name={['settings', 'tls', 'provider']} hidden>
         <Input />
       </Form.Item>
+      <Form.Item name={['settings', 'tls', 'dataDirectory']} hidden>
+        <Input />
+      </Form.Item>
       {detailed ? (
         <>
           <Form.Item
@@ -184,7 +254,19 @@ function AcmeTlsFields({ detailed }: { detailed: boolean }) {
             <Input type="email" autoComplete="off" name="acme-contact-email" />
           </Form.Item>
         </>
-      ) : null}
+      ) : (
+        <>
+          <Form.Item name={['settings', 'tls', 'sni']} hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name={['settings', 'tls', 'domains']} hidden>
+            <Select mode="tags" />
+          </Form.Item>
+          <Form.Item name={['settings', 'tls', 'email']} hidden>
+            <Input />
+          </Form.Item>
+        </>
+      )}
     </>
   );
 }
@@ -493,7 +575,10 @@ export function InboundEditor({
 
   const saveMutation = useMutation({
     mutationFn: async (values: InboundEditorForm) => {
-      const sanitized = sanitizeInboundForm(values);
+      if (!defaultsContext) {
+        throw new Error('Inbound defaults are not ready');
+      }
+      const sanitized = sanitizeInboundForm(values, defaultsContext);
       const body = {
         tag: sanitized.tag,
         protocol: sanitized.protocol,
@@ -609,7 +694,11 @@ export function InboundEditor({
           form={form}
           layout="vertical"
           autoComplete="off"
-          onFinish={(values) => saveMutation.mutate(values)}
+          onFinish={() => {
+            // Include values set via setFieldsValue but not bound to visible Form.Items.
+            const values = form.getFieldsValue(true) as InboundEditorForm;
+            saveMutation.mutate(values);
+          }}
         >
           <Form.Item style={{ marginBottom: 16 }}>
             <Segmented<EditorMode>
