@@ -1,0 +1,52 @@
+name: Фича
+description: Идея или улучшение
+title: "[feat] "
+labels: ["type: feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опиши проблему и желаемый результат. Протоколы / UX / ops — всё ок.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Зона
+      options:
+        - panel
+        - api
+        - core (sing-box / Xray)
+        - install / Docker
+        - docs
+        - i18n
+        - другое
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Задача
+      description: Какую задачу решаем?
+      placeholder: Неудобно массово выдавать планы нескольким пользователям
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предложение
+      description: Как должно выглядеть решение
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Что уже пробовали или чем можно обойтись
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Ограничения
+      options:
+        - label: Это укладывается в однонодовую модель (без мульти-ноды)
+          required: true

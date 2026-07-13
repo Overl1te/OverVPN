@@ -162,6 +162,30 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      - name: Prefetch Xray release zip
+        env:
+          XRAY_VERSION: v26.6.27
+        run: |
+          set -euo pipefail
+          mkdir -p .docker-cache/xray
+          # Runner arch matches the image we publish today (linux/amd64).
+          dest=".docker-cache/xray/Xray-linux-64.zip"
+          if [[ -s "$dest" ]]; then
+            echo "Using cached ${dest} ($(du -h "$dest" | cut -f1))"
+            exit 0
+          fi
+          echo "Downloading Xray ${XRAY_VERSION} to ${dest}"
+          curl -fsSL \
+            --retry 8 \
+            --retry-all-errors \
+            --retry-delay 5 \
+            --connect-timeout 30 \
+            --max-time 600 \
+            -o "${dest}.partial" \
+            "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip"
+          mv -f "${dest}.partial" "$dest"
+          ls -lh "$dest"
+
       - name: Build and push API (+ sing-box)
         uses: docker/build-push-action@v6
         with:

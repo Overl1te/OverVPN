@@ -23,6 +23,9 @@ FROM alpine:3.22 AS xray-build
 ARG TARGETARCH
 ARG XRAY_VERSION=v26.6.27
 
+# CI prefetches the zip onto the runner host (buildkit container often times out on GitHub).
+# Local/dev builds without the cache file fall back to curl with retries.
+COPY .docker-cache/xray/ /prefetch/xray/
 RUN apk add --no-cache ca-certificates curl unzip \
     && mkdir -p /out \
     && case "${TARGETARCH:-amd64}" in \
@@ -31,9 +34,21 @@ RUN apk add --no-cache ca-certificates curl unzip \
          arm) XRAY_ARCH=arm32-v7a ;; \
          *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
        esac \
-    && curl -fsSL \
-         "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${XRAY_ARCH}.zip" \
-         -o /tmp/xray.zip \
+    && PREFETCH="/prefetch/xray/Xray-linux-${XRAY_ARCH}.zip" \
+    && if [ -f "$PREFETCH" ] && [ -s "$PREFETCH" ]; then \
+         echo "Using prefetched Xray zip: ${PREFETCH}"; \
+         cp "$PREFETCH" /tmp/xray.zip; \
+       else \
+         echo "Prefetch miss — downloading Xray ${XRAY_VERSION} (${XRAY_ARCH})"; \
+         curl -fsSL \
+           --retry 8 \
+           --retry-all-errors \
+           --retry-delay 5 \
+           --connect-timeout 30 \
+           --max-time 600 \
+           "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${XRAY_ARCH}.zip" \
+           -o /tmp/xray.zip; \
+       fi \
     && unzip -q /tmp/xray.zip -d /tmp/xray \
     && install -m 755 /tmp/xray/xray /out/xray \
     && install -m 644 /tmp/xray/geoip.dat /out/geoip.dat \

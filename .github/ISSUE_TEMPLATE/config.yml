@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Документация
+    url: https://overl1te.github.io/OverVPN/
+    about: Установка, управление панелью, подписки
+  - name: Discussions — вопросы
+    url: https://github.com/Overl1te/OverVPN/discussions/categories/q-a
+    about: Вопросы по использованию (не баги)
+  - name: Security
+    url: https://github.com/Overl1te/OverVPN/security/advisories/new
+    about: Сообщить об уязвимости приватно

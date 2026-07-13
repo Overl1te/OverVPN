@@ -34,3 +34,7 @@ Thumbs.db
 # Local database and backup artifacts (repo root only; do not ignore apps/*/src/backups)
 /data/
 /backups/
+
+# Prefetched release zips for Docker builds (CI); keep directory via .gitkeep
+.docker-cache/**/*.zip
+.docker-cache/**/*.partial

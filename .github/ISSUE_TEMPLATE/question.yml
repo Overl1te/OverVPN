@@ -1,0 +1,23 @@
+name: Вопрос
+description: Вопрос по использованию (лучше Discussions Q&A)
+title: "[question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Для общих вопросов предпочтительнее [Discussions → Q&A](https://github.com/Overl1te/OverVPN/discussions/categories/q-a).
+        Issue оставляй, если вопрос близок к багу или блокирует установку.
+  - type: textarea
+    id: question
+    attributes:
+      label: Вопрос
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Контекст
+      description: Что уже смотрели в доке / логах
+    validations:
+      required: false

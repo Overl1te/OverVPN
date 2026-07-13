@@ -12,9 +12,13 @@
 
 <br />
 
+[![CI](https://github.com/Overl1te/OverVPN/actions/workflows/ci.yml/badge.svg)](https://github.com/Overl1te/OverVPN/actions/workflows/ci.yml)
+[![Docs](https://github.com/Overl1te/OverVPN/actions/workflows/docs.yml/badge.svg)](https://github.com/Overl1te/OverVPN/actions/workflows/docs.yml)
+[![Stars](https://img.shields.io/github/stars/Overl1te/OverVPN?style=flat-square)](https://github.com/Overl1te/OverVPN/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/Overl1te/OverVPN?style=flat-square)](https://github.com/Overl1te/OverVPN/commits/master)
 ![Node.js](https://img.shields.io/badge/Node.js-24_LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
+[![License](https://img.shields.io/github/license/Overl1te/OverVPN?style=flat-square)](LICENSE)
 
 </div>
 

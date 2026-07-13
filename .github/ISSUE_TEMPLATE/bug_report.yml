@@ -1,0 +1,80 @@
+name: Баг
+description: Что-то работает не так
+title: "[bug] "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт. Для установки и вопросов — [документация](https://overl1te.github.io/OverVPN/) и [Discussions](https://github.com/Overl1te/OverVPN/discussions).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Зона
+      options:
+        - panel
+        - api
+        - core (sing-box / Xray)
+        - install / Docker
+        - docs
+        - i18n
+        - другое
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Кратко
+      description: Что сломалось одной-двумя фразами
+      placeholder: После apply конфига Hysteria2 клиенты не подключаются
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидание
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Факт
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия / коммит
+      description: Тег релиза, образ GHCR или `git rev-parse --short HEAD`
+      placeholder: master @ abc1234
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Окружение
+      description: ОС, как ставили (GHCR / `--build`), домены, ядро (sing-box / Xray)
+      placeholder: |
+        OS: Ubuntu 24.04
+        Install: GHCR
+        Engines: SING_BOX + XRAY
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи
+      description: Релевантные фрагменты `docker compose logs` / панели (без секретов и токенов)
+      render: shell
+    validations:
+      required: false
