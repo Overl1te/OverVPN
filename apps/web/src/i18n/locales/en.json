@@ -127,6 +127,11 @@
     "confirmRotateOne": "Rotate this subscription URL?",
     "confirmResetOne": "Reset traffic for this user?",
     "limits": "Limits",
+    "profile": "User",
+    "advanced": "Advanced",
+    "inbounds": "Inbounds",
+    "planHint": "Expiry and limits come from the plan unless you override them below.",
+    "inboundsHint": "Select at least one inbound — the subscription will not work without it.",
     "usageChart": "Daily usage (UTC)",
     "noAssignments": "No inbound assignments found for this user",
     "needsApply": "Needs apply"

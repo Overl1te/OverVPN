@@ -2,6 +2,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   DatePicker,
   Form,
   Input,
@@ -20,6 +21,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { Line } from '@ant-design/charts';
+import type { UserResult } from '@overvpn/shared/schemas';
 import {
   createUser,
   getUser,
@@ -30,7 +32,7 @@ import {
   updateUser,
 } from '@/api/users';
 import { listPlans } from '@/api/plans';
-import { listInbounds, listAssignments } from '@/api/inbounds';
+import { addAssignment, listAssignments, listInbounds, removeAssignment } from '@/api/inbounds';
 import { PageHeader } from '@/components/PageHeader';
 import { UserStatusTag } from '@/components/StatusTag';
 import { CopyButton } from '@/components/CopyButton';
@@ -39,6 +41,21 @@ import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 import { buildSubscriptionUrl, formatBytes } from '@/utils/format';
+
+function userHasAdvancedValues(user: UserResult): boolean {
+  return (
+    user.identity !== user.username ||
+    user.status !== 'ACTIVE' ||
+    user.expireAt !== null ||
+    user.dataLimitBytes !== null ||
+    user.resetStrategy !== 'NO_RESET' ||
+    user.deviceLimit !== null ||
+    user.ipLimit !== null ||
+    user.speedLimitBps !== null ||
+    user.tags.length > 0 ||
+    (user.note?.length ?? 0) > 0
+  );
+}
 
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +67,7 @@ export function UserDetailPage() {
   const { canMutate } = useAuth();
   const [form] = Form.useForm();
   const [qrOpen, setQrOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(29, 'day').startOf('day'),
     dayjs().startOf('day'),
@@ -90,7 +108,6 @@ export function UserDetailPage() {
   const inboundsQuery = useQuery({
     queryKey: ['inbounds', 'all'],
     queryFn: () => listInbounds({ page: 1, pageSize: 100 }),
-    enabled: !isNew && !!id,
   });
 
   const assignmentsQueries = useQuery({
@@ -119,8 +136,20 @@ export function UserDetailPage() {
     [plansQuery.data],
   );
 
+  const inboundOptions = useMemo(
+    () =>
+      (inboundsQuery.data?.items ?? []).map((inbound) => ({
+        value: inbound.id,
+        label: inbound.tag,
+      })),
+    [inboundsQuery.data],
+  );
+
+  const hasInbounds = inboundOptions.length > 0;
+
   const saveMutation = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
+      const inboundIds = (values.inboundIds as string[] | undefined) ?? [];
       const payload = {
         username: values.username as string,
         identity: values.identity as string | undefined,
@@ -135,14 +164,28 @@ export function UserDetailPage() {
         ipLimit: values.ipLimit as number | null,
         speedLimitBps: values.speedLimitBps ? String(values.speedLimitBps) : null,
       };
-      if (isNew) {
-        return createUser(payload as never);
-      }
-      return updateUser(id!, payload as never);
+
+      const user = isNew
+        ? await createUser(payload as never)
+        : await updateUser(id!, payload as never);
+
+      const currentAssignments = assignmentsQueries.data ?? [];
+      const currentInboundIds = currentAssignments.map((item) => item.inboundId);
+      const toAdd = inboundIds.filter((inboundId) => !currentInboundIds.includes(inboundId));
+      const toRemove = currentAssignments.filter((item) => !inboundIds.includes(item.inboundId));
+
+      await Promise.all([
+        ...toAdd.map((inboundId) => addAssignment(inboundId, { userId: user.id })),
+        ...toRemove.map((item) => removeAssignment(item.inboundId, item.id)),
+      ]);
+
+      return user;
     },
     onSuccess: (user) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
       void queryClient.invalidateQueries({ queryKey: ['user', user.id] });
+      void queryClient.invalidateQueries({ queryKey: ['user-assignments', user.id] });
+      void queryClient.invalidateQueries({ queryKey: ['assignments'] });
       if (isNew) {
         navigate(`/users/${user.id}`, { replace: true });
       }
@@ -178,6 +221,7 @@ export function UserDetailPage() {
 
   useEffect(() => {
     if (user) {
+      setAdvancedOpen(userHasAdvancedValues(user));
       form.setFieldsValue({
         username: user.username,
         identity: user.identity,
@@ -194,6 +238,15 @@ export function UserDetailPage() {
       });
     }
   }, [user, form]);
+
+  useEffect(() => {
+    if (!isNew && assignmentsQueries.data) {
+      form.setFieldValue(
+        'inboundIds',
+        assignmentsQueries.data.map((item) => item.inboundId),
+      );
+    }
+  }, [assignmentsQueries.data, form, isNew]);
 
   if (!isNew && userQuery.isLoading) {
     return null;
@@ -218,60 +271,105 @@ export function UserDetailPage() {
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={10}>
-          <Card size="small" title={t('users.limits')}>
+          <Card size="small" title={t('users.profile')}>
             <Form
               form={form}
               layout="vertical"
               disabled={!canMutate}
-              initialValues={{ resetStrategy: 'NO_RESET', tags: [] }}
+              initialValues={{ resetStrategy: 'NO_RESET', tags: [], inboundIds: [] }}
               onFinish={(values) => saveMutation.mutate(values)}
             >
               <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="identity" label={t('users.identity')}>
-                <Input />
-              </Form.Item>
-              <Form.Item name="status" label={t('app.status')}>
-                <Select
-                  options={['ACTIVE', 'DISABLED', 'EXPIRED', 'LIMITED'].map((value) => ({
-                    value,
-                    label: t(`enums.userStatus.${value}`),
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item name="planId" label={t('users.plan')}>
+
+              <Form.Item
+                name="planId"
+                label={t('users.plan')}
+                extra={<Typography.Text type="secondary">{t('users.planHint')}</Typography.Text>}
+              >
                 <Select allowClear options={planOptions} />
               </Form.Item>
-              <Form.Item name="expireAt" label={t('users.expireAt')}>
-                <DatePicker showTime style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item name="dataLimitBytes" label={t('users.limit')}>
-                <Input placeholder={t('app.unlimited')} />
-              </Form.Item>
-              <Form.Item name="resetStrategy" label={t('users.resetStrategy')}>
+
+              <Form.Item
+                name="inboundIds"
+                label={t('users.inbounds')}
+                extra={
+                  hasInbounds ? (
+                    <Typography.Text type="secondary">{t('users.inboundsHint')}</Typography.Text>
+                  ) : null
+                }
+                rules={
+                  hasInbounds
+                    ? [{ required: true, type: 'array', min: 1, message: t('users.inboundsHint') }]
+                    : []
+                }
+              >
                 <Select
-                  options={['NO_RESET', 'DAILY', 'MONTHLY', 'YEARLY'].map((value) => ({
-                    value,
-                    label: t(`enums.resetStrategy.${value}`),
-                  }))}
+                  mode="multiple"
+                  allowClear
+                  options={inboundOptions}
+                  loading={inboundsQuery.isLoading}
+                  placeholder={hasInbounds ? undefined : t('users.noAssignments')}
                 />
               </Form.Item>
-              <Form.Item name="deviceLimit" label={t('users.deviceLimit')}>
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item name="ipLimit" label={t('users.ipLimit')}>
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item name="speedLimitBps" label={t('users.speedLimit')}>
-                <Input />
-              </Form.Item>
-              <Form.Item name="tags" label={t('users.tags')}>
-                <Select mode="tags" tokenSeparators={[',']} />
-              </Form.Item>
-              <Form.Item name="note" label={t('users.note')}>
-                <Input.TextArea rows={3} />
-              </Form.Item>
+
+              <Collapse
+                style={{ marginBottom: 16 }}
+                activeKey={advancedOpen ? ['advanced'] : []}
+                onChange={(keys) => setAdvancedOpen(keys.includes('advanced'))}
+                items={[
+                  {
+                    key: 'advanced',
+                    label: t('users.advanced'),
+                    children: (
+                      <>
+                        <Form.Item name="identity" label={t('users.identity')}>
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="status" label={t('app.status')}>
+                          <Select
+                            options={['ACTIVE', 'DISABLED', 'EXPIRED', 'LIMITED'].map((value) => ({
+                              value,
+                              label: t(`enums.userStatus.${value}`),
+                            }))}
+                          />
+                        </Form.Item>
+                        <Form.Item name="expireAt" label={t('users.expireAt')}>
+                          <DatePicker showTime style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item name="dataLimitBytes" label={t('users.limit')}>
+                          <Input placeholder={t('app.unlimited')} />
+                        </Form.Item>
+                        <Form.Item name="resetStrategy" label={t('users.resetStrategy')}>
+                          <Select
+                            options={['NO_RESET', 'DAILY', 'MONTHLY', 'YEARLY'].map((value) => ({
+                              value,
+                              label: t(`enums.resetStrategy.${value}`),
+                            }))}
+                          />
+                        </Form.Item>
+                        <Form.Item name="deviceLimit" label={t('users.deviceLimit')}>
+                          <InputNumber min={1} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item name="ipLimit" label={t('users.ipLimit')}>
+                          <InputNumber min={1} style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item name="speedLimitBps" label={t('users.speedLimit')}>
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="tags" label={t('users.tags')}>
+                          <Select mode="tags" tokenSeparators={[',']} />
+                        </Form.Item>
+                        <Form.Item name="note" label={t('users.note')}>
+                          <Input.TextArea rows={3} />
+                        </Form.Item>
+                      </>
+                    ),
+                  },
+                ]}
+              />
+
               <MutateOnly>
                 <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
                   {t('app.save')}
