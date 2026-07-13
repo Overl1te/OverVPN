@@ -13,6 +13,7 @@ import type {
 } from '../common/authorization';
 import { CoreChangeDispatcher } from '../core/core-change-dispatcher';
 import type { Plan, Prisma } from '../generated/prisma/client';
+import { PlanAssignmentSyncService } from '../inbounds/plan-assignment-sync.service';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 
 type PlanWithRelations = Plan & {
@@ -26,6 +27,7 @@ export class PlansService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly coreChanges: CoreChangeDispatcher,
+    private readonly planAssignments: PlanAssignmentSyncService,
   ) {}
 
   async list(query: PlanListQuery): Promise<{
@@ -198,6 +200,11 @@ export class PlansService {
               })),
             });
           }
+          await this.planAssignments.syncAllUsersOnPlan(
+            tx,
+            id,
+            input.inboundIds,
+          );
         }
         await this.coreChanges.recordPending(
           {

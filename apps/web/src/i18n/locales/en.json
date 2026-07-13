@@ -108,7 +108,7 @@
     "tag": "Tag",
     "expireAt": "Expires",
     "usage": "Usage",
-    "limit": "Data limit",
+    "limit": "Traffic limit",
     "statusReason": "Status reason",
     "note": "Note",
     "deviceLimit": "Device limit",
@@ -141,14 +141,18 @@
     "confirmRotateOne": "Rotate this subscription URL?",
     "confirmResetOne": "Reset traffic for this user?",
     "limits": "Limits",
+    "limitsFromPlan": "Limits and inbounds come from the selected plan.",
     "profile": "User",
     "advanced": "Advanced",
     "inbounds": "Inbounds",
-    "planHint": "Expiry and limits come from the plan unless you override them below.",
+    "planHint": "Expiry, limits, and inbounds are applied from the plan automatically.",
+    "planRequired": "Select a plan",
     "inboundsHint": "Select at least one inbound — the subscription will not work without it.",
     "usageChart": "Daily usage (UTC)",
     "noAssignments": "No inbound assignments found for this user",
-    "needsApply": "Needs apply"
+    "needsApply": "Needs apply",
+    "copySub": "Copy subscription",
+    "openDetail": "Open"
   },
   "statusReason": {
     "manual": "Manually disabled",
@@ -308,7 +312,9 @@
     "secretPresent": "Secret present — leave blank to keep, or enter a new value to rotate",
     "modeSimple": "Simple",
     "modeDetailed": "Detailed",
-    "modeSimpleHint": "Quick setup: domain, port, and protocol. Everything else uses defaults.",
+    "modeSimpleHint": "Quick setup: tag, host, and protocol. Port comes from the install.",
+    "installPort": "Port (from install)",
+    "installPortValue": "{{port}} ({{transport}})",
     "xrayTlsPathsMissing": "Xray needs TLS certificate files. Run `overvpn config certs` (or finish install with Nginx), recreate the API container so VPN_TLS_* is loaded, then open Detailed and set certificate paths — or paste PEM.",
     "advanced": "JSON",
     "applyAdvanced": "Apply JSON",
@@ -372,7 +378,9 @@
     "inboundIds": "Inbounds",
     "userCount": "Users",
     "confirmArchive": "Archive this plan?",
-    "confirmDelete": "Permanently delete this plan?"
+    "confirmDelete": "Permanently delete this plan?",
+    "trafficLimit": "Traffic limit",
+    "trafficLimitHint": "In gigabytes (GiB). Leave empty for unlimited."
   },
   "online": {
     "title": "Online sessions",

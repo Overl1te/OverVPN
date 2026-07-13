@@ -2,6 +2,8 @@ import {
   buildDefaultInboundSettings,
   defaultAcmeEmail,
   PROTOCOL_ENGINE_MAP,
+  publishedListenPortForProtocol,
+  publishedTransportForProtocol,
   type InboundDefaultsContext,
   type InboundListenOverrides,
 } from '@overvpn/shared';
@@ -834,11 +836,23 @@ export function InboundEditor({
       publicHost: settingsQuery.data.readOnly.vpnPublicHost?.trim() ?? '',
       acmeHttpPort: settingsQuery.data.readOnly.acmeHttpPort,
       acmeTlsPort: settingsQuery.data.readOnly.acmeTlsPort,
+      singBoxUdpPort: settingsQuery.data.readOnly.singBoxUdpPort,
+      singBoxTcpPort: settingsQuery.data.readOnly.singBoxTcpPort,
       xrayListenPort: settingsQuery.data.readOnly.xrayListenPort,
       tlsCertificatePath: settingsQuery.data.readOnly.tlsCertificatePath,
       tlsKeyPath: settingsQuery.data.readOnly.tlsKeyPath,
     };
   }, [inbound, settingsQuery.data, settingsQuery.isSuccess]);
+
+  const installPortInfo = useMemo(() => {
+    if (!defaultsContext || !protocol) {
+      return null;
+    }
+    return {
+      port: publishedListenPortForProtocol(protocol, defaultsContext),
+      transport: publishedTransportForProtocol(protocol),
+    };
+  }, [defaultsContext, protocol]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: InboundEditorForm) => {
@@ -875,7 +889,18 @@ export function InboundEditor({
           throw new Error('VLESS_XHTTP_TLS TLS certificate paths are not configured');
         }
       }
-      const sanitized = sanitizeInboundForm(values, defaultsContext);
+      let sanitized = sanitizeInboundForm(values, defaultsContext);
+      if (editorMode === 'simple' && !inbound) {
+        const port = publishedListenPortForProtocol(sanitized.protocol, defaultsContext);
+        sanitized = {
+          ...sanitized,
+          settings: {
+            ...sanitized.settings,
+            listenPort: port,
+            publicPort: port,
+          } as InboundEditorForm['settings'],
+        };
+      }
       const body = {
         tag: sanitized.tag,
         protocol: sanitized.protocol,
@@ -932,25 +957,23 @@ export function InboundEditor({
       return;
     }
     const current = form.getFieldsValue(true) as InboundEditorForm;
+    // Drop listen/public ports so each protocol picks its install published port.
+    const overrides = listenOverrides(current.settings);
+    delete overrides.listenPort;
+    delete overrides.publicPort;
     let nextSettings: InboundEditorForm['settings'];
     try {
-      nextSettings = buildDefaultInboundSettings(
-        value,
-        defaultsContext,
-        listenOverrides(current.settings),
-      );
+      nextSettings = buildDefaultInboundSettings(value, defaultsContext, overrides);
     } catch {
       if (value !== 'VLESS_XHTTP_TLS') {
         return;
       }
+      const port = publishedListenPortForProtocol(value, defaultsContext);
       nextSettings = {
         listenHost: current.settings?.listenHost ?? '0.0.0.0',
-        listenPort: current.settings?.listenPort ?? defaultsContext.xrayListenPort ?? 8443,
+        listenPort: port,
         publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
-        publicPort:
-          current.settings && 'publicPort' in current.settings
-            ? current.settings.publicPort
-            : undefined,
+        publicPort: port,
         enabled: current.settings?.enabled ?? true,
         path: '/',
         host: defaultsContext.publicHost || null,
@@ -1130,7 +1153,7 @@ export function InboundEditor({
               </Space>
             </>
           ) : (
-            <Space size="large" wrap>
+            <Space size="large" wrap align="start">
               <Form.Item
                 name={['settings', 'publicHost']}
                 label={t('inbounds.publicHost')}
@@ -1142,12 +1165,18 @@ export function InboundEditor({
                   onChange={(event) => handlePublicHostChange(event.target.value)}
                 />
               </Form.Item>
-              <Form.Item
-                name={['settings', 'listenPort']}
-                label={t('inbounds.listenPort')}
-                rules={[{ required: true }]}
-              >
-                <InputNumber min={1} max={65535} style={{ width: 140 }} />
+              <Form.Item label={t('inbounds.installPort')}>
+                <Typography.Text>
+                  {installPortInfo
+                    ? t('inbounds.installPortValue', {
+                        port: installPortInfo.port,
+                        transport: installPortInfo.transport.toUpperCase(),
+                      })
+                    : '—'}
+                </Typography.Text>
+              </Form.Item>
+              <Form.Item name={['settings', 'listenPort']} hidden>
+                <InputNumber />
               </Form.Item>
               <Form.Item name={['settings', 'listenHost']} hidden>
                 <Input />

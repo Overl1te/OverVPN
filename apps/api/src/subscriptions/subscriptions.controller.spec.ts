@@ -10,6 +10,7 @@ import {
   negotiateSubscriptionFormat,
   SubscriptionsController,
 } from './subscriptions.controller';
+import { prefersSubscriptionHtmlPage } from './subscription-status-page';
 import { SubscriptionsService } from './subscriptions.service';
 
 const TOKEN = Buffer.alloc(32, 5).toString('base64url');
@@ -142,6 +143,35 @@ describe('SubscriptionsController', () => {
     );
     expect(JSON.stringify(response.body)).not.toContain('password');
   });
+  it('returns an HTML status page for browser requests', async () => {
+    builder.render.mockClear();
+    service.info.mockClear();
+    const response = await request(app.getHttpServer())
+      .get(`/api/sub/${TOKEN}`)
+      .set('Accept', 'text/html,application/xhtml+xml')
+      .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0')
+      .expect(200);
+
+    expect(response.headers['content-type']).toMatch(/^text\/html/);
+    expect(response.text).toContain('OverVPN');
+    expect(response.text).toContain('alice');
+    expect(response.text).toContain('Active');
+    expect(response.text).toContain(info.formatUrls.links);
+    expect(service.info).toHaveBeenCalledWith(TOKEN);
+    expect(builder.render).not.toHaveBeenCalled();
+  });
+
+  it('still returns a profile when a browser asks for an explicit format', async () => {
+    builder.render.mockClear();
+    const response = await request(app.getHttpServer())
+      .get(`/api/sub/${TOKEN}?format=links`)
+      .set('Accept', 'text/html')
+      .set('User-Agent', 'Mozilla/5.0')
+      .expect(200);
+
+    expect(response.headers['content-type']).toMatch(/^text\/plain/);
+    expect(builder.render).toHaveBeenCalledWith('links', profile);
+  });
 });
 
 describe('subscription format negotiation', () => {
@@ -167,6 +197,21 @@ describe('subscription format negotiation', () => {
       expect(negotiateSubscriptionFormat(undefined, accept, userAgent)).toBe(
         expected,
       );
+    },
+  );
+});
+
+describe('subscription HTML preference', () => {
+  it.each([
+    [undefined, 'text/html', 'Mozilla/5.0', true],
+    [undefined, '*/*', 'Mozilla/5.0', true],
+    [undefined, '*/*', 'Mihomo/1.0', false],
+    ['links', 'text/html', 'Mozilla/5.0', false],
+    [undefined, undefined, undefined, false],
+  ] as const)(
+    'format=%s accept=%s ua=%s => %s',
+    (format, accept, ua, expected) => {
+      expect(prefersSubscriptionHtmlPage(format, accept, ua)).toBe(expected);
     },
   );
 });

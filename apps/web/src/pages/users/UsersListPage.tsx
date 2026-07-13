@@ -4,6 +4,7 @@ import {
   Form,
   Input,
   InputNumber,
+  message,
   Modal,
   Popconfirm,
   Select,
@@ -16,14 +17,21 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { UserStatus } from '@overvpn/shared/constants';
-import { bulkUserAction, listUsers } from '@/api/users';
+import type { UserResult } from '@overvpn/shared/schemas';
+import {
+  bulkUserAction,
+  listUsers,
+  resetUserTraffic,
+  rotateUserSub,
+} from '@/api/users';
 import { listPlans } from '@/api/plans';
+import { getSettings } from '@/api/settings';
 import { PageHeader } from '@/components/PageHeader';
 import { UserStatusTag } from '@/components/StatusTag';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
-import { formatBytes } from '@/utils/format';
+import { buildSubscriptionUrl, formatBytes } from '@/utils/format';
 import dayjs from 'dayjs';
 
 export function UsersListPage() {
@@ -63,6 +71,11 @@ export function UsersListPage() {
     queryFn: () => listPlans({ page: 1, pageSize: 100, status: 'ACTIVE' }),
   });
 
+  const settingsQuery = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+  });
+
   const planOptions = useMemo(
     () =>
       (plansQuery.data?.items ?? []).map((plan) => ({
@@ -72,14 +85,54 @@ export function UsersListPage() {
     [plansQuery.data],
   );
 
+  const subBaseUrl = settingsQuery.data?.subPublicBaseUrl;
+
+  const invalidateUsers = () => {
+    void queryClient.invalidateQueries({ queryKey: ['users'] });
+  };
+
   const bulkMutation = useMutation({
     mutationFn: bulkUserAction,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      invalidateUsers();
       setSelectedRowKeys([]);
     },
     onError: onError,
   });
+
+  const rowMutation = useMutation({
+    mutationFn: async ({
+      action,
+      userId,
+    }: {
+      action: 'disable' | 'enable' | 'rotate-sub' | 'reset-traffic';
+      userId: string;
+    }) => {
+      if (action === 'rotate-sub') {
+        return rotateUserSub(userId);
+      }
+      if (action === 'reset-traffic') {
+        return resetUserTraffic(userId);
+      }
+      return bulkUserAction({ action, userIds: [userId] } as never);
+    },
+    onSuccess: () => invalidateUsers(),
+    onError: onError,
+  });
+
+  const copySub = async (user: UserResult) => {
+    if (!subBaseUrl) {
+      message.warning(t('users.subscriptionLoading'));
+      return;
+    }
+    const url = buildSubscriptionUrl(user.subToken, subBaseUrl);
+    try {
+      await navigator.clipboard.writeText(url);
+      message.success(t('app.copied'));
+    } catch {
+      message.error(t('app.error'));
+    }
+  };
 
   const runBulk = (
     action: 'disable' | 'enable' | 'reset-traffic' | 'rotate-sub',
@@ -270,6 +323,67 @@ export function UsersListPage() {
                   {tag}
                 </Tag>
               )),
+          },
+          {
+            title: t('app.actions'),
+            render: (_, row: UserResult) => (
+              <Space wrap size={4}>
+                <Button
+                  size="small"
+                  onClick={() => void copySub(row)}
+                  disabled={!subBaseUrl}
+                >
+                  {t('users.copySub')}
+                </Button>
+                <Button size="small" onClick={() => navigate(`/users/${row.id}`)}>
+                  {t('users.openDetail')}
+                </Button>
+                <MutateOnly>
+                  {row.status === 'DISABLED' ? (
+                    <Button
+                      size="small"
+                      loading={rowMutation.isPending}
+                      onClick={() =>
+                        rowMutation.mutate({ action: 'enable', userId: row.id })
+                      }
+                    >
+                      {t('app.enable')}
+                    </Button>
+                  ) : (
+                    <Popconfirm
+                      title={t('users.confirmDisable')}
+                      onConfirm={() =>
+                        rowMutation.mutate({ action: 'disable', userId: row.id })
+                      }
+                    >
+                      <Button size="small" loading={rowMutation.isPending}>
+                        {t('app.disable')}
+                      </Button>
+                    </Popconfirm>
+                  )}
+                  <Popconfirm
+                    title={t('users.confirmRotateOne')}
+                    onConfirm={() =>
+                      rowMutation.mutate({ action: 'rotate-sub', userId: row.id })
+                    }
+                  >
+                    <Button size="small" loading={rowMutation.isPending}>
+                      {t('app.rotateSub')}
+                    </Button>
+                  </Popconfirm>
+                  <Popconfirm
+                    title={t('users.confirmResetOne')}
+                    onConfirm={() =>
+                      rowMutation.mutate({ action: 'reset-traffic', userId: row.id })
+                    }
+                  >
+                    <Button size="small" loading={rowMutation.isPending}>
+                      {t('app.resetTraffic')}
+                    </Button>
+                  </Popconfirm>
+                </MutateOnly>
+              </Space>
+            ),
           },
         ]}
       />

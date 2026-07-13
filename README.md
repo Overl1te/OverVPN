@@ -147,7 +147,9 @@ overvpn uninstall              # удалить установку
 | API             | внутри Compose; наружу через веб/прокси |
 | PostgreSQL      | `5432` → только `127.0.0.1`             |
 | Redis           | `6379` → только `127.0.0.1`             |
-| VPN UDP inbound | `443`                                   |
+| VPN UDP inbound | `SING_BOX_UDP_PORT` (по умолчанию `443`) |
+| VPN TCP inbound | `SING_BOX_TCP_PORT` (по умолчанию `4443`) |
+| VPN Xray TCP    | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx) |
 
 > [!WARNING]
 > Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
@@ -164,7 +166,7 @@ overvpn uninstall              # удалить установку
 
 При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_*` — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
-`SING_BOX_UDP_PORT` в `.env` должен совпадать с портом inbound’а, который вы отдаёте наружу.
+Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality / Trojan / Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
 ### 2. Создать пользователя
 

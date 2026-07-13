@@ -59,6 +59,11 @@ describe('plan validation', () => {
       prismaMock as unknown as PrismaService,
       audit as unknown as AuditService,
       core,
+      {
+        planInboundIds: jest.fn(),
+        syncUserToInboundIds: jest.fn(),
+        syncAllUsersOnPlan: jest.fn(),
+      } as never,
     );
 
     await expect(

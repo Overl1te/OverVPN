@@ -1473,6 +1473,7 @@ generate_env() {
   set_env_var "BOOTSTRAP_ADMIN_PASSWORD" "$admin_pass"
   set_env_var "SWAGGER_ENABLED" "false"
   set_env_var "SING_BOX_UDP_PORT" "443"
+  set_env_var "SING_BOX_TCP_PORT" "4443"
   set_env_var "XRAY_LISTEN_PORT" "8443"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"

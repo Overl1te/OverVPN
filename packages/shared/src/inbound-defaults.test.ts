@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { Hysteria2InboundSettings, TrojanInboundSettings } from './schemas.ts';
+import type {
+  Hysteria2InboundSettings,
+  TrojanInboundSettings,
+  VlessRealityInboundSettings,
+  VlessXhttpTlsInboundSettings,
+} from './schemas.ts';
 import {
   applyVpnPublicHostFallback,
   applyVpnTlsPathsFallback,
@@ -64,7 +69,10 @@ describe('buildDefaultInboundSettings', () => {
   it('preserves listen overrides when switching presets', () => {
     const settings = buildDefaultInboundSettings(
       'SHADOWSOCKS',
-      { publicHost: 'vpn.host.test' },
+      {
+        publicHost: 'vpn.host.test',
+        singBoxTcpPort: 4443,
+      },
       {
         listenHost: '127.0.0.1',
         listenPort: 9443,
@@ -87,6 +95,37 @@ describe('buildDefaultInboundSettings', () => {
       assert.equal(settings.tls.email, 'admin@vpn.example.org');
       assert.equal(settings.tls.provider, 'letsencrypt');
     }
+  });
+  it('defaults HYSTERIA2 / Reality / XHTTP to install published ports', () => {
+    const context = {
+      publicHost: 'vpn.example.org',
+      singBoxUdpPort: 443,
+      singBoxTcpPort: 4443,
+      xrayListenPort: 9443,
+      tlsCertificatePath: '/certs/fullchain.pem',
+      tlsKeyPath: '/certs/privkey.pem',
+    };
+    const hy2 = buildDefaultInboundSettings('HYSTERIA2', context);
+    assert.equal(hy2.listenPort, 443);
+    assert.equal(hy2.publicPort, 443);
+
+    const reality = buildDefaultInboundSettings(
+      'VLESS_REALITY',
+      context,
+    ) as VlessRealityInboundSettings;
+    assert.equal(reality.listenPort, 4443);
+    assert.equal(reality.publicPort, 4443);
+    assert.equal(reality.handshakePort, 443);
+
+    const xhttp = buildDefaultInboundSettings(
+      'VLESS_XHTTP_TLS',
+      context,
+    ) as VlessXhttpTlsInboundSettings;
+    assert.equal(xhttp.listenPort, 9443);
+    assert.equal(xhttp.publicPort, 9443);
+
+    const ss = buildDefaultInboundSettings('SHADOWSOCKS', context);
+    assert.equal(ss.listenPort, 4443);
   });
 });
 

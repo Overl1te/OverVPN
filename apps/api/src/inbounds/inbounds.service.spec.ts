@@ -1,3 +1,4 @@
+import { ApiException } from '../common/api-error';
 import type { AuditService } from '../audit/audit.service';
 import type { SecretEncryptionService } from '../auth/auth-crypto';
 import type {
@@ -7,6 +8,22 @@ import type {
 import type { CoreApplyService } from '../core/core-apply.service';
 import type { PrismaService } from '../infrastructure/infrastructure.module';
 import { InboundsService } from './inbounds.service';
+
+function testConfig(overrides: Record<string, unknown> = {}) {
+  const values: Record<string, unknown> = {
+    SING_BOX_CONFIG_PATH: '/tmp/config.json',
+    XRAY_CONFIG_PATH: '/tmp/xray/config.json',
+    SING_BOX_BINARY_PATH: '/usr/bin/sing-box',
+    SING_BOX_PROCESS_TIMEOUT_MS: 500,
+    SING_BOX_UDP_PORT: 443,
+    SING_BOX_TCP_PORT: 4443,
+    XRAY_LISTEN_PORT: 9443,
+    ...overrides,
+  };
+  return {
+    get: (key: string) => values[key],
+  } as never;
+}
 
 describe('InboundsService VLESS Reality create', () => {
   const actor: AuthenticatedAdmin = {
@@ -51,9 +68,9 @@ describe('InboundsService VLESS Reality create', () => {
       engine: 'SING_BOX',
       protocol: 'VLESS_REALITY',
       listenHost: '0.0.0.0',
-      listenPort: 443,
+      listenPort: 4443,
       publicHost: 'vpn.example.com',
-      publicPort: 443,
+      publicPort: 4443,
       enabled: true,
       config: {
         handshakeServer: 'www.cloudflare.com',
@@ -92,15 +109,7 @@ describe('InboundsService VLESS Reality create', () => {
       audit as unknown as AuditService,
       coreApply as unknown as CoreApplyService,
       processAdapter,
-      {
-        get: (key: string) => {
-          if (key === 'SING_BOX_CONFIG_PATH') return '/tmp/config.json';
-          if (key === 'XRAY_CONFIG_PATH') return '/tmp/xray/config.json';
-          if (key === 'SING_BOX_BINARY_PATH') return '/usr/bin/sing-box';
-          if (key === 'SING_BOX_PROCESS_TIMEOUT_MS') return 500;
-          return undefined;
-        },
-      } as never,
+      testConfig(),
     );
 
     const result = await service.create(
@@ -109,7 +118,7 @@ describe('InboundsService VLESS Reality create', () => {
         protocol: 'VLESS_REALITY',
         settings: {
           listenHost: '0.0.0.0',
-          listenPort: 443,
+          listenPort: 4443,
           publicHost: 'vpn.example.com',
           enabled: true,
           handshakeServer: 'www.cloudflare.com',
@@ -143,5 +152,71 @@ describe('InboundsService VLESS Reality create', () => {
       expect(result.inbound.settings.publicKeyPresent).toBe(true);
     }
     expect(encryption.encrypt).toHaveBeenCalled();
+  });
+
+  it('rejects create when listen port is not the install published port', async () => {
+    const service = new InboundsService(
+      {
+        inbound: { findFirst: jest.fn() },
+        $transaction: jest.fn(),
+      } as unknown as PrismaService,
+      { encrypt: jest.fn(), decrypt: jest.fn() } as unknown as SecretEncryptionService,
+      {
+        record: jest.fn(),
+        recordFailureSafely: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditService,
+      { apply: jest.fn() } as unknown as CoreApplyService,
+      { run: jest.fn() },
+      testConfig(),
+    );
+
+    const payload = {
+      tag: 'hy2-bad',
+      protocol: 'HYSTERIA2' as const,
+      settings: {
+        listenHost: '0.0.0.0',
+        listenPort: 4433,
+        publicHost: 'vpn.example.com',
+        enabled: true,
+        upMbps: null,
+        downMbps: null,
+        ignoreClientBandwidth: false,
+        obfs: null,
+        tls: {
+          mode: 'ACME' as const,
+          sni: 'vpn.example.com',
+          domains: ['vpn.example.com'],
+          dataDirectory: '/var/lib/sing-box-state/acme',
+          provider: 'letsencrypt' as const,
+        },
+        masquerade: null,
+        bindInterface: null,
+        routingMark: null,
+        reuseAddr: false,
+        netns: null,
+        tcpFastOpen: false,
+        tcpMultiPath: false,
+        disableTcpKeepAlive: false,
+        tcpKeepAlive: null,
+        tcpKeepAliveInterval: null,
+        udpFragment: null,
+        udpTimeout: null,
+        detour: null,
+        brutalDebug: false,
+      },
+    };
+
+    try {
+      await service.create(payload as never, actor, metadata);
+      throw new Error('expected create to reject unpublished port');
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ApiException);
+      const details = (error as ApiException).details as {
+        reason?: string;
+        allowedPort?: number;
+      };
+      expect(details.reason).toBe('inbound_listen_port_not_published');
+      expect(details.allowedPort).toBe(443);
+    }
   });
 });

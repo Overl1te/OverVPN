@@ -143,6 +143,11 @@ describe('UsersService bulk actions', () => {
       prismaMock as unknown as PrismaService,
       audit as unknown as AuditService,
       core,
+      {
+        planInboundIds: jest.fn().mockResolvedValue([]),
+        syncUserToInboundIds: jest.fn().mockResolvedValue(undefined),
+        syncAllUsersOnPlan: jest.fn().mockResolvedValue(undefined),
+      } as never,
     );
   });
 

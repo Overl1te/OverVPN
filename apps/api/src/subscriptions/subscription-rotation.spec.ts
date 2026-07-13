@@ -37,6 +37,11 @@ describe('subscription token rotation', () => {
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
       core,
+      {
+        planInboundIds: jest.fn().mockResolvedValue([]),
+        syncUserToInboundIds: jest.fn().mockResolvedValue(undefined),
+        syncAllUsersOnPlan: jest.fn().mockResolvedValue(undefined),
+      } as never,
     );
     const subscriptions = new SubscriptionsService(
       prisma as unknown as PrismaService,
@@ -98,6 +103,11 @@ describe('subscription token rotation', () => {
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
       { recordPending: jest.fn() },
+      {
+        planInboundIds: jest.fn().mockResolvedValue([]),
+        syncUserToInboundIds: jest.fn().mockResolvedValue(undefined),
+        syncAllUsersOnPlan: jest.fn().mockResolvedValue(undefined),
+      } as never,
     );
 
     const result = await users.rotateSubscription(user.id, actor, metadata);

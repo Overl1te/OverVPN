@@ -10,10 +10,12 @@ import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 import { formatBytes } from '@/utils/format';
 
+const GIB = 1024 ** 3;
+
 type PlanFormValues = {
   name: string;
   description?: string | null;
-  defaultDataLimitBytes?: string | null;
+  defaultDataLimitGiB?: number | null;
   defaultExpiryDays?: number | null;
   defaultDeviceLimit?: number | null;
   defaultIpLimit?: number | null;
@@ -21,6 +23,24 @@ type PlanFormValues = {
   defaultResetStrategy?: string;
   inboundIds?: string[];
 };
+
+function bytesToGiB(bytes: string | null | undefined): number | null {
+  if (!bytes) {
+    return null;
+  }
+  try {
+    return Number(BigInt(bytes)) / GIB;
+  } catch {
+    return null;
+  }
+}
+
+function giBToBytes(giB: number | null | undefined): string | null {
+  if (giB == null || Number.isNaN(giB)) {
+    return null;
+  }
+  return String(Math.round(giB * GIB));
+}
 
 export function PlansPage() {
   const { t } = useTranslation();
@@ -55,9 +75,15 @@ export function PlansPage() {
   const saveMutation = useMutation({
     mutationFn: (values: PlanFormValues) => {
       const payload = {
-        ...values,
-        defaultDataLimitBytes: values.defaultDataLimitBytes || null,
+        name: values.name,
+        description: values.description,
+        defaultDataLimitBytes: giBToBytes(values.defaultDataLimitGiB),
+        defaultExpiryDays: values.defaultExpiryDays,
+        defaultDeviceLimit: values.defaultDeviceLimit,
+        defaultIpLimit: values.defaultIpLimit,
         defaultSpeedLimitBps: values.defaultSpeedLimitBps || null,
+        defaultResetStrategy: values.defaultResetStrategy,
+        inboundIds: values.inboundIds,
       };
       if (editingId) {
         return updatePlan(editingId, payload as never);
@@ -149,7 +175,7 @@ export function PlansPage() {
                     form.setFieldsValue({
                       name: row.name,
                       description: row.description,
-                      defaultDataLimitBytes: row.defaultDataLimitBytes,
+                      defaultDataLimitGiB: bytesToGiB(row.defaultDataLimitBytes),
                       defaultExpiryDays: row.defaultExpiryDays,
                       defaultDeviceLimit: row.defaultDeviceLimit,
                       defaultIpLimit: row.defaultIpLimit,
@@ -201,8 +227,17 @@ export function PlansPage() {
           <Form.Item name="description" label={t('plans.description')}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="defaultDataLimitBytes" label={t('users.limit')}>
-            <Input placeholder={t('app.unlimited')} />
+          <Form.Item
+            name="defaultDataLimitGiB"
+            label={t('plans.trafficLimit')}
+            extra={t('plans.trafficLimitHint')}
+          >
+            <InputNumber
+              min={0}
+              step={1}
+              style={{ width: '100%' }}
+              placeholder={t('app.unlimited')}
+            />
           </Form.Item>
           <Form.Item name="defaultExpiryDays" label={t('app.days')}>
             <InputNumber min={1} style={{ width: '100%' }} />

@@ -32,6 +32,10 @@ import { ZodQuery } from '../common/zod-validation';
 import { SubscriptionProfileBuilder } from './subscription-profile';
 import { SubscriptionRateLimitGuard } from './subscription-rate-limit';
 import {
+  prefersSubscriptionHtmlPage,
+  renderSubscriptionStatusPage,
+} from './subscription-status-page';
+import {
   formatSubscriptionUserinfo,
   SubscriptionsService,
 } from './subscriptions.service';
@@ -222,6 +226,15 @@ export class SubscriptionsController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<string> {
+    const accept = request.headers.accept;
+    const userAgent = request.headers['user-agent'];
+    if (prefersSubscriptionHtmlPage(query.format, accept, userAgent)) {
+      const info = await this.subscriptions.info(token);
+      setSubscriptionHeaders(response, info);
+      response.type('text/html; charset=utf-8');
+      return renderSubscriptionStatusPage(info);
+    }
+
     const access = await this.subscriptions.profile(token);
     setSubscriptionHeaders(response, access.info);
     if (access.kind === 'inactive') {
@@ -231,11 +244,7 @@ export class SubscriptionsController {
       throw new ApiException('SUBSCRIPTION_EMPTY', HttpStatus.CONFLICT);
     }
 
-    const format = negotiateSubscriptionFormat(
-      query.format,
-      request.headers.accept,
-      request.headers['user-agent'],
-    );
+    const format = negotiateSubscriptionFormat(query.format, accept, userAgent);
     const rendered = this.profiles.render(format, access.profile);
     response.type(rendered.contentType);
     response.setHeader(

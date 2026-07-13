@@ -26,15 +26,36 @@ function firstValidationIssue(details: unknown): ValidationIssue | null {
   };
 }
 
+function conflictDetailMessage(details: unknown, locale: string): string | null {
+  if (!details || typeof details !== 'object') {
+    return null;
+  }
+  const record = details as { reason?: unknown; message?: unknown; messageRu?: unknown };
+  if (
+    typeof record.reason !== 'string' ||
+    !record.reason.startsWith('inbound_listen_port_')
+  ) {
+    return null;
+  }
+  if (locale.startsWith('ru') && typeof record.messageRu === 'string' && record.messageRu) {
+    return record.messageRu;
+  }
+  if (typeof record.message === 'string' && record.message) {
+    return record.message;
+  }
+  return null;
+}
+
 export function useApiErrorHandler() {
   const { t, i18n } = useTranslation();
   const { message } = AntApp.useApp();
 
   return (error: unknown) => {
     if (error instanceof ApiError) {
-      let text = error.localized(i18n.language);
+      const conflictDetail = conflictDetailMessage(error.details, i18n.language);
+      let text = conflictDetail ?? error.localized(i18n.language);
       const issue = error.code === 'VALIDATION_FAILED' ? firstValidationIssue(error.details) : null;
-      if (issue?.path && issue.message) {
+      if (!conflictDetail && issue?.path && issue.message) {
         text = `${text} — ${t('app.validationDetails', { path: issue.path, message: issue.message })}`;
       }
       void message.error(

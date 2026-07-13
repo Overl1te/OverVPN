@@ -2,9 +2,10 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   PROTOCOL_ENGINE_MAP,
+  publishedListenPortForProtocol,
   type CoreEngine,
   type InboundProtocol,
-} from '@overvpn/shared/constants';
+} from '@overvpn/shared';
 import type {
   AddAssignment,
   AssignmentListQuery,
@@ -91,6 +92,9 @@ export class InboundsService {
   private readonly xrayConfigPath: string;
   private readonly binaryPath: string;
   private readonly processTimeoutMs: number;
+  private readonly singBoxUdpPort: number;
+  private readonly singBoxTcpPort: number;
+  private readonly xrayListenPort: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -106,6 +110,9 @@ export class InboundsService {
     this.processTimeoutMs = config.get('SING_BOX_PROCESS_TIMEOUT_MS', {
       infer: true,
     });
+    this.singBoxUdpPort = config.get('SING_BOX_UDP_PORT', { infer: true });
+    this.singBoxTcpPort = config.get('SING_BOX_TCP_PORT', { infer: true });
+    this.xrayListenPort = config.get('XRAY_LISTEN_PORT', { infer: true });
   }
 
   async list(query: InboundListQuery): Promise<{
@@ -166,6 +173,7 @@ export class InboundsService {
   ) {
     try {
       const engine = this.resolveEngine(input.protocol);
+      this.assertListenPortPublished(input.protocol, input.settings.listenPort);
       await this.assertListenPortAvailable(
         input.settings.listenHost,
         input.settings.listenPort,
@@ -280,6 +288,10 @@ export class InboundsService {
             )
           : previous!;
         if (input.settings) {
+          this.assertListenPortPublished(
+            before.protocol,
+            input.settings.listenPort,
+          );
           await this.assertListenPortAvailable(
             input.settings.listenHost,
             input.settings.listenPort,
@@ -946,6 +958,30 @@ export class InboundsService {
     return engine;
   }
 
+  private assertListenPortPublished(
+    protocol: InboundProtocol,
+    listenPort: number,
+  ): void {
+    const allowedPort = publishedListenPortForProtocol(protocol, {
+      singBoxUdpPort: this.singBoxUdpPort,
+      singBoxTcpPort: this.singBoxTcpPort,
+      xrayListenPort: this.xrayListenPort,
+    });
+    if (listenPort === allowedPort) {
+      return;
+    }
+    const transport = protocol === 'HYSTERIA2' ? 'UDP' : 'TCP';
+    throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+      reason: 'inbound_listen_port_not_published',
+      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / XRAY_LISTEN_PORT and Compose publish).`,
+      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}), либо измените SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / XRAY_LISTEN_PORT и publish в Compose.`,
+      protocol,
+      listenPort,
+      allowedPort,
+      transport,
+    });
+  }
+
   private async assertListenPortAvailable(
     listenHost: string,
     listenPort: number,
@@ -965,6 +1001,7 @@ export class InboundsService {
       throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
         reason: 'inbound_listen_port_conflict',
         message: `Listen address ${listenHost}:${listenPort} is already used by inbound "${collision.tag}"`,
+        messageRu: `Адрес ${listenHost}:${listenPort} уже занят inbound «${collision.tag}»`,
         listenHost,
         listenPort,
         conflictingInboundId: collision.id,

@@ -6,6 +6,8 @@ describe('sanitizeInboundForm', () => {
     publicHost: 'vpn.overl1te-private.online',
     acmeHttpPort: 8081,
     acmeTlsPort: 8443,
+    singBoxUdpPort: 443,
+    singBoxTcpPort: 4443,
     xrayListenPort: 9443,
     tlsCertificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
     tlsKeyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',

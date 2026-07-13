@@ -7,14 +7,17 @@ import {
 } from './inbound-validation.pipe';
 import { InboundsController } from './inbounds.controller';
 import { InboundsService } from './inbounds.service';
+import { PlanAssignmentSyncService } from './plan-assignment-sync.service';
 
 @Module({
   imports: [AuthModule, CoreModule],
   controllers: [InboundsController],
   providers: [
     InboundsService,
+    PlanAssignmentSyncService,
     InboundCreateValidationPipe,
     InboundUpdateValidationPipe,
   ],
+  exports: [PlanAssignmentSyncService],
 })
 export class InboundsModule {}

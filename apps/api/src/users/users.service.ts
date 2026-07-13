@@ -20,6 +20,7 @@ import type {
 } from '../common/authorization';
 import { CoreChangeDispatcher } from '../core/core-change-dispatcher';
 import type { Plan, Prisma, User } from '../generated/prisma/client';
+import { PlanAssignmentSyncService } from '../inbounds/plan-assignment-sync.service';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 import {
   calculateNextResetAt,
@@ -33,6 +34,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly coreChanges: CoreChangeDispatcher,
+    private readonly planAssignments: PlanAssignmentSyncService,
   ) {}
 
   async list(query: UserListQuery): Promise<{
@@ -181,6 +183,17 @@ export class UsersService {
             },
             tx,
           );
+          if (plan) {
+            const inboundIds = await this.planAssignments.planInboundIds(
+              tx,
+              plan.id,
+            );
+            await this.planAssignments.syncUserToInboundIds(
+              tx,
+              user.id,
+              inboundIds,
+            );
+          }
           return user;
         });
         return this.toResult(created);
@@ -314,6 +327,21 @@ export class UsersService {
           },
           tx,
         );
+        if (input.planId !== undefined) {
+          if (plan) {
+            const inboundIds = await this.planAssignments.planInboundIds(
+              tx,
+              plan.id,
+            );
+            await this.planAssignments.syncUserToInboundIds(
+              tx,
+              id,
+              inboundIds,
+            );
+          } else {
+            await this.planAssignments.syncUserToInboundIds(tx, id, []);
+          }
+        }
         return user;
       });
       return this.toResult(updated);
@@ -512,6 +540,25 @@ export class UsersService {
                 data: changes,
               });
               updated.push(changed);
+              if (input.action === 'set-plan') {
+                if (plan) {
+                  const inboundIds = await this.planAssignments.planInboundIds(
+                    tx,
+                    plan.id,
+                  );
+                  await this.planAssignments.syncUserToInboundIds(
+                    tx,
+                    user.id,
+                    inboundIds,
+                  );
+                } else {
+                  await this.planAssignments.syncUserToInboundIds(
+                    tx,
+                    user.id,
+                    [],
+                  );
+                }
+              }
               if (input.action !== 'rotate-sub') {
                 await this.coreChanges.recordPending(
                   {

@@ -11,6 +11,10 @@ export type InboundDefaultsContext = {
   publicHost: string;
   acmeHttpPort?: number;
   acmeTlsPort?: number;
+  /** Published sing-box UDP port (compose SING_BOX_UDP_PORT) — Hysteria2. */
+  singBoxUdpPort?: number;
+  /** Published sing-box TCP port (compose SING_BOX_TCP_PORT) — Reality / Trojan / SS. */
+  singBoxTcpPort?: number;
   /** Published Xray TCP listen port (compose XRAY_LISTEN_PORT). */
   xrayListenPort?: number;
   /** Container paths from install (LE sync). Prefer FILES TLS when set. */
@@ -25,6 +29,34 @@ export type InboundListenOverrides = {
   publicPort?: number;
   enabled?: boolean;
 };
+
+export type InboundPublishedTransport = 'udp' | 'tcp';
+
+/** Install-published listen port for a protocol (Simple mode / API guard). */
+export function publishedListenPortForProtocol(
+  protocol: InboundProtocol,
+  context: Pick<
+    InboundDefaultsContext,
+    'singBoxUdpPort' | 'singBoxTcpPort' | 'xrayListenPort'
+  >,
+): number {
+  switch (protocol) {
+    case 'HYSTERIA2':
+      return context.singBoxUdpPort ?? 443;
+    case 'VLESS_REALITY':
+    case 'TROJAN':
+    case 'SHADOWSOCKS':
+      return context.singBoxTcpPort ?? 4443;
+    case 'VLESS_XHTTP_TLS':
+      return context.xrayListenPort ?? 8443;
+  }
+}
+
+export function publishedTransportForProtocol(
+  protocol: InboundProtocol,
+): InboundPublishedTransport {
+  return protocol === 'HYSTERIA2' ? 'udp' : 'tcp';
+}
 
 type AcmeTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'ACME' }>;
 type FilesTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'FILES' }>;
@@ -101,12 +133,18 @@ function buildDefaultTls(
   return buildAcmeTls(publicHost, context);
 }
 
-function listenFields(context: InboundDefaultsContext, overrides?: InboundListenOverrides) {
+function listenFields(
+  protocol: InboundProtocol,
+  context: InboundDefaultsContext,
+  overrides?: InboundListenOverrides,
+) {
+  const published = publishedListenPortForProtocol(protocol, context);
+  const listenPort = overrides?.listenPort ?? published;
   return {
     listenHost: overrides?.listenHost ?? '0.0.0.0',
-    listenPort: overrides?.listenPort ?? 443,
+    listenPort,
     publicHost: overrides?.publicHost ?? context.publicHost,
-    publicPort: overrides?.publicPort,
+    publicPort: overrides?.publicPort ?? listenPort,
     enabled: overrides?.enabled ?? true,
   };
 }
@@ -122,7 +160,7 @@ export function buildDefaultInboundSettings(
   | TrojanInboundSettings
   | ShadowsocksInboundSettings {
   const publicHost = overrides?.publicHost ?? context.publicHost;
-  const common = listenFields({ ...context, publicHost }, overrides);
+  const common = listenFields(protocol, { ...context, publicHost }, overrides);
 
   const tls = buildDefaultTls(publicHost, { ...context, publicHost });
 
@@ -170,7 +208,6 @@ export function buildDefaultInboundSettings(
     case 'SHADOWSOCKS':
       return {
         ...common,
-        listenPort: overrides?.listenPort ?? 8388,
         method: '2022-blake3-aes-256-gcm',
       };
     case 'VLESS_XHTTP_TLS':
@@ -181,7 +218,6 @@ export function buildDefaultInboundSettings(
       }
       return {
         ...common,
-        listenPort: overrides?.listenPort ?? context.xrayListenPort ?? 8443,
         path: '/',
         host: publicHost,
         mode: 'auto',
