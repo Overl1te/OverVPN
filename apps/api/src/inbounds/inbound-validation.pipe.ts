@@ -1,6 +1,9 @@
 import { HttpStatus, Injectable, PipeTransform } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { applyVpnPublicHostFallback } from '@overvpn/shared';
+import {
+  applyVpnPublicHostFallback,
+  applyVpnTlsPathsFallback,
+} from '@overvpn/shared';
 import {
   createInboundSchema,
   updateInboundSchema,
@@ -25,13 +28,25 @@ function validationError(schemaResult: {
   });
 }
 
+function patchInboundBody(
+  value: unknown,
+  config: ConfigService<AppEnvironment, true>,
+): unknown {
+  const vpnHost = config.get('VPN_PUBLIC_HOST', { infer: true });
+  const withHost = applyVpnPublicHostFallback(value, vpnHost);
+  return applyVpnTlsPathsFallback(
+    withHost,
+    config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }),
+    config.get('VPN_TLS_KEY_PATH', { infer: true }),
+  );
+}
+
 @Injectable()
 export class InboundCreateValidationPipe implements PipeTransform {
   constructor(private readonly config: ConfigService<AppEnvironment, true>) {}
 
   transform(value: unknown): CreateInbound {
-    const vpnHost = this.config.get('VPN_PUBLIC_HOST', { infer: true });
-    const patched = applyVpnPublicHostFallback(value, vpnHost);
+    const patched = patchInboundBody(value, this.config);
     const result = createInboundSchema.safeParse(patched);
     if (result.success) {
       return result.data;
@@ -45,8 +60,7 @@ export class InboundUpdateValidationPipe implements PipeTransform {
   constructor(private readonly config: ConfigService<AppEnvironment, true>) {}
 
   transform(value: unknown): UpdateInbound {
-    const vpnHost = this.config.get('VPN_PUBLIC_HOST', { infer: true });
-    const patched = applyVpnPublicHostFallback(value, vpnHost);
+    const patched = patchInboundBody(value, this.config);
     const result = updateInboundSchema.safeParse(patched);
     if (result.success) {
       return result.data;

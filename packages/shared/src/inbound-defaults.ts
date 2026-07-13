@@ -11,6 +11,8 @@ export type InboundDefaultsContext = {
   publicHost: string;
   acmeHttpPort?: number;
   acmeTlsPort?: number;
+  /** Published Xray TCP listen port (compose XRAY_LISTEN_PORT). */
+  xrayListenPort?: number;
   /** Container paths from install (LE sync). Prefer FILES TLS when set. */
   tlsCertificatePath?: string | null;
   tlsKeyPath?: string | null;
@@ -179,6 +181,7 @@ export function buildDefaultInboundSettings(
       }
       return {
         ...common,
+        listenPort: overrides?.listenPort ?? context.xrayListenPort ?? 8443,
         path: '/',
         host: publicHost,
         mode: 'auto',
@@ -245,5 +248,66 @@ export function applyVpnPublicHostFallback(
     settingsRecord.host = host;
   }
   syncTlsPublicHost(settingsRecord, host);
+  return { ...record, settings: settingsRecord };
+}
+
+/**
+ * Fills missing VLESS_XHTTP_TLS FILES cert paths from install env defaults.
+ * Does not override explicit paths or inline PEM.
+ */
+export function applyVpnTlsPathsFallback(
+  body: unknown,
+  certificatePath: string | undefined | null,
+  keyPath: string | undefined | null,
+): unknown {
+  const cert = certificatePath?.trim();
+  const key = keyPath?.trim();
+  if (!cert || !key || typeof body !== 'object' || body === null) {
+    return body;
+  }
+  const record = body as Record<string, unknown>;
+  if (record.protocol !== 'VLESS_XHTTP_TLS') {
+    return body;
+  }
+  const settings = record.settings;
+  if (typeof settings !== 'object' || settings === null) {
+    return body;
+  }
+  const settingsRecord = { ...(settings as Record<string, unknown>) };
+  const tls = settingsRecord.tls;
+  const tlsRecord: Record<string, unknown> =
+    typeof tls === 'object' && tls !== null
+      ? { ...(tls as Record<string, unknown>) }
+      : { mode: 'FILES' };
+  if (tlsRecord.mode !== undefined && tlsRecord.mode !== 'FILES') {
+    return body;
+  }
+  const hasInline =
+    (typeof tlsRecord.certificatePem === 'string' && tlsRecord.certificatePem.trim()) ||
+    (typeof tlsRecord.privateKeyPem === 'string' && tlsRecord.privateKeyPem.trim());
+  if (hasInline) {
+    return body;
+  }
+  const hasCertPath =
+    typeof tlsRecord.certificatePath === 'string' && tlsRecord.certificatePath.trim();
+  const hasKeyPath = typeof tlsRecord.keyPath === 'string' && tlsRecord.keyPath.trim();
+  if (hasCertPath && hasKeyPath) {
+    return body;
+  }
+  tlsRecord.mode = 'FILES';
+  if (!hasCertPath) {
+    tlsRecord.certificatePath = cert;
+  }
+  if (!hasKeyPath) {
+    tlsRecord.keyPath = key;
+  }
+  if (typeof tlsRecord.sni !== 'string' || !tlsRecord.sni.trim()) {
+    const publicHost =
+      typeof settingsRecord.publicHost === 'string' ? settingsRecord.publicHost.trim() : '';
+    if (publicHost) {
+      tlsRecord.sni = publicHost;
+    }
+  }
+  settingsRecord.tls = tlsRecord;
   return { ...record, settings: settingsRecord };
 }

@@ -309,6 +309,7 @@
     "modeSimple": "Simple",
     "modeDetailed": "Detailed",
     "modeSimpleHint": "Quick setup: domain, port, and protocol. Everything else uses defaults.",
+    "xrayTlsPathsMissing": "Xray needs TLS certificate files. Run `overvpn config certs` (or finish install with Nginx), recreate the API container so VPN_TLS_* is loaded, then open Detailed and set certificate paths — or paste PEM.",
     "advanced": "JSON",
     "applyAdvanced": "Apply JSON",
     "sectionListen": "Listen",

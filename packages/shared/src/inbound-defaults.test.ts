@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Hysteria2InboundSettings, TrojanInboundSettings } from './schemas.ts';
-import { applyVpnPublicHostFallback, buildDefaultInboundSettings } from './inbound-defaults.ts';
+import {
+  applyVpnPublicHostFallback,
+  applyVpnTlsPathsFallback,
+  buildDefaultInboundSettings,
+} from './inbound-defaults.ts';
 
 describe('buildDefaultInboundSettings', () => {
   it('uses configured public host instead of example.com', () => {
@@ -128,6 +132,60 @@ describe('applyVpnPublicHostFallback', () => {
       },
     };
     const patched = applyVpnPublicHostFallback(body, 'vpn.overl1te-private.online');
+    assert.deepEqual(patched, body);
+  });
+});
+
+describe('applyVpnTlsPathsFallback', () => {
+  it('fills missing VLESS_XHTTP_TLS certificate paths from install defaults', () => {
+    const patched = applyVpnTlsPathsFallback(
+      {
+        tag: 'xhttps',
+        protocol: 'VLESS_XHTTP_TLS',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 9443,
+          publicHost: 'vpn.overl1te-private.online',
+          enabled: true,
+          path: '/',
+          host: 'vpn.overl1te-private.online',
+          mode: 'auto',
+          tls: {
+            mode: 'FILES',
+            sni: 'vpn.overl1te-private.online',
+          },
+        },
+      },
+      '/var/lib/sing-box-certs/vpn-fullchain.pem',
+      '/var/lib/sing-box-certs/vpn-privkey.pem',
+    ) as {
+      settings: {
+        tls: { certificatePath: string; keyPath: string };
+      };
+    };
+
+    assert.equal(patched.settings.tls.certificatePath, '/var/lib/sing-box-certs/vpn-fullchain.pem');
+    assert.equal(patched.settings.tls.keyPath, '/var/lib/sing-box-certs/vpn-privkey.pem');
+  });
+
+  it('does not override inline PEM', () => {
+    const body = {
+      tag: 'xhttps',
+      protocol: 'VLESS_XHTTP_TLS',
+      settings: {
+        tls: {
+          mode: 'FILES',
+          sni: 'vpn.test',
+          certificatePem: 'CERT',
+          privateKeyPem: 'KEY',
+        },
+      },
+    };
+    const patched = applyVpnTlsPathsFallback(
+      body,
+      '/var/lib/sing-box-certs/vpn-fullchain.pem',
+      '/var/lib/sing-box-certs/vpn-privkey.pem',
+    );
     assert.deepEqual(patched, body);
   });
 });

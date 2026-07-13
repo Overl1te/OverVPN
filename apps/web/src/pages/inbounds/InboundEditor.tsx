@@ -10,6 +10,7 @@ import type { CreateInbound, InboundResult } from '@overvpn/shared/schemas';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import {
   Button,
+  Alert,
   Collapse,
   Drawer,
   Form,
@@ -23,6 +24,7 @@ import {
   Tag,
   Tooltip,
   Typography,
+  message,
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -122,240 +124,256 @@ function isProbablyEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function sanitizeInboundForm(
+type DirtySettings = Record<string, unknown>;
+
+function asDirtySettings(settings: InboundEditorForm['settings']): DirtySettings {
+  return settings as unknown as DirtySettings;
+}
+
+/** Copy only keys that exist on the protocol preset — drops leftovers from other protocols. */
+function overlayPresetKeys<T extends Record<string, unknown>>(
+  preset: T,
+  dirty: DirtySettings,
+  extraKeys: readonly string[] = [],
+): T {
+  const next = { ...preset };
+  for (const key of Object.keys(preset)) {
+    if (key === 'tls') {
+      continue;
+    }
+    if (key in dirty && dirty[key] !== undefined) {
+      (next as DirtySettings)[key] = dirty[key];
+    }
+  }
+  for (const key of extraKeys) {
+    if (key in dirty && dirty[key] !== undefined) {
+      (next as DirtySettings)[key] = dirty[key];
+    }
+  }
+  return next;
+}
+
+function resolveSingBoxTls(
+  protocol: 'HYSTERIA2' | 'TROJAN',
+  presetTls: Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>['tls'],
+  dirty: DirtySettings,
+  host: string,
+  defaultsContext: InboundDefaultsContext,
+  overrides: InboundListenOverrides,
+): Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>['tls'] {
+  const formTls =
+    dirty.tls && typeof dirty.tls === 'object'
+      ? (dirty.tls as DirtySettings)
+      : { mode: presetTls.mode };
+  const formMode =
+    formTls.mode === 'ACME' || formTls.mode === 'FILES' ? formTls.mode : presetTls.mode;
+
+  if (formMode === 'FILES') {
+    const presetFiles = presetTls.mode === 'FILES' ? presetTls : null;
+    const certificatePath =
+      (typeof formTls.certificatePath === 'string' ? formTls.certificatePath : undefined) ||
+      presetFiles?.certificatePath ||
+      defaultsContext.tlsCertificatePath ||
+      undefined;
+    const keyPath =
+      (typeof formTls.keyPath === 'string' ? formTls.keyPath : undefined) ||
+      presetFiles?.keyPath ||
+      defaultsContext.tlsKeyPath ||
+      undefined;
+    return {
+      ...(presetFiles ?? {
+        mode: 'FILES' as const,
+        sni: host || defaultsContext.publicHost,
+        alpn: ['h3'],
+        minVersion: '1.2' as const,
+        cipherSuites: [],
+        curvePreferences: [],
+        kernelTx: false,
+        kernelRx: false,
+        clientInsecure: false,
+        certificatePath: certificatePath!,
+        keyPath: keyPath!,
+      }),
+      ...(formTls.mode === 'FILES' ? formTls : {}),
+      mode: 'FILES',
+      sni:
+        (typeof formTls.sni === 'string' && formTls.sni) ||
+        host ||
+        presetFiles?.sni ||
+        defaultsContext.publicHost,
+      certificatePath: certificatePath!,
+      keyPath: keyPath!,
+    };
+  }
+
+  const acmePreset =
+    presetTls.mode === 'ACME'
+      ? presetTls
+      : (
+          buildDefaultInboundSettings(
+            protocol,
+            {
+              publicHost: host || defaultsContext.publicHost,
+              acmeHttpPort: defaultsContext.acmeHttpPort,
+              acmeTlsPort: defaultsContext.acmeTlsPort,
+            },
+            overrides,
+          ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>
+        ).tls;
+  if (acmePreset.mode !== 'ACME') {
+    return presetTls;
+  }
+  const formDomains = Array.isArray(formTls.domains) ? formTls.domains : undefined;
+  const formSni = typeof formTls.sni === 'string' ? formTls.sni : undefined;
+  const formEmail = typeof formTls.email === 'string' ? formTls.email.trim() : undefined;
+  const formProvider = typeof formTls.provider === 'string' ? formTls.provider.trim() : undefined;
+  const tls = {
+    ...acmePreset,
+    ...(formTls.mode === 'ACME' ? formTls : {}),
+    mode: 'ACME' as const,
+    sni: formSni || host || acmePreset.sni,
+    domains: formDomains?.length ? formDomains : host ? [host] : acmePreset.domains,
+    provider: formProvider || 'letsencrypt',
+    dataDirectory:
+      (typeof formTls.dataDirectory === 'string' ? formTls.dataDirectory : undefined) ||
+      acmePreset.dataDirectory,
+  };
+  if (formEmail && isProbablyEmail(formEmail)) {
+    tls.email = formEmail;
+  } else {
+    const fallback = defaultAcmeEmail(host || defaultsContext.publicHost);
+    if (fallback) {
+      tls.email = fallback;
+    } else {
+      delete tls.email;
+    }
+  }
+  return tls;
+}
+
+function resolveXhttpTls(
+  dirty: DirtySettings,
+  host: string,
+  defaultsContext: InboundDefaultsContext,
+): {
+  mode: 'FILES';
+  sni: string;
+  certificatePath?: string;
+  keyPath?: string;
+  certificatePem?: string;
+  privateKeyPem?: string;
+} {
+  const formTls = dirty.tls && typeof dirty.tls === 'object' ? (dirty.tls as DirtySettings) : {};
+  const certificatePem =
+    typeof formTls.certificatePem === 'string' ? formTls.certificatePem : undefined;
+  const privateKeyPem =
+    typeof formTls.privateKeyPem === 'string' ? formTls.privateKeyPem : undefined;
+  const sni =
+    (typeof formTls.sni === 'string' && formTls.sni) || host || defaultsContext.publicHost;
+  if (certificatePem && privateKeyPem) {
+    return { mode: 'FILES', sni, certificatePem, privateKeyPem };
+  }
+  return {
+    mode: 'FILES',
+    sni,
+    certificatePath:
+      (typeof formTls.certificatePath === 'string' ? formTls.certificatePath : undefined) ||
+      defaultsContext.tlsCertificatePath ||
+      undefined,
+    keyPath:
+      (typeof formTls.keyPath === 'string' ? formTls.keyPath : undefined) ||
+      defaultsContext.tlsKeyPath ||
+      undefined,
+  };
+}
+
+/**
+ * Ant Design keeps stale nested keys when switching protocols (`setFieldsValue` merges).
+ * Always rebuild from protocol defaults and overlay only keys that belong to that protocol.
+ */
+export function sanitizeInboundForm(
   values: InboundEditorForm,
   defaultsContext: InboundDefaultsContext,
 ): InboundEditorForm {
-  let settings = structuredClone(values.settings);
-  const host = settings.publicHost?.trim() ?? '';
+  const dirty = asDirtySettings(structuredClone(values.settings));
+  const host = typeof dirty.publicHost === 'string' ? dirty.publicHost.trim() : '';
+  const context: InboundDefaultsContext = {
+    ...defaultsContext,
+    publicHost: host || defaultsContext.publicHost,
+  };
+  const overrides = listenOverrides(values.settings);
 
-  // Ant Design onFinish only returns registered fields; simple mode hides most TLS
-  // keys, so rebuild defaults and overlay whatever the form still has.
   if (values.protocol === 'VLESS_XHTTP_TLS') {
-    let preset: Extract<
-      ReturnType<typeof buildDefaultInboundSettings>,
-      { protocol?: never; path: string }
-    >;
+    let preset: ReturnType<typeof buildDefaultInboundSettings>;
     try {
-      preset = buildDefaultInboundSettings(
-        'VLESS_XHTTP_TLS',
-        {
-          publicHost: host || defaultsContext.publicHost,
-          tlsCertificatePath: defaultsContext.tlsCertificatePath,
-          tlsKeyPath: defaultsContext.tlsKeyPath,
-        },
-        listenOverrides(settings),
-      ) as typeof preset;
+      preset = buildDefaultInboundSettings('VLESS_XHTTP_TLS', context, overrides);
     } catch {
       preset = {
-        ...listenOverrides(settings),
-        listenHost: settings.listenHost ?? '0.0.0.0',
-        listenPort: settings.listenPort ?? 443,
+        listenHost: overrides.listenHost ?? '0.0.0.0',
+        listenPort: overrides.listenPort ?? defaultsContext.xrayListenPort ?? 8443,
         publicHost: host || defaultsContext.publicHost,
-        publicPort: 'publicPort' in settings ? settings.publicPort : undefined,
-        enabled: settings.enabled ?? true,
-        path: 'path' in settings && typeof settings.path === 'string' ? settings.path : '/',
-        host: 'host' in settings ? settings.host : host || defaultsContext.publicHost || null,
-        mode: 'mode' in settings && typeof settings.mode === 'string' ? settings.mode : 'auto',
+        publicPort: overrides.publicPort,
+        enabled: overrides.enabled ?? true,
+        path: '/',
+        host: host || defaultsContext.publicHost || null,
+        mode: 'auto',
         tls: {
           mode: 'FILES',
           sni: host || defaultsContext.publicHost,
           certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
           keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
         },
-      } as typeof preset;
+      };
     }
-    const formTls =
-      'tls' in settings && settings.tls && typeof settings.tls === 'object'
-        ? settings.tls
-        : preset.tls;
-    const certificatePath =
-      ('certificatePath' in formTls && typeof formTls.certificatePath === 'string'
-        ? formTls.certificatePath
-        : undefined) ||
-      defaultsContext.tlsCertificatePath ||
-      undefined;
-    const keyPath =
-      ('keyPath' in formTls && typeof formTls.keyPath === 'string' ? formTls.keyPath : undefined) ||
-      defaultsContext.tlsKeyPath ||
-      undefined;
-    const certificatePem =
-      'certificatePem' in formTls && typeof formTls.certificatePem === 'string'
-        ? formTls.certificatePem
-        : undefined;
-    const privateKeyPem =
-      'privateKeyPem' in formTls && typeof formTls.privateKeyPem === 'string'
-        ? formTls.privateKeyPem
-        : undefined;
-    const tls =
-      certificatePem && privateKeyPem
-        ? {
-            mode: 'FILES' as const,
-            sni:
-              ('sni' in formTls && typeof formTls.sni === 'string' && formTls.sni) ||
-              host ||
-              defaultsContext.publicHost,
-            certificatePem,
-            privateKeyPem,
-          }
-        : {
-            mode: 'FILES' as const,
-            sni:
-              ('sni' in formTls && typeof formTls.sni === 'string' && formTls.sni) ||
-              host ||
-              defaultsContext.publicHost,
-            certificatePath: certificatePath!,
-            keyPath: keyPath!,
-          };
-    settings = {
-      ...preset,
-      ...settings,
-      path: 'path' in settings && typeof settings.path === 'string' ? settings.path : preset.path,
-      host: 'host' in settings ? settings.host : preset.host,
-      mode: 'mode' in settings && typeof settings.mode === 'string' ? settings.mode : preset.mode,
-      tls,
-    } as InboundEditorForm['settings'];
-    return { ...values, settings };
+    const settings = overlayPresetKeys(
+      preset as Record<string, unknown>,
+      dirty,
+    ) as typeof preset & { tls: ReturnType<typeof resolveXhttpTls> };
+    settings.tls = resolveXhttpTls(dirty, host, defaultsContext);
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
   if (values.protocol === 'HYSTERIA2' || values.protocol === 'TROJAN') {
-    const preset = buildDefaultInboundSettings(
+    const preset = buildDefaultInboundSettings(values.protocol, context, overrides) as Extract<
+      ReturnType<typeof buildDefaultInboundSettings>,
+      { tls: unknown }
+    >;
+    const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty) as typeof preset;
+    settings.tls = resolveSingBoxTls(
       values.protocol,
-      {
-        publicHost: host || defaultsContext.publicHost,
-        acmeHttpPort: defaultsContext.acmeHttpPort,
-        acmeTlsPort: defaultsContext.acmeTlsPort,
-        tlsCertificatePath: defaultsContext.tlsCertificatePath,
-        tlsKeyPath: defaultsContext.tlsKeyPath,
-      },
-      listenOverrides(settings),
-    ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }> &
-      InboundEditorForm['settings'];
-    const presetTls = preset.tls;
-    const formTls =
-      'tls' in settings && settings.tls && typeof settings.tls === 'object'
-        ? settings.tls
-        : { mode: presetTls.mode };
-    const formMode =
-      'mode' in formTls && (formTls.mode === 'ACME' || formTls.mode === 'FILES')
-        ? formTls.mode
-        : presetTls.mode;
-
-    if (formMode === 'FILES') {
-      const presetFiles = presetTls.mode === 'FILES' ? presetTls : null;
-      const certificatePath =
-        ('certificatePath' in formTls && typeof formTls.certificatePath === 'string'
-          ? formTls.certificatePath
-          : undefined) ||
-        presetFiles?.certificatePath ||
-        defaultsContext.tlsCertificatePath ||
-        undefined;
-      const keyPath =
-        ('keyPath' in formTls && typeof formTls.keyPath === 'string'
-          ? formTls.keyPath
-          : undefined) ||
-        presetFiles?.keyPath ||
-        defaultsContext.tlsKeyPath ||
-        undefined;
-      settings = {
-        ...preset,
-        ...settings,
-        tls: {
-          ...(presetFiles ?? {
-            mode: 'FILES' as const,
-            sni: host || defaultsContext.publicHost,
-            alpn: ['h3'],
-            minVersion: '1.2' as const,
-            cipherSuites: [],
-            curvePreferences: [],
-            kernelTx: false,
-            kernelRx: false,
-            clientInsecure: false,
-            certificatePath: certificatePath!,
-            keyPath: keyPath!,
-          }),
-          ...('mode' in formTls && formTls.mode === 'FILES' ? formTls : {}),
-          mode: 'FILES',
-          sni:
-            ('sni' in formTls && typeof formTls.sni === 'string' && formTls.sni) ||
-            host ||
-            presetFiles?.sni ||
-            defaultsContext.publicHost,
-          certificatePath: certificatePath!,
-          keyPath: keyPath!,
-        },
-      } as InboundEditorForm['settings'];
-    } else {
-      const acmePreset =
-        presetTls.mode === 'ACME'
-          ? presetTls
-          : (
-              buildDefaultInboundSettings(
-                values.protocol,
-                {
-                  publicHost: host || defaultsContext.publicHost,
-                  acmeHttpPort: defaultsContext.acmeHttpPort,
-                  acmeTlsPort: defaultsContext.acmeTlsPort,
-                },
-                listenOverrides(settings),
-              ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>
-            ).tls;
-      if (acmePreset.mode !== 'ACME') {
-        return { ...values, settings };
+      preset.tls,
+      dirty,
+      host,
+      defaultsContext,
+      overrides,
+    );
+    if ('obfs' in settings && settings.obfs && typeof settings.obfs === 'object') {
+      const obfs = { ...settings.obfs } as { password?: string };
+      const password = obfs.password?.trim();
+      if (password) {
+        obfs.password = password;
+      } else {
+        delete obfs.password;
       }
-      const formDomains =
-        'domains' in formTls && Array.isArray(formTls.domains) ? formTls.domains : undefined;
-      const formSni = 'sni' in formTls && typeof formTls.sni === 'string' ? formTls.sni : undefined;
-      const formEmail =
-        'email' in formTls && typeof formTls.email === 'string' ? formTls.email.trim() : undefined;
-      const formProvider =
-        'provider' in formTls && typeof formTls.provider === 'string'
-          ? formTls.provider.trim()
-          : undefined;
-
-      settings = {
-        ...preset,
-        ...settings,
-        tls: {
-          ...acmePreset,
-          ...('mode' in formTls && formTls.mode === 'ACME' ? formTls : {}),
-          mode: 'ACME',
-          sni: formSni || host || acmePreset.sni,
-          domains: formDomains?.length ? formDomains : host ? [host] : acmePreset.domains,
-          provider: formProvider || 'letsencrypt',
-          dataDirectory:
-            ('dataDirectory' in formTls && typeof formTls.dataDirectory === 'string'
-              ? formTls.dataDirectory
-              : undefined) || acmePreset.dataDirectory,
-        },
-      } as InboundEditorForm['settings'];
-
-      if ('tls' in settings && settings.tls.mode === 'ACME') {
-        const acmeTls = settings.tls;
-        if (formEmail && isProbablyEmail(formEmail)) {
-          acmeTls.email = formEmail;
-        } else {
-          const fallback = defaultAcmeEmail(settings.publicHost);
-          if (fallback) {
-            acmeTls.email = fallback;
-          } else {
-            delete acmeTls.email;
-          }
-        }
-      }
+      (settings as { obfs: unknown }).obfs = obfs;
     }
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
-  if ('obfs' in settings && settings.obfs) {
-    const password = settings.obfs.password?.trim();
-    if (password) {
-      settings.obfs.password = password;
-    } else {
-      delete settings.obfs.password;
-    }
+  if (values.protocol === 'VLESS_REALITY') {
+    const preset = buildDefaultInboundSettings('VLESS_REALITY', context, overrides);
+    const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
+      'privateKey',
+      'publicKey',
+    ]) as typeof preset;
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
-  if ('password' in settings && typeof settings.password === 'string') {
+  const preset = buildDefaultInboundSettings('SHADOWSOCKS', context, overrides);
+  const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
+    'password',
+  ]) as typeof preset & { password?: string };
+  if (typeof settings.password === 'string') {
     const password = settings.password.trim();
     if (password) {
       settings.password = password;
@@ -363,8 +381,19 @@ function sanitizeInboundForm(
       delete settings.password;
     }
   }
+  return { ...values, settings: settings as InboundEditorForm['settings'] };
+}
 
-  return { ...values, settings };
+function replaceFormSettings(
+  form: ReturnType<typeof Form.useForm<InboundEditorForm>>[0],
+  protocol: InboundProtocol,
+  nextSettings: InboundEditorForm['settings'],
+): void {
+  // setFields replaces the whole `settings` value; setFieldsValue merges nested keys.
+  form.setFields([
+    { name: 'protocol', value: protocol },
+    { name: 'settings', value: nextSettings },
+  ]);
 }
 
 function FieldHelpLabel({ label, help }: { label: string; help: string }) {
@@ -805,6 +834,7 @@ export function InboundEditor({
       publicHost: settingsQuery.data.readOnly.vpnPublicHost?.trim() ?? '',
       acmeHttpPort: settingsQuery.data.readOnly.acmeHttpPort,
       acmeTlsPort: settingsQuery.data.readOnly.acmeTlsPort,
+      xrayListenPort: settingsQuery.data.readOnly.xrayListenPort,
       tlsCertificatePath: settingsQuery.data.readOnly.tlsCertificatePath,
       tlsKeyPath: settingsQuery.data.readOnly.tlsKeyPath,
     };
@@ -814,6 +844,36 @@ export function InboundEditor({
     mutationFn: async (values: InboundEditorForm) => {
       if (!defaultsContext) {
         throw new Error('Inbound defaults are not ready');
+      }
+      if (
+        values.protocol === 'VLESS_XHTTP_TLS' &&
+        !defaultsContext.tlsCertificatePath?.trim() &&
+        !defaultsContext.tlsKeyPath?.trim()
+      ) {
+        const hasPem =
+          'tls' in values.settings &&
+          values.settings.tls &&
+          typeof values.settings.tls === 'object' &&
+          'certificatePem' in values.settings.tls &&
+          typeof values.settings.tls.certificatePem === 'string' &&
+          values.settings.tls.certificatePem.trim() &&
+          'privateKeyPem' in values.settings.tls &&
+          typeof values.settings.tls.privateKeyPem === 'string' &&
+          values.settings.tls.privateKeyPem.trim();
+        const hasPaths =
+          'tls' in values.settings &&
+          values.settings.tls &&
+          typeof values.settings.tls === 'object' &&
+          'certificatePath' in values.settings.tls &&
+          typeof values.settings.tls.certificatePath === 'string' &&
+          values.settings.tls.certificatePath.trim() &&
+          'keyPath' in values.settings.tls &&
+          typeof values.settings.tls.keyPath === 'string' &&
+          values.settings.tls.keyPath.trim();
+        if (!hasPem && !hasPaths) {
+          message.error(t('inbounds.xrayTlsPathsMissing'));
+          throw new Error('VLESS_XHTTP_TLS TLS certificate paths are not configured');
+        }
       }
       const sanitized = sanitizeInboundForm(values, defaultsContext);
       const body = {
@@ -850,11 +910,11 @@ export function InboundEditor({
     }
     const initialSettings =
       inbound?.settings ?? buildDefaultInboundSettings(initialProtocol, defaultsContext);
-    form.setFieldsValue({
-      tag: inbound?.tag ?? '',
-      protocol: initialProtocol,
-      settings: initialSettings,
-    });
+    form.setFields([
+      { name: 'tag', value: inbound?.tag ?? '' },
+      { name: 'protocol', value: initialProtocol },
+      { name: 'settings', value: initialSettings },
+    ]);
     setEditorMode(inbound ? 'detailed' : 'simple');
     setAdvancedJson(JSON.stringify(initialSettings, null, 2));
     setAdvancedTouched(false);
@@ -871,7 +931,7 @@ export function InboundEditor({
     if (inbound || !defaultsContext) {
       return;
     }
-    const current = form.getFieldsValue();
+    const current = form.getFieldsValue(true) as InboundEditorForm;
     let nextSettings: InboundEditorForm['settings'];
     try {
       nextSettings = buildDefaultInboundSettings(
@@ -885,9 +945,12 @@ export function InboundEditor({
       }
       nextSettings = {
         listenHost: current.settings?.listenHost ?? '0.0.0.0',
-        listenPort: current.settings?.listenPort ?? 443,
+        listenPort: current.settings?.listenPort ?? defaultsContext.xrayListenPort ?? 8443,
         publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
-        publicPort: current.settings?.publicPort,
+        publicPort:
+          current.settings && 'publicPort' in current.settings
+            ? current.settings.publicPort
+            : undefined,
         enabled: current.settings?.enabled ?? true,
         path: '/',
         host: defaultsContext.publicHost || null,
@@ -900,7 +963,7 @@ export function InboundEditor({
         },
       };
     }
-    form.setFieldsValue({ protocol: value, settings: nextSettings });
+    replaceFormSettings(form, value, nextSettings);
     if (!advancedTouched) {
       setAdvancedJson(JSON.stringify(nextSettings, null, 2));
     }
@@ -908,13 +971,15 @@ export function InboundEditor({
 
   const handlePublicHostChange = (host: string) => {
     const current = form.getFieldValue('settings') as InboundEditorForm['settings'];
-    form.setFieldValue('settings', syncTlsPublicHost({ ...current, publicHost: host }, host));
+    const next = syncTlsPublicHost({ ...current, publicHost: host }, host);
+    form.setFields([{ name: 'settings', value: next }]);
   };
 
   const applyAdvancedJson = () => {
     try {
       const parsed = JSON.parse(advancedJson) as InboundEditorForm['settings'];
-      form.setFieldValue('settings', parsed);
+      const protocol = form.getFieldValue('protocol') as InboundProtocol;
+      replaceFormSettings(form, protocol, parsed);
       setAdvancedTouched(true);
     } catch {
       form.setFields([
@@ -1009,6 +1074,16 @@ export function InboundEditor({
             <Form.Item label={t('inbounds.engine')}>
               <Tag>{t(`enums.coreEngine.${PROTOCOL_ENGINE_MAP[protocol]}`)}</Tag>
             </Form.Item>
+          ) : null}
+          {protocol === 'VLESS_XHTTP_TLS' &&
+          !inbound &&
+          !defaultsContext?.tlsCertificatePath?.trim() ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={t('inbounds.xrayTlsPathsMissing')}
+            />
           ) : null}
 
           {detailed ? (

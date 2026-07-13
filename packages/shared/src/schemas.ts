@@ -1968,6 +1968,7 @@ export const systemSettingsReadOnlySchema = z
     vpnPublicHost: z.string().nullable(),
     acmeHttpPort: z.number().int().min(1).max(65_535),
     acmeTlsPort: z.number().int().min(1).max(65_535),
+    xrayListenPort: z.number().int().min(1).max(65_535),
     tlsCertificatePath: z.string().nullable(),
     tlsKeyPath: z.string().nullable(),
     telegramEnvConfigured: z.boolean(),

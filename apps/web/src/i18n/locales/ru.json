@@ -309,6 +309,7 @@
     "modeSimple": "Простой",
     "modeDetailed": "Детальный",
     "modeSimpleHint": "Быстрая настройка: домен, порт и протокол. Остальное — по умолчанию.",
+    "xrayTlsPathsMissing": "Xray нужен TLS-сертификат. Выполните `overvpn config certs` (или завершите install с Nginx), пересоздайте API-контейнер чтобы подхватились VPN_TLS_*, затем в «Детальный» укажите пути к сертификату — либо вставьте PEM.",
     "advanced": "JSON",
     "applyAdvanced": "Применить JSON",
     "sectionListen": "Прослушивание",
