@@ -98,18 +98,6 @@ jobs:
             exit 1
           fi
           docker version
-          docker buildx version
-
-      - name: Clean stale Docker resources
-        run: |
-          set +e
-          docker buildx ls --format '{{.Name}}' | while read -r builder; do
-            [[ -z "$builder" || "$builder" == "default" || "$builder" == "overvpn-ci" ]] && continue
-            echo "Removing stale builder: ${builder}"
-            docker buildx rm "$builder" 2>/dev/null || true
-          done
-          docker buildx prune -af 2>/dev/null || true
-          df -h /
 
       - name: Ensure buildx cache dirs
         run: |
@@ -124,6 +112,18 @@ jobs:
           driver: docker-container
           cleanup: true
           buildkitd-flags: --oci-worker-gc --oci-worker-gc-keepstorage=5GB
+
+      - name: Clean stale Docker resources
+        run: |
+          set +e
+          docker buildx version
+          docker buildx ls --format '{{.Name}}' | while read -r builder; do
+            [[ -z "$builder" || "$builder" == "default" || "$builder" == "overvpn-ci" ]] && continue
+            echo "Removing stale builder: ${builder}"
+            docker buildx rm "$builder" 2>/dev/null || true
+          done
+          docker buildx prune -af 2>/dev/null || true
+          df -h /
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

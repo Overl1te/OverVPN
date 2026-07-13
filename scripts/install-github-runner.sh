@@ -54,6 +54,14 @@ if ! command -v docker >/dev/null 2>&1; then
   color blue "Installing Docker..."
   curl -fsSL https://get.docker.com | sh
 fi
+# buildx is required by CI publish (docker/setup-buildx-action / build-push-action)
+if ! docker buildx version >/dev/null 2>&1; then
+  color blue "Installing Docker Buildx plugin..."
+  apt-get install -y docker-buildx-plugin || true
+fi
+if ! docker buildx version >/dev/null 2>&1; then
+  color yellow "docker buildx still missing; CI will install it via setup-buildx-action."
+fi
 systemctl enable --now docker
 
 if ! id -u "$RUNNER_USER" >/dev/null 2>&1; then
