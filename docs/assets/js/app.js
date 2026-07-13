@@ -194,32 +194,6 @@ function parseCommandLine(unit) {
   return { command: unit.trimEnd(), comment: '' };
 }
 
-function getCopyText(unit) {
-  const lines = unit.split('\n');
-  const commands = lines.map((line) => parseCommandLine(line).command).filter(Boolean);
-  return commands.join('\n').trim();
-}
-
-function parseCommandUnit(unit) {
-  const command = getCopyText(unit);
-  let comment = '';
-
-  for (let i = unit.split('\n').length - 1; i >= 0; i -= 1) {
-    const parsed = parseCommandLine(unit.split('\n')[i]);
-    if (parsed.comment) {
-      comment = parsed.comment;
-      break;
-    }
-  }
-
-  if (!command && !comment) {
-    const parsed = parseCommandLine(unit);
-    return parsed;
-  }
-
-  return { command, comment };
-}
-
 function createLineCopyButton(getText) {
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -283,37 +257,48 @@ function initCopyButtons() {
 
     const linesContainer = document.createElement('div');
     linesContainer.className = 'code-lines';
+    const hints = [];
 
     units.forEach((unit) => {
-      const row = document.createElement('div');
-      const parsed = parseCommandUnit(unit);
-      const copyText = parsed.command;
-      const isCommentOnly = !copyText && parsed.comment;
+      const parsed = parseCommandLine(unit);
+      const copyText = parsed.command.trim();
 
-      row.className = isCommentOnly ? 'code-line code-line-note' : 'code-line';
-
-      if (copyText) {
-        const textEl = document.createElement('code');
-        textEl.className = 'code-line-text';
-        textEl.textContent = copyText;
-        row.appendChild(textEl);
+      if (!copyText && parsed.comment) {
+        hints.push(parsed.comment);
+        return;
       }
+
+      const row = document.createElement('div');
+      row.className = 'code-line';
+
+      const body = document.createElement('div');
+      body.className = 'code-line-body';
+
+      const textEl = document.createElement('code');
+      textEl.className = 'code-line-text';
+      textEl.textContent = copyText;
+      body.appendChild(textEl);
 
       if (parsed.comment) {
         const commentEl = document.createElement('span');
         commentEl.className = 'code-line-comment';
         commentEl.textContent = parsed.comment;
-        row.appendChild(commentEl);
+        body.appendChild(commentEl);
       }
 
-      if (copyText) {
-        row.appendChild(createLineCopyButton(() => copyText));
-      }
-
+      row.appendChild(body);
+      row.appendChild(createLineCopyButton(() => copyText));
       linesContainer.appendChild(row);
     });
 
     wrapper.appendChild(linesContainer);
+
+    if (hints.length) {
+      const hintsEl = document.createElement('div');
+      hintsEl.className = 'code-hints';
+      hintsEl.textContent = hints.join(' · ');
+      wrapper.appendChild(hintsEl);
+    }
     pre.remove();
   });
 }
