@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Req,
+  Body,
 } from '@nestjs/common';
 import { INBOUND_PROTOCOLS } from '@overvpn/shared/constants';
 import {
@@ -29,11 +30,9 @@ import type {
 import {
   addAssignmentSchema,
   assignmentListQuerySchema,
-  createInboundSchema,
   idSchema,
   inboundListQuerySchema,
   rotateAssignmentCredentialSchema,
-  updateInboundSchema,
 } from '@overvpn/shared/schemas';
 import {
   CurrentAdmin,
@@ -43,6 +42,10 @@ import {
   type AuthenticatedRequest,
 } from '../common/authorization';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation';
+import {
+  InboundCreateValidationPipe,
+  InboundUpdateValidationPipe,
+} from './inbound-validation.pipe';
 import { InboundsService } from './inbounds.service';
 
 class CreateInboundDto {
@@ -92,7 +95,7 @@ export class InboundsController {
   })
   @ApiBody({ type: CreateInboundDto })
   create(
-    @ZodBody(createInboundSchema) input: CreateInbound,
+    @Body(InboundCreateValidationPipe) input: CreateInbound,
     @CurrentAdmin() actor: AuthenticatedAdmin,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -108,7 +111,7 @@ export class InboundsController {
   @ApiBody({ type: UpdateInboundDto })
   update(
     @ZodParam('id', idSchema) id: string,
-    @ZodBody(updateInboundSchema) input: UpdateInbound,
+    @Body(InboundUpdateValidationPipe) input: UpdateInbound,
     @CurrentAdmin() actor: AuthenticatedAdmin,
     @Req() request: AuthenticatedRequest,
   ) {

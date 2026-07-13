@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "OverVPN control plane API",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "build": "prisma generate && nest build",
     "dev": "nest start --watch",

@@ -6,9 +6,21 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@': path.resolve(rootDir, 'src'),
-    },
+    alias: [
+      {
+        find: '@overvpn/shared/constants',
+        replacement: path.resolve(rootDir, '../../packages/shared/src/constants.ts'),
+      },
+      {
+        find: '@overvpn/shared/schemas',
+        replacement: path.resolve(rootDir, '../../packages/shared/src/schemas.ts'),
+      },
+      {
+        find: '@overvpn/shared',
+        replacement: path.resolve(rootDir, '../../packages/shared/src/index.ts'),
+      },
+      { find: '@', replacement: path.resolve(rootDir, 'src') },
+    ],
   },
   test: {
     environment: 'node',

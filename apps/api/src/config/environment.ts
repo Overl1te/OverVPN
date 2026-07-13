@@ -262,6 +262,18 @@ export const environmentSchema = z
       .min(250)
       .max(60_000)
       .default(5_000),
+    SING_BOX_ACME_HTTP_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(80),
+    SING_BOX_ACME_TLS_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(443),
     CORE_APPLY_LOCK_TTL_MS: z.coerce
       .number()
       .int()

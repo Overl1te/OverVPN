@@ -1,10 +1,7 @@
 import {
   Button,
-  Drawer,
-  Form,
   Input,
   Popconfirm,
-  Select,
   Space,
   Table,
   Tag,
@@ -13,11 +10,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CreateInbound, InboundResult } from '@overvpn/shared/schemas';
-import type { InboundProtocol } from '@overvpn/shared/constants';
+import type { InboundResult } from '@overvpn/shared/schemas';
 import {
   addAssignment,
-  createInbound,
   disableInbound,
   enableInbound,
   listAssignments,
@@ -25,215 +20,13 @@ import {
   removeAssignment,
   revealAssignmentLink,
   rotateAssignmentCredential,
-  updateInbound,
 } from '@/api/inbounds';
-import { getSettings } from '@/api/settings';
 import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
-
-function defaultSettings(protocol: InboundProtocol, publicHost: string) {
-  const common = {
-    listenHost: '0.0.0.0',
-    listenPort: 443,
-    publicHost,
-    enabled: true,
-  };
-  switch (protocol) {
-    case 'HYSTERIA2':
-      return {
-        ...common,
-        upMbps: null,
-        downMbps: null,
-        ignoreClientBandwidth: false,
-        obfs: null,
-        tls: {
-          mode: 'ACME',
-          sni: publicHost,
-          alpn: ['h3'],
-          domains: [publicHost],
-          dataDirectory: '/var/lib/sing-box-state/acme',
-          provider: 'letsencrypt',
-          disableHttpChallenge: false,
-          disableTlsAlpnChallenge: false,
-          cipherSuites: [],
-          curvePreferences: [],
-          kernelTx: false,
-          kernelRx: false,
-          clientInsecure: false,
-        },
-        masquerade: null,
-        bindInterface: null,
-        routingMark: null,
-        reuseAddr: false,
-        netns: null,
-        tcpFastOpen: false,
-        tcpMultiPath: false,
-        disableTcpKeepAlive: false,
-        tcpKeepAlive: null,
-        tcpKeepAliveInterval: null,
-        udpFragment: null,
-        udpTimeout: null,
-        detour: null,
-        brutalDebug: false,
-      };
-    case 'VLESS_REALITY':
-      return {
-        ...common,
-        handshakeServer: 'www.cloudflare.com',
-        handshakePort: 443,
-        serverNames: ['www.cloudflare.com'],
-        shortIds: [''],
-        flow: 'xtls-rprx-vision',
-        transport: 'none',
-        fingerprint: 'chrome',
-      };
-    case 'TROJAN':
-      return {
-        ...common,
-        tls: {
-          mode: 'ACME',
-          sni: publicHost,
-          alpn: ['h3'],
-          domains: [publicHost],
-          dataDirectory: '/var/lib/sing-box-state/acme',
-          provider: 'letsencrypt',
-          disableHttpChallenge: false,
-          disableTlsAlpnChallenge: false,
-          cipherSuites: [],
-          curvePreferences: [],
-          kernelTx: false,
-          kernelRx: false,
-          clientInsecure: false,
-        },
-        fallback: null,
-      };
-    case 'SHADOWSOCKS':
-      return {
-        ...common,
-        listenPort: 8388,
-        method: '2022-blake3-aes-256-gcm',
-      };
-  }
-}
-
-function InboundEditor({
-  open,
-  inbound,
-  onClose,
-}: {
-  open: boolean;
-  inbound: InboundResult | null;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const onError = useApiErrorHandler();
-  const [form] = Form.useForm();
-  const protocol = Form.useWatch('protocol', form) as InboundProtocol | undefined;
-  const settingsQuery = useQuery({
-    queryKey: ['settings'],
-    queryFn: getSettings,
-    enabled: open && !inbound,
-  });
-  const publicHost = settingsQuery.data?.readOnly.vpnPublicHost?.trim() || 'vpn.example.com';
-
-  const saveMutation = useMutation({
-    mutationFn: async (values: Record<string, unknown>) => {
-      const body = {
-        tag: values.tag as string,
-        protocol: values.protocol as InboundProtocol,
-        settings: JSON.parse(values.settingsJson as string),
-      };
-      if (inbound) {
-        return updateInbound(inbound.id, body);
-      }
-      return createInbound(body as CreateInbound);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
-      onClose();
-    },
-    onError: onError,
-  });
-
-  const initialProtocol = inbound?.protocol ?? 'HYSTERIA2';
-
-  return (
-    <Drawer
-      width={720}
-      open={open}
-      destroyOnClose
-      title={inbound ? t('inbounds.edit') : t('inbounds.create')}
-      onClose={onClose}
-      extra={
-        <Button type="primary" loading={saveMutation.isPending} onClick={() => form.submit()}>
-          {t('app.save')}
-        </Button>
-      }
-    >
-      <Form
-        form={form}
-        layout="vertical"
-        key={inbound?.id ?? `new-${publicHost}-${settingsQuery.isFetched ? 'ready' : 'loading'}`}
-        initialValues={{
-          tag: inbound?.tag ?? '',
-          protocol: initialProtocol,
-          settingsJson: JSON.stringify(
-            inbound?.settings ?? defaultSettings(initialProtocol, publicHost),
-            null,
-            2,
-          ),
-        }}
-        onFinish={(values) => saveMutation.mutate(values)}
-      >
-        <Form.Item name="tag" label={t('inbounds.tag')} rules={[{ required: true }]}>
-          <Input disabled={!!inbound} />
-        </Form.Item>
-        <Form.Item name="protocol" label={t('inbounds.protocol')}>
-          <Select
-            disabled={!!inbound}
-            options={['HYSTERIA2', 'VLESS_REALITY', 'TROJAN', 'SHADOWSOCKS'].map((value) => ({
-              value,
-              label: t(`enums.protocol.${value}`),
-            }))}
-            onChange={(value: InboundProtocol) => {
-              if (!inbound) {
-                form.setFieldValue(
-                  'settingsJson',
-                  JSON.stringify(defaultSettings(value, publicHost), null, 2),
-                );
-              }
-            }}
-          />
-        </Form.Item>
-        <Typography.Text type="secondary">
-          {protocol ? t(`enums.protocol.${protocol}`, { defaultValue: protocol }) : '—'} ·{' '}
-          {t('inbounds.secretPresent')}
-        </Typography.Text>
-        <Form.Item
-          name="settingsJson"
-          label={t('inbounds.advanced')}
-          rules={[
-            {
-              validator: async (_, value: string) => {
-                try {
-                  JSON.parse(value);
-                } catch {
-                  throw new Error(t('app.invalidJson'));
-                }
-              },
-            },
-          ]}
-        >
-          <Input.TextArea rows={18} style={{ fontFamily: 'monospace', fontSize: 12 }} />
-        </Form.Item>
-      </Form>
-    </Drawer>
-  );
-}
+import { InboundEditor } from './InboundEditor';
 
 function AssignmentsPanel({ inboundId }: { inboundId: string }) {
   const { t } = useTranslation();

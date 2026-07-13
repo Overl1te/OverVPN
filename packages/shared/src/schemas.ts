@@ -1793,6 +1793,8 @@ export const systemSettingsReadOnlySchema = z
     swaggerEnabled: z.boolean(),
     subPublicBaseUrlEnv: z.string().min(1),
     vpnPublicHost: z.string().nullable(),
+    acmeHttpPort: z.number().int().min(1).max(65_535),
+    acmeTlsPort: z.number().int().min(1).max(65_535),
     telegramEnvConfigured: z.boolean(),
   })
   .strict();

@@ -14,7 +14,7 @@
 
 ![Node.js](https://img.shields.io/badge/Node.js-24_LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/license-UNLICENSED-red?style=flat-square)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
 
 </div>
 
@@ -377,6 +377,20 @@ curl -s http://localhost:8080/api/health/ready
 ## Документация для разработчиков
 
 Стек, архитектура модулей, воркеры, миграции, CI и локальная разработка без Compose — в **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+---
+
+## Лицензия
+
+Copyright (C) 2026 Overl1te
+
+OverVPN — свободное ПО: его можно распространять и/или изменять на условиях
+[GNU Affero General Public License v3](LICENSE) (только версия 3, без «or later»).
+
+Программа распространяется в надежде, что будет полезной, но **БЕЗ КАКИХ-ЛИБО
+ГАРАНТИЙ**. Полный текст — в файле [`LICENSE`](LICENSE).
+
+Исходники: https://github.com/Overl1te/OverVPN
 
 ---
 

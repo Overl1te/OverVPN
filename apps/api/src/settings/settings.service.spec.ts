@@ -82,6 +82,8 @@ describe('SettingsService', () => {
 
     const initial = await service.get();
     expect(initial.revision).toBe(1);
+    expect(initial.readOnly.acmeHttpPort).toBe(8081);
+    expect(initial.readOnly.acmeTlsPort).toBe(8443);
     expect(initial).not.toHaveProperty('telegramBotToken');
     expect(initial.telegramBotTokenConfigured).toBe(false);
 
@@ -140,6 +142,8 @@ function testConfig(): ConfigService<AppEnvironment, true> {
     BACKUP_ENCRYPT: true,
     NODE_ENV: 'test',
     SWAGGER_ENABLED: true,
+    SING_BOX_ACME_HTTP_PORT: 8081,
+    SING_BOX_ACME_TLS_PORT: 8443,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   };

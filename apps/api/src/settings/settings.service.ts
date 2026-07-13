@@ -244,6 +244,12 @@ export class SettingsService {
         subPublicBaseUrlEnv: envSub,
         vpnPublicHost:
           this.config.get('VPN_PUBLIC_HOST', { infer: true }) ?? null,
+        acmeHttpPort: this.config.get('SING_BOX_ACME_HTTP_PORT', {
+          infer: true,
+        }),
+        acmeTlsPort: this.config.get('SING_BOX_ACME_TLS_PORT', {
+          infer: true,
+        }),
         telegramEnvConfigured: Boolean(envToken) && Boolean(envChat),
       },
     };

@@ -39,6 +39,10 @@ class SystemSettingsReadOnlyDto {
   @ApiPropertyOptional({ nullable: true })
   vpnPublicHost!: string | null;
   @ApiProperty()
+  acmeHttpPort!: number;
+  @ApiProperty()
+  acmeTlsPort!: number;
+  @ApiProperty()
   telegramEnvConfigured!: boolean;
 }
 
