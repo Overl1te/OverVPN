@@ -15,7 +15,7 @@ function validationError(schemaResult: {
   error: {
     issues: Array<{ path: PropertyKey[]; code: string; message: string }>;
   };
-}) {
+}): never {
   throw new ApiException('VALIDATION_FAILED', HttpStatus.BAD_REQUEST, {
     issues: schemaResult.error.issues.map((issue) => ({
       path: issue.path.map(String).join('.'),
@@ -33,10 +33,10 @@ export class InboundCreateValidationPipe implements PipeTransform {
     const vpnHost = this.config.get('VPN_PUBLIC_HOST', { infer: true });
     const patched = applyVpnPublicHostFallback(value, vpnHost);
     const result = createInboundSchema.safeParse(patched);
-    if (!result.success) {
-      validationError(result);
+    if (result.success) {
+      return result.data;
     }
-    return result.data;
+    validationError(result);
   }
 }
 
@@ -48,9 +48,9 @@ export class InboundUpdateValidationPipe implements PipeTransform {
     const vpnHost = this.config.get('VPN_PUBLIC_HOST', { infer: true });
     const patched = applyVpnPublicHostFallback(value, vpnHost);
     const result = updateInboundSchema.safeParse(patched);
-    if (!result.success) {
-      validationError(result);
+    if (result.success) {
+      return result.data;
     }
-    return result.data;
+    validationError(result);
   }
 }

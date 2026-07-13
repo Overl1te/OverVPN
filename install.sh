@@ -25,6 +25,7 @@ DEFAULT_WEB_PORT="8000"
 DEFAULT_IMAGE_TAG="${OVERVPN_IMAGE_TAG:-latest}"
 GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
 GHCR_WEB_IMAGE="ghcr.io/overl1te/overvpn-web"
+CLI_LANG="${OVERVPN_CLI_LANG:-en}"
 
 colorized_echo() {
   local color=$1
@@ -40,9 +41,158 @@ colorized_echo() {
   esac
 }
 
+load_cli_lang() {
+  if [[ -f "$INSTALL_CONF" ]]; then
+    local saved
+    saved="$(get_env_var CLI_LANG "$INSTALL_CONF" 2>/dev/null || true)"
+    if [[ "$saved" == ru || "$saved" == en ]]; then
+      CLI_LANG="$saved"
+    fi
+  fi
+  case "${OVERVPN_CLI_LANG,,}" in
+    ru|ru_ru|ru-ru|russian) CLI_LANG=ru ;;
+    en|english) CLI_LANG=en ;;
+  esac
+}
+
+ensure_ru_locale() {
+  if locale -a 2>/dev/null | grep -qiE 'ru(_|-)ru'; then
+    return 0
+  fi
+  detect_os
+  colorized_echo blue "$(cli_t installing_ru_locale)"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y language-pack-ru locales
+  locale-gen ru_RU.UTF-8 2>/dev/null || true
+  update-locale LANG=ru_RU.UTF-8 2>/dev/null || true
+}
+
+apply_cli_lang() {
+  if [[ "$CLI_LANG" == ru ]]; then
+    ensure_ru_locale
+    export LANG=ru_RU.UTF-8
+    export LC_ALL=ru_RU.UTF-8
+  fi
+}
+
+cli_t() {
+  local key=$1
+  shift
+  if [[ "$CLI_LANG" == ru ]]; then
+    case "$key" in
+      must_be_root) printf '%s' "Эту команду нужно запускать от root (sudo)." ;;
+      wizard_title) printf '%s' " OverVPN — мастер установки" ;;
+      server_ip) printf 'IP сервера: %s' "$1" ;;
+      answer_all) printf '%s' "Ответьте на все вопросы сейчас — дальше установка пойдёт без участия." ;;
+      leave_empty_ip) printf 'Оставьте домен пустым для http://%s:%s (без TLS).' "$1" "$2" ;;
+      non_interactive_no_domain) printf '%s' "Неинтерактивный режим: установка без домена." ;;
+      prompt_base_domain) printf '%s' "1) Базовый домен (например example.com): " ;;
+      mode_ip_only) printf '%s' "Режим: только IP (без TLS). Запускаем установку…" ;;
+      prompt_panel_host) printf '2) Хост панели [panel.%s]: ' "$1" ;;
+      prompt_sub_host) printf '3) Хост подписок или хост/путь [sub.%s]: ' "$1" ;;
+      prompt_vpn_host) printf '4) Публичный VPN-хост [vpn.%s]: ' "$1" ;;
+      prompt_email) printf '5) Email для Let'\''s Encrypt [admin@%s]: ' "$1" ;;
+      summary_title) printf '%s' "Итого:" ;;
+      summary_site) printf '  Сайт:         https://%s' "$1" ;;
+      summary_panel) printf '  Панель:       https://%s' "$1" ;;
+      summary_sub) printf '  Подписки:     https://%s/api/sub/{TOKEN}' "$1" ;;
+      summary_sub_path) printf '  Подписки:     https://%s%s/{TOKEN}' "$1" "$2" ;;
+      summary_vpn) printf '  VPN-хост:     %s' "$1" ;;
+      summary_email) printf '  Email:        %s' "$1" ;;
+      dns_title) printf '%s' " Создайте эти DNS A-записи" ;;
+      dns_hint) printf 'У регистратора DNS → A-записи → %s' "$1" ;;
+      dns_point) printf '  %s  →  %s' "$1" "$2" ;;
+      dns_cloudflare) printf '%s' "Cloudflare: серая тучка (только DNS), пока не выпущены сертификаты." ;;
+      dns_firewall) printf '%s' "Также откройте UDP/443 (и TCP 80/443) в файрволе." ;;
+      prompt_dns_ready) printf '%s' "6) DNS A-записи уже созданы? [Y=ждать / s=пропустить проверку]: " ;;
+      dns_skip) printf '%s' "Проверка DNS пропущена (certbot может не сработать)." ;;
+      dns_wait_ok) printf '%s' "ОК — установщик дождётся DNS и продолжит без дополнительных вопросов." ;;
+      prompt_start_now) printf '%s' "7) Начать установку сейчас? [Y/n]: " ;;
+      aborted) printf '%s' "Отменено." ;;
+      no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай ☕" ;;
+      installing_ru_locale) printf '%s' "Устанавливаем поддержку русской локали…" ;;
+      install_success_title) printf '%s' "║      OverVPN успешно установлен              ║" ;;
+      install_success_site) printf 'Сайт:         https://%s' "$1" ;;
+      install_success_panel) printf 'Панель:       %s' "$1" ;;
+      install_success_login) printf 'Логин:        %s' "$1" ;;
+      install_success_password) printf 'Пароль:       %s' "$1" ;;
+      install_success_subs) printf 'Подписки:     %s/api/sub/{TOKEN}  (корень хоста подписок — заглушка)' "$1" ;;
+      install_success_vpn) printf 'VPN-хост:     %s  (publicHost для новых входящих)' "$1" ;;
+      install_success_credentials) printf 'Учётные данные: %s' "$1" ;;
+      install_success_manage) printf 'Управление: %s status | logs | config | update | restart' "$1" ;;
+      *) printf '%s' "$key" ;;
+    esac
+  else
+    case "$key" in
+      must_be_root) printf '%s' "This command must be run as root (use sudo)." ;;
+      wizard_title) printf '%s' " OverVPN — setup wizard" ;;
+      server_ip) printf 'Server IP: %s' "$1" ;;
+      answer_all) printf '%s' "Answer everything now — after that install runs unattended." ;;
+      leave_empty_ip) printf 'Leave base domain empty to use http://%s:%s (no TLS).' "$1" "$2" ;;
+      non_interactive_no_domain) printf '%s' "Non-interactive mode: installing without domain." ;;
+      prompt_base_domain) printf '%s' "1) Base domain (e.g. example.com): " ;;
+      mode_ip_only) printf '%s' "Mode: IP-only (no TLS). Starting install…" ;;
+      prompt_panel_host) printf '2) Panel host [panel.%s]: ' "$1" ;;
+      prompt_sub_host) printf '3) Subscription host or host/path [sub.%s]: ' "$1" ;;
+      prompt_vpn_host) printf '4) VPN public host [vpn.%s]: ' "$1" ;;
+      prompt_email) printf '5) Let'\''s Encrypt email [admin@%s]: ' "$1" ;;
+      summary_title) printf '%s' "Summary:" ;;
+      summary_site) printf '  Site:         https://%s' "$1" ;;
+      summary_panel) printf '  Panel:        https://%s' "$1" ;;
+      summary_sub) printf '  Subscription: https://%s/api/sub/{TOKEN}' "$1" ;;
+      summary_sub_path) printf '  Subscription: https://%s%s/{TOKEN}' "$1" "$2" ;;
+      summary_vpn) printf '  VPN host:     %s' "$1" ;;
+      summary_email) printf '  Email:        %s' "$1" ;;
+      dns_title) printf '%s' " Create these DNS A records" ;;
+      dns_hint) printf 'At your DNS provider → A records → %s' "$1" ;;
+      dns_point) printf '  %s  →  %s' "$1" "$2" ;;
+      dns_cloudflare) printf '%s' "Cloudflare: grey cloud (DNS only) until certs are issued." ;;
+      dns_firewall) printf '%s' "Also open UDP/443 (and 80/443 TCP) on the firewall." ;;
+      prompt_dns_ready) printf '%s' "6) DNS A-records already created? [Y=wait for them / s=skip check]: " ;;
+      dns_skip) printf '%s' "DNS check will be skipped (certbot may fail)." ;;
+      dns_wait_ok) printf '%s' "OK — installer will wait for DNS, then continue without more questions." ;;
+      prompt_start_now) printf '%s' "7) Start installation now? [Y/n]: " ;;
+      aborted) printf '%s' "Aborted." ;;
+      no_more_prompts) printf '%s' "No more prompts. You can go drink tea ☕" ;;
+      installing_ru_locale) printf '%s' "Installing Russian locale support..." ;;
+      install_success_title) printf '%s' "║         OverVPN installed successfully       ║" ;;
+      install_success_site) printf 'Site:         https://%s' "$1" ;;
+      install_success_panel) printf 'Panel:        %s' "$1" ;;
+      install_success_login) printf 'Login:        %s' "$1" ;;
+      install_success_password) printf 'Password:     %s' "$1" ;;
+      install_success_subs) printf 'Subscriptions:%s/api/sub/{TOKEN}  (root / on sub host is only a stub)' "$1" ;;
+      install_success_vpn) printf 'VPN host:     %s  (default publicHost for new inbounds)' "$1" ;;
+      install_success_credentials) printf 'Credentials: %s' "$1" ;;
+      install_success_manage) printf 'Manage with: %s status | logs | config | update | restart' "$1" ;;
+      *) printf '%s' "$key" ;;
+    esac
+  fi
+}
+
+prompt_wizard_language() {
+  if [[ ! -t 0 ]]; then
+    return
+  fi
+  local choice
+  echo
+  colorized_echo cyan "0) Language / Язык [1=English, 2=Русский] [1]: "
+  read -r -p "> " choice
+  choice="$(printf '%s' "${choice:-1}" | tr -d '[:space:]')"
+  case "$choice" in
+    2|ru|russian|русский|р|Русский)
+      CLI_LANG=ru
+      apply_cli_lang
+      ;;
+    *)
+      CLI_LANG=en
+      ;;
+  esac
+}
+
 check_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
-    colorized_echo red "This command must be run as root (use sudo)."
+    colorized_echo red "$(cli_t must_be_root)"
     exit 1
   fi
 }
@@ -234,27 +384,29 @@ prompt_install_endpoints() {
   CFG_MODE="ip"
   CFG_SKIP_DNS="false"
 
+  prompt_wizard_language
+
   echo
   colorized_echo cyan "════════════════════════════════════════"
-  colorized_echo cyan " OverVPN — setup wizard"
+  colorized_echo cyan "$(cli_t wizard_title)"
   colorized_echo cyan "════════════════════════════════════════"
-  colorized_echo cyan "Server IP: ${ip}"
-  colorized_echo yellow "Answer everything now — after that install runs unattended."
+  colorized_echo cyan "$(cli_t server_ip "$ip")"
+  colorized_echo yellow "$(cli_t answer_all)"
   echo
-  colorized_echo yellow "Leave base domain empty to use http://${ip}:${DEFAULT_WEB_PORT} (no TLS)."
+  colorized_echo yellow "$(cli_t leave_empty_ip "$ip" "$DEFAULT_WEB_PORT")"
   echo
 
   if [[ ! -t 0 ]]; then
-    colorized_echo yellow "Non-interactive mode: installing without domain."
+    colorized_echo yellow "$(cli_t non_interactive_no_domain)"
     return
   fi
 
   local base panel sub vpn email dns_ready
-  read -r -p "1) Base domain (e.g. example.com): " base
+  read -r -p "$(cli_t prompt_base_domain)" base
   base="$(printf '%s' "$base" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
   if [[ -z "$base" ]]; then
     echo
-    colorized_echo green "Mode: IP-only (no TLS). Starting install…"
+    colorized_echo green "$(cli_t mode_ip_only)"
     echo
     return
   fi
@@ -262,63 +414,63 @@ prompt_install_endpoints() {
   CFG_BASE_DOMAIN="$base"
   CFG_MODE="domain"
 
-  read -r -p "2) Panel host [panel.${base}]: " panel
+  read -r -p "$(cli_t prompt_panel_host "$base")" panel
   panel="$(printf '%s' "${panel:-panel.${base}}" | tr -d '[:space:]')"
   parse_endpoint "$panel" false
   CFG_PANEL_HOST="$PARSE_HOST"
 
-  read -r -p "3) Subscription host or host/path [sub.${base}]: " sub
+  read -r -p "$(cli_t prompt_sub_host "$base")" sub
   sub="$(printf '%s' "${sub:-sub.${base}}" | tr -d '[:space:]')"
   parse_endpoint "$sub" true
   CFG_SUB_HOST="$PARSE_HOST"
   CFG_SUB_PATH="$PARSE_PATH"
 
-  read -r -p "4) VPN public host [vpn.${base}]: " vpn
+  read -r -p "$(cli_t prompt_vpn_host "$base")" vpn
   vpn="$(printf '%s' "${vpn:-vpn.${base}}" | tr -d '[:space:]')"
   parse_endpoint "$vpn" false
   CFG_VPN_HOST="$PARSE_HOST"
 
-  read -r -p "5) Let's Encrypt email [admin@${base}]: " email
+  read -r -p "$(cli_t prompt_email "$base")" email
   CFG_EMAIL="$(printf '%s' "${email:-admin@${base}}" | tr -d '[:space:]')"
 
   local -a dns_hosts=()
   mapfile -t dns_hosts < <(unique_hosts "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
 
   echo
-  colorized_echo green "Summary:"
-  colorized_echo cyan "  Site:         https://${CFG_BASE_DOMAIN}"
-  colorized_echo cyan "  Panel:        https://${CFG_PANEL_HOST}"
+  colorized_echo green "$(cli_t summary_title)"
+  colorized_echo cyan "$(cli_t summary_site "$CFG_BASE_DOMAIN")"
+  colorized_echo cyan "$(cli_t summary_panel "$CFG_PANEL_HOST")"
   if [[ -n "$CFG_SUB_PATH" ]]; then
-    colorized_echo cyan "  Subscription: https://${CFG_SUB_HOST}${CFG_SUB_PATH}/{TOKEN}"
+    colorized_echo cyan "$(cli_t summary_sub_path "$CFG_SUB_HOST" "$CFG_SUB_PATH")"
   else
-    colorized_echo cyan "  Subscription: https://${CFG_SUB_HOST}/api/sub/{TOKEN}"
+    colorized_echo cyan "$(cli_t summary_sub "$CFG_SUB_HOST")"
   fi
-  colorized_echo cyan "  VPN host:     ${CFG_VPN_HOST}"
-  colorized_echo cyan "  Email:        ${CFG_EMAIL}"
+  colorized_echo cyan "$(cli_t summary_vpn "$CFG_VPN_HOST")"
+  colorized_echo cyan "$(cli_t summary_email "$CFG_EMAIL")"
   echo
 
   show_dns_instructions "$ip" "${dns_hosts[@]}"
 
-  read -r -p "6) DNS A-records already created? [Y=wait for them / s=skip check]: " dns_ready
+  read -r -p "$(cli_t prompt_dns_ready)" dns_ready
   dns_ready="$(printf '%s' "${dns_ready:-y}" | tr '[:upper:]' '[:lower:]')"
   if [[ "$dns_ready" == "s" || "$dns_ready" == "skip" ]]; then
     CFG_SKIP_DNS="true"
-    colorized_echo yellow "DNS check will be skipped (certbot may fail)."
+    colorized_echo yellow "$(cli_t dns_skip)"
   else
     CFG_SKIP_DNS="false"
-    colorized_echo green "OK — installer will wait for DNS, then continue without more questions."
+    colorized_echo green "$(cli_t dns_wait_ok)"
   fi
 
   echo
-  read -r -p "7) Start installation now? [Y/n]: " start_now
+  read -r -p "$(cli_t prompt_start_now)" start_now
   start_now="$(printf '%s' "${start_now:-y}" | tr '[:upper:]' '[:lower:]')"
   if [[ "$start_now" != "y" && "$start_now" != "yes" ]]; then
-    colorized_echo red "Aborted."
+    colorized_echo red "$(cli_t aborted)"
     exit 1
   fi
 
   echo
-  colorized_echo green "No more prompts. You can go drink tea ☕"
+  colorized_echo green "$(cli_t no_more_prompts)"
   echo
 }
 
@@ -341,17 +493,17 @@ show_dns_instructions() {
 
   echo
   colorized_echo yellow "════════════════════════════════════════"
-  colorized_echo yellow " Create these DNS A records"
+  colorized_echo yellow "$(cli_t dns_title)"
   colorized_echo yellow "════════════════════════════════════════"
-  colorized_echo yellow "At your DNS provider → A records → ${ip}"
+  colorized_echo yellow "$(cli_t dns_hint "$ip")"
   echo
   local host
   for host in "${hosts[@]}"; do
     printf '  %-40s A    %s\n' "$host" "$ip"
   done
   echo
-  colorized_echo yellow "Cloudflare: grey cloud (DNS only) until certs are issued."
-  colorized_echo cyan "Also open UDP/443 (and 80/443 TCP) on the firewall."
+  colorized_echo yellow "$(cli_t dns_cloudflare)"
+  colorized_echo cyan "$(cli_t dns_firewall)"
   echo
 }
 
@@ -982,6 +1134,7 @@ SUB_HOST=${CFG_SUB_HOST:-}
 SUB_PATH=${CFG_SUB_PATH:-}
 VPN_HOST=${CFG_VPN_HOST:-}
 EMAIL=${CFG_EMAIL:-}
+CLI_LANG=${CLI_LANG}
 EOF
   apply_deploy_permissions
 }
@@ -1016,22 +1169,22 @@ print_success() {
 
   echo
   colorized_echo green "╔══════════════════════════════════════════════╗"
-  colorized_echo green "║         OverVPN installed successfully       ║"
+  colorized_echo green "$(cli_t install_success_title)"
   colorized_echo green "╚══════════════════════════════════════════════╝"
   echo
   if [[ -n "$base_domain" ]]; then
-    colorized_echo cyan  "Site:         https://${base_domain}"
+    colorized_echo cyan "$(cli_t install_success_site "$base_domain")"
   fi
-  colorized_echo cyan  "Panel:        ${panel_url}"
-  colorized_echo cyan  "Login:        ${user}"
-  colorized_echo cyan  "Password:     ${pass}"
-  colorized_echo cyan  "Subscriptions:${sub_url}/api/sub/{TOKEN}  (root / on sub host is only a stub)"
+  colorized_echo cyan "$(cli_t install_success_panel "$panel_url")"
+  colorized_echo cyan "$(cli_t install_success_login "$user")"
+  colorized_echo cyan "$(cli_t install_success_password "$pass")"
+  colorized_echo cyan "$(cli_t install_success_subs "$sub_url")"
   if [[ -n "$vpn_host" ]]; then
-    colorized_echo cyan  "VPN host:     ${vpn_host}  (default publicHost for new inbounds)"
+    colorized_echo cyan "$(cli_t install_success_vpn "$vpn_host")"
   fi
   echo
-  colorized_echo yellow "Credentials: ${CREDENTIALS_FILE}"
-  colorized_echo yellow "Manage with: ${APP_NAME} status | logs | config | update | restart"
+  colorized_echo yellow "$(cli_t install_success_credentials "$CREDENTIALS_FILE")"
+  colorized_echo yellow "$(cli_t install_success_manage "$APP_NAME")"
   echo
 }
 
@@ -1569,6 +1722,9 @@ cmd_install_script() {
 }
 
 main() {
+  load_cli_lang
+  apply_cli_lang
+
   if [[ "${1:-}" == "@" ]]; then
     shift
   fi
