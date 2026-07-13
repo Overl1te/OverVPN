@@ -156,6 +156,8 @@ cli_t() {
       building_images) printf '%s' "Собираем образы локально (это может занять несколько минут)…" ;;
       pulling_images) printf '%s' "Скачиваем образы из GHCR…" ;;
       starting_containers) printf '%s' "Запускаем контейнеры…" ;;
+      checking_api_image) printf '%s' "Проверяем, что API-образ содержит Xray…" ;;
+      api_image_missing_xray) printf 'Образ %s не содержит Xray (нужен свежий GHCR или локальная сборка).\nПовторите: sudo overvpn install --build\nИли дождитесь publish образов после зелёного CI и сделайте: sudo overvpn update' "$1" ;;
       refreshing_core_config) printf '%s' "Обновляем bootstrap-конфиг VPN-ядра…" ;;
       installing_cli) printf 'Устанавливаем CLI в %s…' "$1" ;;
       cli_installed) printf 'CLI установлен. Команда: %s <command>' "$1" ;;
@@ -297,6 +299,8 @@ cli_t() {
       building_images) printf '%s' "Building images locally (this can take several minutes)..." ;;
       pulling_images) printf '%s' "Pulling images from GHCR..." ;;
       starting_containers) printf '%s' "Starting containers..." ;;
+      checking_api_image) printf '%s' "Checking that the API image includes Xray..." ;;
+      api_image_missing_xray) printf 'Image %s is missing Xray (need a fresh GHCR publish or a local build).\nRetry with: sudo overvpn install --build\nOr wait for CI publish, then: sudo overvpn update' "$1" ;;
       refreshing_core_config) printf '%s' "Refreshing VPN core bootstrap config..." ;;
       installing_cli) printf 'Installing CLI to %s...' "$1" ;;
       cli_installed) printf 'CLI installed. Use: %s <command>' "$1" ;;
@@ -469,6 +473,25 @@ compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+api_image_ref() {
+  local image
+  image="$(get_env_var API_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+  if [[ -z "$image" ]]; then
+    image="ghcr.io/overl1te/overvpn-api:latest"
+  fi
+  printf '%s\n' "$image"
+}
+
+assert_api_image_has_xray() {
+  local image=$1
+  colorized_echo blue "$(cli_t checking_api_image)"
+  if ! docker run --rm --entrypoint /bin/sh "$image" -c \
+    'test -x /usr/local/bin/xray && test -x /usr/local/bin/xray-entrypoint && test -f "${XRAY_LOCATION_ASSET:-/usr/local/share/xray}/geoip.dat"'; then
+    colorized_echo red "$(cli_t api_image_missing_xray "$image")"
+    exit 1
+  fi
+}
+
 compose_up() {
   local do_build=${1:-false}
   if [[ "$do_build" == "true" ]]; then
@@ -477,6 +500,7 @@ compose_up() {
   else
     colorized_echo blue "$(cli_t pulling_images)"
     compose pull
+    assert_api_image_has_xray "$(api_image_ref)"
     colorized_echo blue "$(cli_t starting_containers)"
     compose up -d --pull missing
   fi
@@ -1255,7 +1279,11 @@ fetch_raw_file() {
 fetch_deploy_bundle() {
   local branch=$1
   colorized_echo blue "$(cli_t downloading_bundle "$branch" "$APP_DIR")"
-  mkdir -p "$APP_DIR/deploy/landing/assets" "$APP_DIR/deploy/sing-box/certs" "$APP_DIR/deploy/proxy"
+  mkdir -p \
+    "$APP_DIR/deploy/landing/assets" \
+    "$APP_DIR/deploy/sing-box/certs" \
+    "$APP_DIR/deploy/xray/certs" \
+    "$APP_DIR/deploy/proxy"
 
   local -a files=(
     ".env.example"
@@ -1268,6 +1296,10 @@ fetch_deploy_bundle() {
     "deploy/sing-box/config.json"
     "deploy/sing-box/entrypoint.sh"
     "deploy/sing-box/certs/.gitkeep"
+    "deploy/xray/bootstrap-config.sh"
+    "deploy/xray/config.json"
+    "deploy/xray/entrypoint.sh"
+    "deploy/xray/certs/.gitkeep"
     "deploy/proxy/nginx.reverse-proxy.conf.example"
   )
 

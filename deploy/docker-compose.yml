@@ -50,6 +50,7 @@ x-api-environment: &api-environment
   XRAY_LAST_KNOWN_GOOD_PATH: /var/lib/xray/config.last-known-good.json
   XRAY_RELOAD_REQUEST_PATH: /var/lib/overvpn/xray-reload/request
   XRAY_RELOAD_ACK_PATH: /var/lib/overvpn/xray-reload/ack
+  XRAY_LOCATION_ASSET: /usr/local/share/xray
   XRAY_API_LISTEN: 0.0.0.0:10085
   XRAY_STATS_ADDRESS: core-xray:10085
   XRAY_PROCESS_TIMEOUT_MS: ${XRAY_PROCESS_TIMEOUT_MS:-15000}
@@ -217,6 +218,7 @@ services:
       XRAY_RELOAD_REQUEST_PATH: /var/lib/overvpn/xray-reload/request
       XRAY_RELOAD_ACK_PATH: /var/lib/overvpn/xray-reload/ack
       XRAY_PID_PATH: /var/lib/overvpn/xray-reload/xray.pid
+      XRAY_LOCATION_ASSET: /usr/local/share/xray
     depends_on:
       core-xray-config-init:
         condition: service_completed_successfully

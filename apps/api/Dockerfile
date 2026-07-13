@@ -36,6 +36,8 @@ RUN apk add --no-cache ca-certificates curl unzip \
          -o /tmp/xray.zip \
     && unzip -q /tmp/xray.zip -d /tmp/xray \
     && install -m 755 /tmp/xray/xray /out/xray \
+    && install -m 644 /tmp/xray/geoip.dat /out/geoip.dat \
+    && install -m 644 /tmp/xray/geosite.dat /out/geosite.dat \
     && rm -rf /tmp/xray /tmp/xray.zip
 
 FROM node:24-bookworm-slim AS base
@@ -82,7 +84,10 @@ COPY --from=build --chown=node:node /workspace/apps/api ./apps/api
 COPY --from=singbox-build /out/sing-box /usr/local/bin/sing-box
 COPY --chmod=755 deploy/sing-box/entrypoint.sh /usr/local/bin/sing-box-entrypoint
 COPY --from=xray-build /out/xray /usr/local/bin/xray
+COPY --from=xray-build /out/geoip.dat /usr/local/share/xray/geoip.dat
+COPY --from=xray-build /out/geosite.dat /usr/local/share/xray/geosite.dat
 COPY --chmod=755 deploy/xray/entrypoint.sh /usr/local/bin/xray-entrypoint
+ENV XRAY_LOCATION_ASSET=/usr/local/share/xray
 
 USER node
 EXPOSE 3000
