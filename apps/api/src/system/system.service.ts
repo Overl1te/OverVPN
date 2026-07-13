@@ -9,6 +9,7 @@ import type {
   UsageDateRangeQuery,
 } from '@overvpn/shared/schemas';
 import { localizeThroughputReason } from '../core/core-user-messages';
+import type { AppEnvironment } from '../config/environment';
 import { CoreProvider } from '../core/core-provider';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';

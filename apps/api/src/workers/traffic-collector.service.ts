@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment';
 import { localizeWorkerError } from '../core/core-user-messages';
 import { CoreProvider, type TrafficCounter } from '../core/core-provider';
 import {
