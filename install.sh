@@ -443,19 +443,20 @@ write_nginx_site() {
     if [[ "$mode" == "https" ]]; then
       conf+="
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name ${host};
 
     ssl_certificate /etc/letsencrypt/live/${panel_host}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${panel_host}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 1d;
 "
       if [[ -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
         conf+="    include /etc/letsencrypt/options-ssl-nginx.conf;
+"
+      else
+        conf+="    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
 "
       fi
       if [[ -f /etc/letsencrypt/ssl-dhparams.pem ]]; then

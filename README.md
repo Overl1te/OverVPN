@@ -23,25 +23,57 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 - `ghcr.io/overl1te/overvpn-api:latest`
 - `ghcr.io/overl1te/overvpn-web:latest`
 
-### Self-hosted runner (сборка образов)
+### Self-hosted runner (сборка образов в CI)
 
-На отдельной или той же Ubuntu-машине с Docker:
+Нужен **один** Ubuntu-сервер с Docker (можно тот же, что и панель). Workflow ждёт labels: `self-hosted`, `linux`, `x64`, `overvpn`.
+
+#### Вариант A — скрипт (рекомендуется)
 
 ```bash
-# токен: Repo → Settings → Actions → Runners → New self-hosted runner
-# или: gh api -X POST repos/Overl1te/OverVPN/actions/runners/registration-token --jq .token
-sudo RUNNER_TOKEN=XXXX ./scripts/install-github-runner.sh
+# 1) Токен регистрации
+# GitHub → OverVPN → Settings → Actions → Runners → New self-hosted runner
+# или:
+gh api -X POST repos/Overl1te/OverVPN/actions/runners/registration-token --jq .token
+
+# 2) Установка (от root)
+sudo RUNNER_TOKEN=XXXX bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/scripts/install-github-runner.sh)"
 ```
 
-Если раннер ставили вручную под своим пользователем — добавьте его в группу `docker` и перезапустите сервис:
+Скрипт поставит Docker (если нет), пользователя `github-runner`, раннер в `/opt/actions-runner`, systemd-сервис и доступ к Docker.
+
+#### Вариант B — уже есть `~/actions-runner` (ручная установка)
 
 ```bash
+# Docker для твоего пользователя
 sudo usermod -aG docker "$USER"
-# найти сервис: systemctl list-units 'actions.runner.*'
-sudo systemctl restart 'actions.runner.<org>-<repo>.<name>.service'
+
+cd ~/actions-runner
+# останови ручной ./run.sh, если крутится
+pkill -f 'Runner.Listener' || true
+
+# поставь как systemd-сервис
+sudo ./svc.sh install "$USER"
+sudo ./svc.sh start
+
+# дай сервису группу docker (обязательно)
+SERVICE=$(systemctl list-units --type=service --all --no-legend 'actions.runner.*' | awk '{print $1}' | head -n1)
+echo "SERVICE=$SERVICE"   # не должно быть пусто!
+
+sudo mkdir -p /etc/systemd/system/${SERVICE}.d
+printf '%s\n' '[Service]' 'SupplementaryGroups=docker' | sudo tee /etc/systemd/system/${SERVICE}.d/docker.conf
+sudo systemctl daemon-reload
+sudo systemctl restart "$SERVICE"
 ```
 
-Workflows ждут labels: `self-hosted`, `linux`, `x64`, `overvpn`.
+#### Проверка
+
+```bash
+systemctl status "$SERVICE" --no-pager
+sg docker -c 'docker info'    # без permission denied
+# GitHub → Settings → Actions → Runners → статус Online (зелёный)
+```
+
+После пуша в `master` workflow **CI** делает `verify` → `publish` образов в GHCR.
 
 Установщик спросит по шагам:
 
