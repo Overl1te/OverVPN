@@ -82,7 +82,8 @@ function syncAcmeTlsHost(
   const nextEmail = defaultAcmeEmail(host);
   const shouldSyncEmail =
     Boolean(nextEmail) &&
-    (!previousEmail || (previousDefaultEmail !== undefined && previousEmail === previousDefaultEmail));
+    (!previousEmail ||
+      (previousDefaultEmail !== undefined && previousEmail === previousDefaultEmail));
 
   return {
     ...settings,
@@ -247,10 +248,7 @@ function Hysteria2Fields({ detailed }: { detailed: boolean }) {
             <Switch
               checked={obfsEnabled}
               onChange={(checked) => {
-                form.setFieldValue(
-                  ['settings', 'obfs'],
-                  checked ? { type: 'SALAMANDER' } : null,
-                );
+                form.setFieldValue(['settings', 'obfs'], checked ? { type: 'SALAMANDER' } : null);
               }}
             />
           </Form.Item>

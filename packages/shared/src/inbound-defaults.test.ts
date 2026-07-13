@@ -50,7 +50,7 @@ describe('buildDefaultInboundSettings', () => {
     assert.equal(settings.publicHost, 'vpn.host.test');
   });
 
-  it('sets a default Let\'s Encrypt contact email from the public host', () => {
+  it("sets a default Let's Encrypt contact email from the public host", () => {
     const settings = buildDefaultInboundSettings('HYSTERIA2', {
       publicHost: 'vpn.example.org',
     }) as Hysteria2InboundSettings;
