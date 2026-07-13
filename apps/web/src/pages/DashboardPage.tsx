@@ -5,10 +5,11 @@ import { Column } from '@ant-design/charts';
 import { getDashboard, getSystemHealth } from '@/api/system';
 import { PageHeader } from '@/components/PageHeader';
 import { formatBytes, formatBytesPerSecond } from '@/utils/format';
+import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
 
 export function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dashboardQuery = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => getDashboard(),
@@ -61,7 +62,11 @@ export function DashboardPage() {
                   message={t('dashboard.throughputUnavailable')}
                   description={
                     data?.traffic.throughput.available === false
-                      ? data.traffic.throughput.reason
+                      ? localizedRuntimeError(
+                          data.traffic.throughput.reason,
+                          i18n.language,
+                          data.traffic.throughput.reasonRu,
+                        ) ?? undefined
                       : undefined
                   }
                 />
@@ -159,7 +164,7 @@ export function DashboardPage() {
           pagination={false}
           dataSource={health?.workers ?? data?.workers ?? []}
           columns={[
-            { title: t('app.name'), dataIndex: 'name' },
+            { title: t('app.name'), dataIndex: 'name', render: (name: string) => t(`enums.workerName.${name}`, { defaultValue: name }) },
             {
               title: t('dashboard.workerState'),
               dataIndex: 'state',
@@ -177,7 +182,8 @@ export function DashboardPage() {
               title: t('app.error'),
               dataIndex: 'error',
               ellipsis: true,
-              render: (value: string | null) => value || '—',
+              render: (value: string | null) =>
+                localizedRuntimeError(value, i18n.language) || '—',
             },
           ]}
         />

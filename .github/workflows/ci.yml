@@ -164,3 +164,13 @@ jobs:
           labels: ${{ steps.meta-web.outputs.labels }}
           cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/web
           cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/web,mode=max
+
+      - name: Package deploy bundle
+        run: bash scripts/package-deploy-bundle.sh dist/overvpn-deploy.tar.gz
+
+      - name: Upload deploy bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: overvpn-deploy
+          path: dist/overvpn-deploy.tar.gz
+          if-no-files-found: error

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AppEnvironment } from '../config/environment';
+import { localizeWorkerError } from '../core/core-user-messages';
 import { CoreProvider, type TrafficCounter } from '../core/core-provider';
 import {
   RedisDistributedLock,
@@ -70,10 +70,15 @@ export class TrafficCollectorService {
           const snapshot = await this.provider.getTrafficSnapshot();
           await assertOwned.verify();
           if (!snapshot.supported) {
+            const localized = localizeWorkerError(
+              `${snapshot.error.code}: ${snapshot.error.message}`,
+            );
+            const workerError =
+              localized?.en ?? `${snapshot.error.code}: ${snapshot.error.message}`;
             await this.health.markDegraded(
               WORKER_NAME,
               startedAt,
-              `${snapshot.error.code}: ${snapshot.error.message}`,
+              workerError,
               {
                 trafficAvailable: false,
                 capturedAt: snapshot.capturedAt.toISOString(),

@@ -158,6 +158,7 @@ export interface CoreHealthResult {
   latencyMs: number;
   checkedAt: Date;
   error: string | null;
+  errorRu: string | null;
 }
 
 export interface TrafficCounter {
@@ -179,6 +180,7 @@ export type TrafficSnapshotResult =
       error: {
         code: 'UNSUPPORTED' | 'UNAVAILABLE' | 'QUERY_FAILED';
         message: string;
+        messageRu: string;
       };
     };
 

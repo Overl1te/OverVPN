@@ -210,7 +210,8 @@ function InboundEditor({
           />
         </Form.Item>
         <Typography.Text type="secondary">
-          {protocol} · {t('inbounds.secretPresent')}
+          {protocol ? t(`enums.protocol.${protocol}`, { defaultValue: protocol }) : '—'} ·{' '}
+          {t('inbounds.secretPresent')}
         </Typography.Text>
         <Form.Item
           name="settingsJson"

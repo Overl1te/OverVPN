@@ -455,6 +455,7 @@ export const coreHealthSchema = z
     latencyMs: z.number().nonnegative(),
     checkedAt: isoDateTimeSchema,
     error: z.string().nullable(),
+    errorRu: z.string().nullable(),
   })
   .strict();
 
@@ -472,6 +473,7 @@ const throughputSchema = z.discriminatedUnion('available', [
     .object({
       available: z.literal(false),
       reason: z.string(),
+      reasonRu: z.string(),
       lastSuccessfulAt: isoDateTimeSchema.nullable(),
     })
     .strict(),

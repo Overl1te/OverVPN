@@ -8,7 +8,10 @@ import type {
   SystemHealth,
   UsageDateRangeQuery,
 } from '@overvpn/shared/schemas';
-import type { AppEnvironment } from '../config/environment';
+import {
+  localizeThroughputReason,
+  localizeWorkerError,
+} from '../core/core-user-messages';
 import { CoreProvider } from '../core/core-provider';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';
@@ -201,6 +204,7 @@ export class SystemService {
         latencyMs: core.latencyMs,
         checkedAt: core.checkedAt.toISOString(),
         error: core.error,
+        errorRu: core.errorRu,
       },
       workers,
     };
@@ -223,6 +227,7 @@ export class SystemService {
         latencyMs: core.latencyMs,
         checkedAt: core.checkedAt.toISOString(),
         error: core.error,
+        errorRu: core.errorRu,
       },
       workers,
     };
@@ -244,10 +249,15 @@ function throughputFromWorkers(workers: WorkerHealthResult[]) {
     typeof download === 'string' &&
     typeof capturedAt === 'string';
   if (!available) {
+    const localized = localizeThroughputReason(
+      traffic?.name,
+      traffic?.state,
+      traffic?.error,
+    );
     return {
       available: false as const,
-      reason:
-        traffic?.error ?? `traffic collector is ${traffic?.state ?? 'unknown'}`,
+      reason: localized.en,
+      reasonRu: localized.ru,
       lastSuccessfulAt: traffic?.lastSuccessAt ?? null,
     };
   }

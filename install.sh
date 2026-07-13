@@ -13,6 +13,7 @@ ENV_FILE="${APP_DIR}/.env"
 COMPOSE_FILE="${APP_DIR}/deploy/docker-compose.yml"
 CREDENTIALS_FILE="${APP_DIR}/.credentials"
 INSTALL_CONF="${APP_DIR}/.install.conf"
+INSTALL_MODE_FILE="${APP_DIR}/.install.mode"
 BIN_PATH="/usr/local/bin/${APP_NAME}"
 NGINX_SITE="/etc/nginx/sites-available/${APP_NAME}"
 NGINX_LINK="/etc/nginx/sites-enabled/${APP_NAME}"
@@ -111,10 +112,10 @@ compose_up() {
     colorized_echo blue "Starting containers..."
     compose up -d --pull missing
   fi
-  # Oneshot init does not re-run on plain `up`; force it so Clash/V2Ray APIs are present.
-  colorized_echo blue "Refreshing sing-box bootstrap config..."
-  compose up -d --force-recreate --no-deps sing-box-config-init
-  compose up -d --force-recreate --no-deps sing-box
+  # Oneshot init does not re-run on plain `up`; force it so management APIs are present.
+  colorized_echo blue "Refreshing VPN core bootstrap config..."
+  compose up -d --force-recreate --no-deps core-config-init
+  compose up -d --force-recreate --no-deps core
 }
 
 is_installed() {
@@ -640,7 +641,11 @@ install_nginx() {
     --redirect \
     --no-eff-email \
     --cert-name "$panel_host" \
-    --expand
+    --expand || {
+      colorized_echo red "Certificate issuance failed during install."
+      colorized_echo yellow "Check DNS (grey cloud on Cloudflare) and that all hosts resolve to this server."
+      exit 1
+    }
 
   write_nginx_site "$base_domain" "$panel_host" "$sub_host" "$sub_path" "$vpn_host" "https"
   nginx -t
@@ -685,17 +690,7 @@ refresh_nginx() {
   done
 
   # Expand existing cert to include apex/base when missing.
-  certbot certonly --nginx \
-    "${cert_args[@]}" \
-    --non-interactive \
-    --agree-tos \
-    --email "$email" \
-    --no-eff-email \
-    --cert-name "$panel_host" \
-    --expand \
-    --keep-until-expiring || {
-      colorized_echo yellow "Certbot expand failed; writing HTTPS nginx config with existing cert."
-    }
+  issue_certificates_strict "$email" "$panel_host" "${cert_args[@]}"
 
   write_nginx_site "$base_domain" "$panel_host" "$sub_host" "$sub_path" "$vpn_host" "https"
   ln -sfn "$NGINX_SITE" "$NGINX_LINK"
@@ -727,6 +722,170 @@ fetch_repo() {
   fi
 }
 
+fetch_raw_file() {
+  local branch=$1
+  local rel=$2
+  local dest=$3
+  mkdir -p "$(dirname "$dest")"
+  curl -fsSL "${REPO_RAW_BASE}/${branch}/${rel}" -o "$dest"
+}
+
+fetch_deploy_bundle() {
+  local branch=$1
+  colorized_echo blue "Downloading deploy bundle (${branch}) into ${APP_DIR}..."
+  mkdir -p "$APP_DIR/deploy/landing" "$APP_DIR/deploy/sing-box/certs" "$APP_DIR/deploy/proxy"
+
+  local -a files=(
+    ".env.example"
+    "deploy/docker-compose.yml"
+    "deploy/landing/index.html"
+    "deploy/landing/sub.html"
+    "deploy/landing/vpn.html"
+    "deploy/sing-box/bootstrap-config.sh"
+    "deploy/sing-box/config.json"
+    "deploy/sing-box/entrypoint.sh"
+    "deploy/sing-box/certs/.gitkeep"
+    "deploy/proxy/nginx.reverse-proxy.conf.example"
+  )
+
+  local rel
+  for rel in "${files[@]}"; do
+    fetch_raw_file "$branch" "$rel" "${APP_DIR}/${rel}"
+  done
+
+  fetch_raw_file "$branch" "install.sh" "${APP_DIR}/install.sh"
+  chmod 755 "${APP_DIR}/install.sh"
+  printf 'slim\n' >"$INSTALL_MODE_FILE"
+}
+
+deploy_source() {
+  local branch=$1
+  local do_build=$2
+
+  if [[ "$do_build" == "true" ]]; then
+    fetch_repo "$branch"
+    printf 'git\n' >"$INSTALL_MODE_FILE"
+  elif [[ -d "$APP_DIR/.git" ]]; then
+    fetch_repo "$branch"
+    printf 'git\n' >"$INSTALL_MODE_FILE"
+  else
+    fetch_deploy_bundle "$branch"
+  fi
+  apply_deploy_permissions
+}
+
+apply_deploy_permissions() {
+  if [[ ! -d "$APP_DIR" ]]; then
+    return 0
+  fi
+  chmod -R a+rX "$APP_DIR"
+  [[ -f "$ENV_FILE" ]] && chmod a+r "$ENV_FILE"
+  [[ -f "$CREDENTIALS_FILE" ]] && chmod a+r "$CREDENTIALS_FILE"
+  [[ -f "$INSTALL_CONF" ]] && chmod a+r "$INSTALL_CONF"
+  [[ -f "${APP_DIR}/install.sh" ]] && chmod a+rX "${APP_DIR}/install.sh"
+}
+
+set_install_conf_var() {
+  local key=$1
+  local value=$2
+  local escaped
+  escaped="$(printf '%s' "$value" | sed -e 's/[\/&]/\\&/g')"
+  if grep -qE "^${key}=" "$INSTALL_CONF"; then
+    sed -i -E "s|^${key}=.*|${key}=${escaped}|" "$INSTALL_CONF"
+  else
+    printf '%s=%s\n' "$key" "$value" >>"$INSTALL_CONF"
+  fi
+}
+
+sync_domains_from_install_conf() {
+  if [[ ! -f "$INSTALL_CONF" ]]; then
+    colorized_echo red "Missing ${INSTALL_CONF}"
+    exit 1
+  fi
+
+  local mode base_domain panel_host sub_host sub_path vpn_host
+  mode="$(get_env_var MODE "$INSTALL_CONF")"
+  base_domain="$(get_env_var BASE_DOMAIN "$INSTALL_CONF")"
+  panel_host="$(get_env_var PANEL_HOST "$INSTALL_CONF")"
+  sub_host="$(get_env_var SUB_HOST "$INSTALL_CONF")"
+  sub_path="$(get_env_var SUB_PATH "$INSTALL_CONF")"
+  vpn_host="$(get_env_var VPN_HOST "$INSTALL_CONF")"
+
+  local panel_url sub_url ip web_port
+  ip="$(public_ip)"
+  web_port="$(get_env_var WEB_PORT "$ENV_FILE" 2>/dev/null || echo "$DEFAULT_WEB_PORT")"
+
+  if [[ "$mode" == "domain" ]]; then
+    panel_url="https://${panel_host}"
+    if [[ -n "$sub_path" ]]; then
+      sub_url="https://${sub_host}${sub_path}"
+    else
+      sub_url="https://${sub_host}"
+    fi
+    set_env_var "CORS_ORIGINS" "$panel_url"
+    set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
+    set_env_var "VPN_PUBLIC_HOST" "$vpn_host"
+    set_env_var "AUTH_COOKIE_SECURE" "true"
+    set_env_var "WEB_BIND_ADDRESS" "127.0.0.1"
+    set_env_var "WEB_PORT" "8080"
+    set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
+    set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
+  else
+    panel_url="http://${ip}:${web_port}"
+    sub_url="$panel_url"
+    set_env_var "CORS_ORIGINS" "$panel_url"
+    set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
+    set_env_var "VPN_PUBLIC_HOST" "$ip"
+    set_env_var "AUTH_COOKIE_SECURE" "false"
+  fi
+
+  if [[ -f "$CREDENTIALS_FILE" ]]; then
+    set_env_var "PANEL_URL" "$panel_url" "$CREDENTIALS_FILE"
+    set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url" "$CREDENTIALS_FILE"
+    set_env_var "VPN_PUBLIC_HOST" "${vpn_host:-$ip}" "$CREDENTIALS_FILE"
+    set_env_var "BASE_DOMAIN" "${base_domain}" "$CREDENTIALS_FILE"
+  fi
+
+  apply_deploy_permissions
+}
+
+issue_certificates_strict() {
+  local email=$1
+  local panel_host=$2
+  shift 2
+  local -a cert_args=("$@")
+
+  if ! need_cmd certbot; then
+    colorized_echo red "certbot is not installed."
+    exit 1
+  fi
+
+  colorized_echo blue "Requesting/expanding Let's Encrypt certificate..."
+  if ! certbot certonly --nginx \
+    "${cert_args[@]}" \
+    --non-interactive \
+    --agree-tos \
+    --email "$email" \
+    --no-eff-email \
+    --cert-name "$panel_host" \
+    --expand \
+    --keep-until-expiring; then
+    colorized_echo red "Certificate issuance failed."
+    colorized_echo yellow "Check DNS (grey cloud on Cloudflare), port 80, and host resolution."
+    exit 1
+  fi
+}
+
+read_install_hosts() {
+  INSTALL_MODE="$(get_env_var MODE "$INSTALL_CONF" 2>/dev/null || true)"
+  INSTALL_BASE_DOMAIN="$(get_env_var BASE_DOMAIN "$INSTALL_CONF" 2>/dev/null || true)"
+  INSTALL_PANEL_HOST="$(get_env_var PANEL_HOST "$INSTALL_CONF" 2>/dev/null || true)"
+  INSTALL_SUB_HOST="$(get_env_var SUB_HOST "$INSTALL_CONF" 2>/dev/null || true)"
+  INSTALL_SUB_PATH="$(get_env_var SUB_PATH "$INSTALL_CONF" 2>/dev/null || true)"
+  INSTALL_VPN_HOST="$(get_env_var VPN_HOST "$INSTALL_CONF" 2>/dev/null || true)"
+  INSTALL_EMAIL="$(get_env_var EMAIL "$INSTALL_CONF" 2>/dev/null || true)"
+}
+
 generate_env() {
   local web_port=$1
   local with_nginx=$2
@@ -736,7 +895,6 @@ generate_env() {
 
   colorized_echo blue "Generating .env secrets..."
   cp "$APP_DIR/.env.example" "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
 
   local pg_pass redis_pass jwt_secret master_key clash_secret admin_pass admin_user
   pg_pass="$(rand_hex 32)"
@@ -802,7 +960,6 @@ BASE_DOMAIN=${CFG_BASE_DOMAIN:-}
 WEB_PORT=${web_port}
 CREATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
-  chmod 600 "$CREDENTIALS_FILE"
 
   cat >"$INSTALL_CONF" <<EOF
 MODE=${CFG_MODE}
@@ -813,7 +970,7 @@ SUB_PATH=${CFG_SUB_PATH:-}
 VPN_HOST=${CFG_VPN_HOST:-}
 EMAIL=${CFG_EMAIL:-}
 EOF
-  chmod 600 "$INSTALL_CONF"
+  apply_deploy_permissions
 }
 
 wait_for_health() {
@@ -861,7 +1018,7 @@ print_success() {
   fi
   echo
   colorized_echo yellow "Credentials: ${CREDENTIALS_FILE}"
-  colorized_echo yellow "Manage with: ${APP_NAME} status | logs | update | nginx | restart"
+  colorized_echo yellow "Manage with: ${APP_NAME} status | logs | config | update | restart"
   echo
 }
 
@@ -872,7 +1029,15 @@ OverVPN management script
 Usage:
   ${APP_NAME} install [options]
   ${APP_NAME} up | down | restart | status | logs [service] | update | uninstall
-  ${APP_NAME} info | edit | bootstrap | nginx | install-script
+  ${APP_NAME} info | edit | bootstrap | nginx | config | install-script
+
+Config (domains, nginx, certificates):
+  ${APP_NAME} config show
+  ${APP_NAME} config sync
+  ${APP_NAME} config set-domain [--base-domain <host>] [--panel <host>] [--subscription <spec>] [--vpn-host <host>] [--email <email>]
+  ${APP_NAME} config nginx
+  ${APP_NAME} config certs
+  ${APP_NAME} config apply
 
 Install asks interactively:
   1) base domain (public landing page + TLS)
@@ -899,9 +1064,8 @@ Options:
 
 Wizard asks all questions first (domains + DNS), then runs unattended.
 
-Default install pulls prebuilt images from:
-  ${GHCR_API_IMAGE}:${DEFAULT_IMAGE_TAG}
-  ${GHCR_WEB_IMAGE}:${DEFAULT_IMAGE_TAG}
+Default install downloads only deploy files (no full git clone).
+Use --build to clone the repository and build images locally.
 
 One-liner:
   sudo bash -c "\$(curl -fsSL ${REPO_RAW_BASE}/${DEFAULT_BRANCH}/install.sh)" @ install
@@ -997,7 +1161,7 @@ cmd_install() {
     wait_for_dns "$ip" "${dns_hosts[@]}"
   fi
 
-  fetch_repo "$branch"
+  deploy_source "$branch" "$do_build"
   generate_env "$web_port" "$with_nginx" "$image_tag"
 
   if [[ "$use_ufw" == "true" ]]; then
@@ -1018,6 +1182,7 @@ cmd_install() {
   compose --profile tools run --rm bootstrap-admin
 
   install_cli "${APP_DIR}/install.sh"
+  apply_deploy_permissions
   print_success "$web_port"
 }
 
@@ -1071,27 +1236,15 @@ cmd_update() {
     esac
   done
 
-  local branch
-  branch="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
+  local branch="$DEFAULT_BRANCH"
+  if [[ "$do_build" == "true" || -d "$APP_DIR/.git" ]]; then
+    branch="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
+  fi
 
   colorized_echo blue "Updating OverVPN (${branch})..."
-  fetch_repo "$branch"
+  deploy_source "$branch" "$do_build"
   install_cli "${APP_DIR}/install.sh"
-
-  # Migrate install-time VPN host into .env for inbound defaults (older installs).
-  if [[ -z "$(get_env_var VPN_PUBLIC_HOST "$ENV_FILE" 2>/dev/null || true)" ]]; then
-    local vpn_host=""
-    if [[ -f "$CREDENTIALS_FILE" ]]; then
-      vpn_host="$(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE" 2>/dev/null || true)"
-    fi
-    if [[ -z "$vpn_host" && -f "$INSTALL_CONF" ]]; then
-      vpn_host="$(get_env_var VPN_HOST "$INSTALL_CONF" 2>/dev/null || true)"
-    fi
-    if [[ -n "$vpn_host" ]]; then
-      set_env_var "VPN_PUBLIC_HOST" "$vpn_host"
-      colorized_echo cyan "Set VPN_PUBLIC_HOST=${vpn_host} from install credentials"
-    fi
-  fi
+  sync_domains_from_install_conf
 
   if [[ -n "$image_tag" ]]; then
     set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
@@ -1100,6 +1253,7 @@ cmd_update() {
 
   compose_up "$do_build"
   refresh_nginx
+  apply_deploy_permissions
   wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
   colorized_echo green "Update complete."
 }
@@ -1200,6 +1354,180 @@ cmd_nginx() {
   refresh_nginx
 }
 
+cmd_config_show() {
+  check_root
+  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+
+  echo "Install dir: ${APP_DIR}"
+  echo "Install mode: $(cat "$INSTALL_MODE_FILE" 2>/dev/null || echo unknown)"
+  echo
+  if [[ -f "$INSTALL_CONF" ]]; then
+    echo "=== .install.conf (nginx/certs source of truth) ==="
+    cat "$INSTALL_CONF"
+    echo
+  else
+    colorized_echo yellow "Missing ${INSTALL_CONF}"
+  fi
+  echo "=== runtime .env ==="
+  echo "CORS_ORIGINS=$(get_env_var CORS_ORIGINS)"
+  echo "SUB_PUBLIC_BASE_URL=$(get_env_var SUB_PUBLIC_BASE_URL)"
+  echo "VPN_PUBLIC_HOST=$(get_env_var VPN_PUBLIC_HOST)"
+  echo "WEB_PORT=$(get_env_var WEB_PORT)"
+  if [[ -f "$CREDENTIALS_FILE" ]]; then
+    echo
+    echo "=== .credentials ==="
+    echo "PANEL_URL=$(get_env_var PANEL_URL "$CREDENTIALS_FILE")"
+    echo "SUB_PUBLIC_BASE_URL=$(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")"
+    echo "VPN_PUBLIC_HOST=$(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE")"
+    echo "BASE_DOMAIN=$(get_env_var BASE_DOMAIN "$CREDENTIALS_FILE")"
+  fi
+}
+
+cmd_config_sync() {
+  check_root
+  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  sync_domains_from_install_conf
+  colorized_echo green "Synced domains from .install.conf → .env and .credentials"
+}
+
+cmd_config_set_domain() {
+  check_root
+  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  [[ -f "$INSTALL_CONF" ]] || { colorized_echo red "Missing ${INSTALL_CONF}"; exit 1; }
+
+  local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --base-domain) flag_base="${2:-}"; shift 2 ;;
+      --panel) flag_panel="${2:-}"; shift 2 ;;
+      --subscription) flag_sub="${2:-}"; shift 2 ;;
+      --vpn-host) flag_vpn="${2:-}"; shift 2 ;;
+      --email) flag_email="${2:-}"; shift 2 ;;
+      *) colorized_echo red "Unknown option: $1"; exit 1 ;;
+    esac
+  done
+
+  read_install_hosts
+  local base="${flag_base:-$INSTALL_BASE_DOMAIN}"
+  local panel="${flag_panel:-$INSTALL_PANEL_HOST}"
+  local sub_spec="${flag_sub:-}"
+  local vpn="${flag_vpn:-$INSTALL_VPN_HOST}"
+  local email="${flag_email:-$INSTALL_EMAIL}"
+
+  if [[ -z "$base" ]]; then
+    colorized_echo red "Provide --base-domain or set BASE_DOMAIN in .install.conf"
+    exit 1
+  fi
+
+  validate_hostname "$base"
+  if [[ -z "$panel" ]]; then
+    panel="panel.${base}"
+  fi
+  validate_hostname "$panel"
+
+  if [[ -z "$sub_spec" ]]; then
+    if [[ -n "$INSTALL_SUB_PATH" ]]; then
+      sub_spec="${INSTALL_SUB_HOST}${INSTALL_SUB_PATH}"
+    else
+      sub_spec="sub.${base}"
+    fi
+  fi
+  parse_endpoint "$sub_spec" true
+  local sub_host="$PARSE_HOST"
+  local sub_path="$PARSE_PATH"
+  validate_hostname "$sub_host"
+
+  if [[ -z "$vpn" ]]; then
+    vpn="vpn.${base}"
+  fi
+  validate_hostname "$vpn"
+
+  if [[ -z "$email" ]]; then
+    email="admin@${base}"
+  fi
+
+  set_install_conf_var "MODE" "domain"
+  set_install_conf_var "BASE_DOMAIN" "$base"
+  set_install_conf_var "PANEL_HOST" "$panel"
+  set_install_conf_var "SUB_HOST" "$sub_host"
+  set_install_conf_var "SUB_PATH" "$sub_path"
+  set_install_conf_var "VPN_HOST" "$vpn"
+  set_install_conf_var "EMAIL" "$email"
+
+  sync_domains_from_install_conf
+  colorized_echo green "Domains updated. Run: ${APP_NAME} config apply"
+}
+
+cmd_config_nginx() {
+  check_root
+  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  read_install_hosts
+  if [[ "$INSTALL_MODE" != "domain" ]]; then
+    colorized_echo yellow "Domain mode is not configured; nothing to refresh."
+    return 0
+  fi
+  install_landing_files
+  write_nginx_site "$INSTALL_BASE_DOMAIN" "$INSTALL_PANEL_HOST" "$INSTALL_SUB_HOST" "$INSTALL_SUB_PATH" "$INSTALL_VPN_HOST" "https"
+  ln -sfn "$NGINX_SITE" "$NGINX_LINK"
+  nginx -t
+  systemctl reload nginx
+  colorized_echo green "Nginx site refreshed (existing certificates)."
+}
+
+cmd_config_certs() {
+  check_root
+  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  read_install_hosts
+  if [[ "$INSTALL_MODE" != "domain" ]]; then
+    colorized_echo yellow "Domain mode is not configured."
+    return 0
+  fi
+  if [[ -z "$INSTALL_PANEL_HOST" || -z "$INSTALL_SUB_HOST" || -z "$INSTALL_VPN_HOST" ]]; then
+    colorized_echo red "Incomplete host list in .install.conf"
+    exit 1
+  fi
+  local email="${INSTALL_EMAIL:-admin@${INSTALL_BASE_DOMAIN:-$INSTALL_PANEL_HOST}}"
+  local -a hosts=()
+  local -a cert_args=()
+  mapfile -t hosts < <(unique_hosts "$INSTALL_BASE_DOMAIN" "$INSTALL_PANEL_HOST" "$INSTALL_SUB_HOST" "$INSTALL_VPN_HOST")
+  local host
+  for host in "${hosts[@]}"; do
+    cert_args+=(-d "$host")
+  done
+  issue_certificates_strict "$email" "$INSTALL_PANEL_HOST" "${cert_args[@]}"
+  colorized_echo green "Certificates issued/expanded for: ${hosts[*]}"
+}
+
+cmd_config_apply() {
+  check_root
+  is_installed || { colorized_echo red "OverVPN is not installed."; exit 1; }
+  sync_domains_from_install_conf
+  refresh_nginx
+  compose_up false
+  wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
+  colorized_echo green "Configuration applied (sync + nginx + certs + containers)."
+}
+
+cmd_config() {
+  local subcmd=${1:-show}
+  if [[ -n "$subcmd" ]]; then
+    shift
+  fi
+  case "$subcmd" in
+    show) cmd_config_show ;;
+    sync) cmd_config_sync ;;
+    set-domain) cmd_config_set_domain "$@" ;;
+    nginx) cmd_config_nginx ;;
+    certs) cmd_config_certs ;;
+    apply) cmd_config_apply ;;
+    *)
+      colorized_echo red "Unknown config command: ${subcmd}"
+      echo "Use: ${APP_NAME} config show|sync|set-domain|nginx|certs|apply"
+      exit 1
+      ;;
+  esac
+}
+
 cmd_install_script() {
   check_root
   install_cli "${BASH_SOURCE[0]}"
@@ -1228,6 +1556,7 @@ main() {
     edit|edit-env) cmd_edit ;;
     bootstrap|bootstrap-admin) cmd_bootstrap ;;
     nginx|refresh-nginx) cmd_nginx ;;
+    config) cmd_config "$@" ;;
     install-script) cmd_install_script ;;
     ""|-h|--help|help) usage ;;
     *)

@@ -1,255 +1,236 @@
+<div align="center">
+
 # OverVPN
 
-Однонодовая панель управления VPN на **sing-box**: админка, API, подписки, учёт трафика, лимиты, бэкапы.
+### Панель управления VPN на [sing-box](https://sing-box.sagernet.org/)
 
-Интерфейс панели по умолчанию на **русском** (переключатель EN/RU в шапке).
+Одна нода. Веб-админка. Подписки. Учёт трафика. Лимиты. Бэкапы.
 
-## Быстрая установка (Ubuntu / Debian)
+[Установка](#-установка) · [Управление](#-управление) · [Панель](#-работа-в-панели) · [Подписки](#-подписки-клиентов) · [Contributing](CONTRIBUTING.md)
 
-По умолчанию ставит **готовые образы из GHCR** (без долгой локальной сборки):
+<br />
+
+![Node.js](https://img.shields.io/badge/Node.js-24_LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+![sing-box](https://img.shields.io/badge/core-sing--box-111111?style=flat-square)
+![License](https://img.shields.io/badge/license-UNLICENSED-red?style=flat-square)
+
+</div>
+
+---
+
+## Что это
+
+OverVPN — **однонодовая** control plane для VPN:
+
+| | |
+| :--- | :--- |
+| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks |
+| **Панель** | пользователи, inbound’ы, планы, онлайн-сессии, аудит |
+| **Подписки** | sing-box JSON · Clash Meta · список ссылок · QR |
+| **Учёт** | трафик, сроки, лимиты устройств/IP, enforce |
+| **Операции** | apply конфига с rollback · бэкапы · Telegram-алерты |
+
+Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке).
+
+> [!IMPORTANT]
+> Мульти-нода **не поддерживается**. Один сервер — одно ядро sing-box.
+
+---
+
+## Установка
+
+### Требования
+
+- **Ubuntu / Debian** (рекомендуется)
+- Доступ `root` / `sudo`
+- Свободные порты: `80`, `443` (и UDP `443` для VPN)
+- DNS A-записи на IP сервера (если ставите с доменами)
+
+### Одна команда
+
+По умолчанию тянет **готовые образы из GHCR** — без долгой сборки на сервере:
 
 ```bash
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
 ```
 
-Локальная сборка образов на сервере:
+Локальная сборка образов на машине:
 
 ```bash
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build
 ```
 
-Образы публикуются одним workflow **CI** на self-hosted runner: сначала `verify`, затем `publish` в GHCR (только push в `master` / теги `v*` / ручной запуск):
+<details>
+<summary><strong>Флаги установщика</strong></summary>
 
-- `ghcr.io/overl1te/overvpn-api:latest`
-- `ghcr.io/overl1te/overvpn-web:latest`
+| Флаг | Назначение |
+| --- | --- |
+| `--base-domain <host>` | Базовый домен (лендинг + TLS) |
+| `--panel <host>` | Хост панели |
+| `--subscription <spec>` | Хост или `хост/путь` для подписок |
+| `--vpn-host <host>` | Публичный VPN-endpoint для клиентов |
+| `--email <email>` | Let’s Encrypt |
+| `--port <port>` | Порт панели без домена (по умолчанию `8000`) |
+| `--tag <tag>` | Тег образов GHCR |
+| `--build` | Собрать образы локально |
+| `--skip-dns` | Не ждать DNS перед сертификатами |
+| `--no-nginx` | Без Nginx/TLS |
+| `--no-ufw` | Не трогать UFW |
 
-### Self-hosted runner (сборка образов в CI)
+</details>
 
-Нужен **один** Ubuntu-сервер с Docker (можно тот же, что и панель). Workflow ждёт labels: `self-hosted`, `linux`, `x64`, `overvpn`.
+### Что спросит мастер
 
-#### Вариант A — скрипт (рекомендуется)
+Сначала все вопросы — потом установка без пауз (можно отойти):
 
-```bash
-# 1) Токен регистрации
-# GitHub → OverVPN → Settings → Actions → Runners → New self-hosted runner
-# или:
-gh api -X POST repos/Overl1te/OverVPN/actions/runners/registration-token --jq .token
+1. **Базовый домен** — публичная заглушка + TLS; пусто → режим `http://IP:8000`
+2. **Панель** — по умолчанию `panel.example.com`
+3. **Подписки** — хост или `хост/путь`, по умолчанию `sub.example.com`
+4. **VPN-хост** — по умолчанию `vpn.example.com` (endpoint клиентов, не панель)
+5. **Email** для Let’s Encrypt
+6. Подтверждение DNS A-записей (или `s` — пропустить проверку)
 
-# 2) Установка (от root)
-sudo RUNNER_TOKEN=XXXX bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/scripts/install-github-runner.sh)"
-```
+Дальше скрипт ждёт DNS (до ~15 мин), ставит Docker, образы, Nginx и сертификаты.
 
-Скрипт поставит Docker (если нет), пользователя `github-runner`, раннер в `/opt/actions-runner`, systemd-сервис и доступ к Docker.
-
-#### Вариант B — уже есть `~/actions-runner` (ручная установка)
-
-```bash
-# Docker для твоего пользователя
-sudo usermod -aG docker "$USER"
-
-cd ~/actions-runner
-# останови ручной ./run.sh, если крутится
-pkill -f 'Runner.Listener' || true
-
-# поставь как systemd-сервис
-sudo ./svc.sh install "$USER"
-sudo ./svc.sh start
-
-# дай сервису группу docker (обязательно)
-SERVICE=$(systemctl list-units --type=service --all --no-legend 'actions.runner.*' | awk '{print $1}' | head -n1)
-echo "SERVICE=$SERVICE"   # не должно быть пусто!
-
-sudo mkdir -p /etc/systemd/system/${SERVICE}.d
-printf '%s\n' '[Service]' 'SupplementaryGroups=docker' | sudo tee /etc/systemd/system/${SERVICE}.d/docker.conf
-sudo systemctl daemon-reload
-sudo systemctl restart "$SERVICE"
-```
-
-#### Проверка
+### После установки
 
 ```bash
-systemctl status "$SERVICE" --no-pager
-sg docker -c 'docker info'    # без permission denied
-# GitHub → Settings → Actions → Runners → статус Online (зелёный)
+overvpn info      # URL панели, подписки, логин владельца
+overvpn status    # состояние контейнеров
 ```
 
-После пуша в `master` workflow **CI** делает `verify` → `publish` образов в GHCR.
-
-Установщик сначала спросит всё (домены, DNS, подтверждение), затем пойдёт без пауз — можно отойти.
-
-1. **Базовый домен** (`example.com`) — публичная заглушка + TLS; или пусто для режима `http://IP:8000`
-2. **Панель** — хост, по умолчанию `panel.example.com`
-3. **Подписки** — хост или `хост/путь`, по умолчанию `sub.example.com` (ссылки вида `/api/sub/{TOKEN}`, не корень `/`)
-4. **VPN-хост** — по умолчанию `vpn.example.com` (публичный endpoint клиентов, не панель)
-5. Email для Let’s Encrypt
-6. Подтверждение, что DNS A-записи созданы (включая базовый домен) (или `s` = пропустить проверку)
-7. Старт установки
-
-Дальше сам ждёт DNS (до ~15 мин), ставит Docker/образы/Nginx/сертификаты.
-
-После установки:
-
-```bash
-overvpn status
-overvpn logs
-overvpn info
-overvpn nginx               # пересобрать Nginx/сертификаты из .install.conf
-overvpn update              # pull новых образов из GHCR
-overvpn update --build     # пересобрать локально
-overvpn restart
-overvpn uninstall
-```
-
-| Компонент              | Порт по умолчанию                                      |
-| ---------------------- | ------------------------------------------------------ |
-| Веб-панель             | `8000` (без домена) / `443` через Nginx / `5173` (dev) |
-| API                    | `3000` (внутри Compose; снаружи через веб/прокси)      |
-| PostgreSQL             | `5432` (только localhost)                              |
-| Redis                  | `6379` (только localhost)                              |
-| sing-box (UDP inbound) | `443`                                                  |
+Откройте URL панели и войдите логином/паролем из `overvpn info`.
 
 ---
 
-## 1. Требования
+## Управление
 
-- Docker Engine + Compose v2
-- (опционально для разработки) Node.js **24** LTS, pnpm **11**
+CLI ставится вместе с панелью:
 
-Не публикуйте в интернет PostgreSQL, Redis и API напрямую. Веб лучше повесить за Nginx с TLS (пример в `deploy/proxy/`).
+```bash
+overvpn status                 # Docker Compose status
+overvpn logs                   # все сервисы
+overvpn logs api               # только API
+overvpn info                   # URL, хосты, bootstrap-учётка
+overvpn edit                   # открыть .env в $EDITOR
+overvpn restart                # перезапуск стека
+overvpn update                 # pull новых образов из GHCR
+overvpn update --build         # пересобрать локально
+overvpn nginx                  # пересобрать Nginx/сертификаты из конфига установки
+overvpn bootstrap              # пересоздать/обновить владельца из .env
+overvpn up | down              # поднять / остановить
+overvpn uninstall              # удалить установку
+```
+
+### Порты
+
+| Компонент | По умолчанию |
+| --- | --- |
+| Веб-панель | `8000` (без домена) / `443` через Nginx |
+| API | внутри Compose; наружу через веб/прокси |
+| PostgreSQL | `5432` → только `127.0.0.1` |
+| Redis | `6379` → только `127.0.0.1` |
+| sing-box (UDP inbound) | `443` |
+
+> [!WARNING]
+> Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
 
 ---
 
-## 2. Быстрый старт (Docker вручную)
+## Работа в панели
 
-### Шаг 1. Конфигурация
+### 1. Создать inbound
 
-```sh
-cp .env.example .env
-```
+1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks).
+2. Укажите `tag`, listen / public host и port.
+3. TLS-файлы кладите в `deploy/sing-box/certs` (в контейнере — `/var/lib/sing-box-certs`).
+4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
-В `.env` замените **все** значения `REPLACE_*`. Секреты генерируйте независимо:
+`SING_BOX_UDP_PORT` в `.env` должен совпадать с портом inbound’а, который вы отдаёте наружу.
 
-```sh
-# пароли / JWT / Clash API (пример)
-openssl rand -hex 32
+### 2. Создать пользователя
 
-# SECRETS_MASTER_KEY — ровно 64 hex-символа
-openssl rand -hex 32
-
-# пароль владельца (не короче 16 символов)
-openssl rand -base64 36
-```
-
-Обязательно задайте:
-
-| Переменная                                          | Зачем                                                                                                                                                       |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_PASSWORD` / `DATABASE_URL`                | БД (пароль в URL должен совпадать)                                                                                                                          |
-| `REDIS_PASSWORD` / `REDIS_URL`                      | Redis                                                                                                                                                       |
-| `JWT_ACCESS_SECRET`                                 | Подпись access JWT                                                                                                                                          |
-| `SECRETS_MASTER_KEY`                                | Шифрование секретов протоколов и бэкапов                                                                                                                    |
-| `SING_BOX_CLASH_API_SECRET`                         | Внутренний Clash API                                                                                                                                        |
-| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | Первый владелец                                                                                                                                             |
-| `CORS_ORIGINS`                                      | Точный origin панели, например `http://localhost:8080`                                                                                                      |
-| `SUB_PUBLIC_BASE_URL`                               | Публичный HTTPS URL для ссылок подписки: origin (`https://sub.example.com` → `…/api/sub/{TOKEN}`) или с путём (`https://example.com/sub` → `…/sub/{TOKEN}`) |
-
-Для локального запуска можно временно:
-
-```env
-CORS_ORIGINS=http://localhost:8080
-SUB_PUBLIC_BASE_URL=http://localhost:8080
-AUTH_COOKIE_SECURE=false
-```
-
-В продакшене: `AUTH_COOKIE_SECURE=true`, реальные HTTPS-origin’ы.
-
-### Шаг 2. Запуск стека
-
-```sh
-pnpm compose-up      # подтянуть/запустить образы из GHCR
-# или локальная сборка:
-pnpm compose-build
-# или: make compose-up / make compose-build
-```
-
-Подождите, пока поднимутся postgres, redis, migrate, sing-box, api, web.
-
-### Шаг 3. Создать владельца
-
-```sh
-docker compose --env-file .env -f deploy/docker-compose.yml --profile tools run --rm bootstrap-admin
-```
-
-Команда идемпотентна: при повторном запуске обновит пароль владельца из env.
-
-### Шаг 4. Войти в панель
-
-Откройте: **http://localhost:8080**
-
-Логин/пароль — из `BOOTSTRAP_ADMIN_*`.
-
-OpenAPI (если `SWAGGER_ENABLED=true`): **http://localhost:8080/api/docs**
-
-Проверка здоровья:
-
-```sh
-curl -s http://localhost:8080/api/health
-curl -s http://localhost:8080/api/health/ready
-```
-
-Остановка:
-
-```sh
-pnpm compose-down
-```
-
----
-
-## 3. Типовой сценарий работы
-
-### 3.1. Создать inbound
-
-1. **Inbounds** → создать (протокол: Hysteria2 / VLESS Reality / Trojan / Shadowsocks).
-2. Укажите `tag`, listen/public host и port.
-3. Для TLS-файлов положите сертификаты в `deploy/sing-box/certs` (в контейнере путь `/var/lib/sing-box-certs`).
-4. После сохранения панель **сразу** пытается применить конфиг sing-box (validate → write → reload → verify → rollback при ошибке).
-
-`SING_BOX_UDP_PORT` в `.env` должен совпадать с портом inbound’а, который вы публикуете наружу.
-
-### 3.2. Создать пользователя
-
-1. **Users** → создать: имя, лимит трафика, срок (`expireAt`), лимиты устройств/IP при необходимости.
+1. **Users** → имя, лимит трафика, срок (`expireAt`), лимиты устройств/IP.
 2. Назначьте inbound (assignments) — появятся учётные данные протокола.
 3. Скопируйте **subscription URL** или QR со страницы пользователя.
 
-Статусы пользователя:
+| Статус | Смысл |
+| --- | --- |
+| `ACTIVE` | доступ разрешён |
+| `DISABLED` | выключен вручную |
+| `EXPIRED` | истёк срок |
+| `LIMITED` | квота / устройство / IP |
 
-| Статус     | Смысл                       |
-| ---------- | --------------------------- |
-| `ACTIVE`   | Доступ разрешён             |
-| `DISABLED` | Вручную выключен (`manual`) |
-| `EXPIRED`  | Истёк срок                  |
-| `LIMITED`  | Квота / устройство / IP     |
+Причина отключения видна в UI (`statusReason`).
 
-Причина отключения показывается в UI (`statusReason`).
+### 3. Применить конфиг вручную
 
-### 3.3. Подписка клиента
+**Config** → Preview (diff без секретов) → Apply с причиной.
 
-Формат URL (origin без пути):
+История применений — там же. При сбое восстанавливается предыдущий конфиг.
+
+### 4. Мониторинг
+
+- **Dashboard** — онлайн, статусы, здоровье ядра, воркеры, throughput
+- **Online sessions** — активные и исторические сессии
+- **Audit** — журнал действий администраторов
+
+### 5. Роли
+
+| Роль | Права |
+| --- | --- |
+| `OWNER` | полный доступ, удаление пользователей, restore бэкапов |
+| `ADMIN` | обычные мутации (users / inbounds / apply / backups create) |
+| `READONLY` | только чтение; мутации скрыты |
+
+В профиле можно включить **TOTP 2FA** (enable → confirm кодом).
+
+### 6. Бэкапы
+
+Раздел **Backups**:
+
+| Тип | Содержимое |
+| --- | --- |
+| `DATABASE` | `pg_dump` |
+| `CORE_CONFIG` | текущий + last-known-good конфиг sing-box |
+| `FULL` | БД + конфиг + метаданные |
+
+Рекомендуемый порядок:
+
+1. Создайте `FULL` и скачайте артефакт.
+2. Перед restore сделайте ещё один свежий бэкап.
+3. Restore только с подтверждением (`confirm: true`) и ролью **OWNER**.
+
+> Restore БД **перезаписывает** живое состояние панели.
+
+### 7. Настройки
+
+**System / Settings** — Telegram, операторские параметры UI и т.д.
+
+Публичный URL подписок в рантайме берётся из env `SUB_PUBLIC_BASE_URL`. Значение в settings держите согласованным с env.
+
+---
+
+## Подписки клиентов
+
+### URL
+
+Origin без пути:
 
 ```text
 {SUB_PUBLIC_BASE_URL}/api/sub/{TOKEN}
 ```
 
-С путём в `SUB_PUBLIC_BASE_URL` (например `https://example.com/sub`):
+С путём в base URL (например `https://example.com/sub`):
 
 ```text
 {SUB_PUBLIC_BASE_URL}/{TOKEN}
 ```
 
-Форматы:
+### Форматы
 
-```sh
+```bash
 # sing-box JSON (по умолчанию)
 curl -o profile.json "$SUB_URL?format=sing-box"
 
@@ -265,147 +246,142 @@ curl "$SUB_URL/info"
 
 Заголовки ответа (где применимо): `subscription-userinfo`, `profile-update-interval`.
 
-**Ротация токена** (старый URL сразу перестаёт работать, VPN-пароли не меняются):
+**Ротация токена** (старый URL сразу мёртв, VPN-пароли не меняются):
 
-- в UI: действие rotate-sub;
-- API: `POST /api/admin/users/:id/rotate-sub`.
+- в UI — действие rotate-sub
+- API — `POST /api/admin/users/:id/rotate-sub`
 
 Не светите токен в тикетах, скриншотах и логах прокси.
 
-### 3.4. Применить конфиг вручную
+<details>
+<summary><strong>Примеры клиентских URI</strong></summary>
 
-**Config** → Preview (красный diff без секретов) → Apply с причиной.
-
-История применений доступна в той же разделе. При сбое предыдущий конфиг восстанавливается автоматически.
-
-### 3.5. Мониторинг
-
-- **Dashboard** — онлайн, статусы пользователей, здоровье ядра, воркеры, throughput (или «недоступно»).
-- **Online sessions** — активные/исторические сессии.
-- **Audit** — журнал действий администраторов.
-
----
-
-## 4. Роли администраторов
-
-| Роль       | Права                                                  |
-| ---------- | ------------------------------------------------------ |
-| `OWNER`    | Полный доступ, удаление пользователей, restore бэкапов |
-| `ADMIN`    | Обычные мутации (users/inbounds/apply/backups create)  |
-| `READONLY` | Только чтение; мутации в UI скрыты/заблокированы       |
-
-Опционально включите **TOTP 2FA** в профиле администратора (enable → confirm кодом).
-
----
-
-## 5. Резервное копирование
-
-В панели: **Backups**.
-
-| Тип           | Содержимое                                |
-| ------------- | ----------------------------------------- |
-| `DATABASE`    | `pg_dump`                                 |
-| `CORE_CONFIG` | текущий + last-known-good конфиг sing-box |
-| `FULL`        | БД + конфиг + метаданные                  |
-
-Рекомендуемый порядок:
-
-1. Создайте `FULL`.
-2. Скачайте артефакт.
-3. Перед restore сделайте ещё один свежий бэкап.
-4. Restore только с `confirm: true` (роль **OWNER**).  
-   Restore БД **перезаписывает** живое состояние панели.
-
-Переменные: `BACKUP_DIR`, `BACKUP_RETENTION_DAYS`, `BACKUP_ENCRYPT`.
-
----
-
-## 6. Настройки системы
-
-**System / Settings** → `GET/PATCH /api/admin/settings`.
-
-- Telegram-токен пишется, но в ответах только флаг `*Configured` (секрет не возвращается).
-- URL подписок в рантайме берётся из env `SUB_PUBLIC_BASE_URL` (значение в settings — операторская настройка UI; для продакшена держите env и settings согласованными).
-
----
-
-## 7. Клиентские ссылки (кратко)
-
-### Hysteria2
+**Hysteria2**
 
 ```text
 hysteria2://PASSWORD@host:443/?sni=...&insecure=0&obfs=salamander&obfs-password=...#LABEL
 ```
 
-### VLESS Reality
+**VLESS Reality**
 
 ```text
 vless://UUID@host:443?encryption=none&security=reality&sni=...&fp=chrome&pbk=...&sid=...&type=tcp&flow=xtls-rprx-vision#LABEL
 ```
 
-### Trojan
+**Trojan**
 
 ```text
 trojan://PASSWORD@host:443?security=tls&sni=...&allowInsecure=0&type=tcp#LABEL
 ```
 
-### Shadowsocks 2022 (multi-user)
+**Shadowsocks 2022** — пароль клиента: `SERVER_PASSWORD:USER_PASSWORD`  
+SIP002: `ss://BASE64(method:password)@host:port#LABEL`
 
-Пароль клиента:
+</details>
 
-```text
-SERVER_PASSWORD:USER_PASSWORD
+---
+
+## Ручной запуск (Docker)
+
+Если ставите не через `install.sh`, а сами на Compose:
+
+### 1. Конфиг
+
+```bash
+cp .env.example .env
 ```
 
-Ссылка SIP002: `ss://BASE64(method:password)@host:port#LABEL`.
+Замените **все** `REPLACE_*`. Секреты генерируйте независимо:
 
----
-
-## 8. Разработка без Compose (кратко)
-
-```sh
-pnpm install
-pnpm prisma:generate
-# .env: DATABASE_URL/REDIS_URL на localhost, пути к sing-box 1.13.14
-pnpm migrate
-pnpm bootstrap:admin
-pnpm dev
+```bash
+openssl rand -hex 32          # пароли / JWT / Clash API
+openssl rand -hex 32          # SECRETS_MASTER_KEY — ровно 64 hex
+openssl rand -base64 36       # пароль владельца (≥ 16 символов)
 ```
 
-Веб: http://localhost:5173 (прокси `/api` → `:3000`).
+Обязательно:
+
+| Переменная | Зачем |
+| --- | --- |
+| `POSTGRES_PASSWORD` / `DATABASE_URL` | БД (пароль в URL = пароль Postgres) |
+| `REDIS_PASSWORD` / `REDIS_URL` | Redis |
+| `JWT_ACCESS_SECRET` | подпись access JWT |
+| `SECRETS_MASTER_KEY` | шифрование секретов протоколов и бэкапов |
+| `SING_BOX_CLASH_API_SECRET` | внутренний Clash API |
+| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | первый владелец |
+| `CORS_ORIGINS` | точный origin панели |
+| `SUB_PUBLIC_BASE_URL` | публичный HTTPS URL подписок |
+
+Локально можно временно:
+
+```env
+CORS_ORIGINS=http://localhost:8080
+SUB_PUBLIC_BASE_URL=http://localhost:8080
+AUTH_COOKIE_SECURE=false
+```
+
+В проде: `AUTH_COOKIE_SECURE=true` и реальные HTTPS-origin’ы.
+
+### 2. Старт
+
+```bash
+pnpm compose-up        # образы из GHCR
+# или:
+pnpm compose-build     # локальная сборка
+```
+
+### 3. Владелец
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml --profile tools run --rm bootstrap-admin
+```
+
+Идемпотентно: повторный запуск обновит пароль владельца из env.
+
+### 4. Вход
+
+- Панель: **http://localhost:8080**
+- OpenAPI (если `SWAGGER_ENABLED=true`): **http://localhost:8080/api/docs**
+
+```bash
+curl -s http://localhost:8080/api/health
+curl -s http://localhost:8080/api/health/ready
+```
+
+Остановка: `pnpm compose-down`.
 
 ---
 
-## 9. Важные ограничения sing-box
-
-1. Трафик V2Ray API — **суммарный по пользователю**, не «пользователь × inbound».
-2. Идентификация устройства онлайн — best-effort (часто `ip:адрес`).
-3. Бинарник должен быть с `with_v2ray_api` / Clash / QUIC / ACME.
-4. После SIGHUP счётчики пересоздаются; панель учитывает это через epoch/generation.
-5. **Мульти-нода не поддерживается** (одна машина, один core).
-
----
-
-## 10. Безопасность (чеклист)
+## Безопасность
 
 - [ ] Все `REPLACE_*` заменены уникальными секретами
 - [ ] `CORS_ORIGINS` — точные origin’ы, без `*`
 - [ ] `SUB_PUBLIC_BASE_URL` — отдельный публичный HTTPS
-- [ ] Postgres/Redis слушают только `127.0.0.1`
+- [ ] Postgres / Redis слушают только `127.0.0.1`
 - [ ] Перед панелью — reverse proxy с TLS
 - [ ] Владелец с сильным паролем + TOTP
 - [ ] Регулярные `FULL` бэкапы
 
 ---
 
-## 11. Полезные команды
+## Ограничения
 
-```sh
-pnpm compose-up / compose-pull / compose-build / compose-down
-pnpm migrate
-pnpm bootstrap:admin
-pnpm test
-pnpm lint
-pnpm typecheck
-pnpm build
-```
+1. Трафик V2Ray API — **суммарный по пользователю**, не «пользователь × inbound».
+2. Идентификация устройства онлайн — best-effort (часто `ip:порт`).
+3. Бинарник sing-box нужен с `with_v2ray_api` / Clash / QUIC / ACME.
+4. После SIGHUP счётчики пересоздаются; панель учитывает это через epoch/generation.
+5. **Одна машина, одно ядро** — мульти-нода вне скоупа.
+
+---
+
+## Документация для разработчиков
+
+Стек, архитектура модулей, воркеры, миграции, CI и локальная разработка без Compose — в **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+---
+
+<div align="center">
+
+**OverVPN** · single-node control plane for sing-box
+
+</div>

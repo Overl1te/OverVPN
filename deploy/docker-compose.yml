@@ -35,11 +35,11 @@ x-api-environment: &api-environment
   SING_BOX_LAST_KNOWN_GOOD_PATH: /var/lib/sing-box/config.last-known-good.json
   SING_BOX_RELOAD_REQUEST_PATH: /var/lib/overvpn/reload/request
   SING_BOX_RELOAD_ACK_PATH: /var/lib/overvpn/reload/ack
-  SING_BOX_CLASH_API_URL: http://sing-box:9090
+  SING_BOX_CLASH_API_URL: http://core:9090
   SING_BOX_CLASH_API_LISTEN: 0.0.0.0:9090
   SING_BOX_CLASH_API_SECRET: ${SING_BOX_CLASH_API_SECRET:?Set SING_BOX_CLASH_API_SECRET in .env}
   SING_BOX_V2RAY_API_LISTEN: 0.0.0.0:8080
-  SING_BOX_V2RAY_API_ADDRESS: sing-box:8080
+  SING_BOX_V2RAY_API_ADDRESS: core:8080
   SING_BOX_PROCESS_TIMEOUT_MS: ${SING_BOX_PROCESS_TIMEOUT_MS:-15000}
   SING_BOX_RELOAD_TIMEOUT_MS: ${SING_BOX_RELOAD_TIMEOUT_MS:-20000}
   SING_BOX_HEALTH_TIMEOUT_MS: ${SING_BOX_HEALTH_TIMEOUT_MS:-5000}
@@ -116,7 +116,7 @@ services:
       - backend
     <<: *service-security
 
-  sing-box-config-init:
+  core-config-init:
     image: busybox:1.37
     restart: 'no'
     network_mode: none
@@ -133,7 +133,7 @@ services:
       - singbox_state:/state
     <<: *service-security
 
-  sing-box:
+  core:
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
@@ -144,7 +144,7 @@ services:
       SING_BOX_RELOAD_ACK_PATH: /var/lib/overvpn/reload/ack
       SING_BOX_PID_PATH: /var/lib/overvpn/reload/sing-box.pid
     depends_on:
-      sing-box-config-init:
+      core-config-init:
         condition: service_completed_successfully
     volumes:
       - singbox_config:/var/lib/sing-box:ro
@@ -212,7 +212,7 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      sing-box:
+      core:
         condition: service_healthy
     volumes:
       - singbox_config:/var/lib/sing-box

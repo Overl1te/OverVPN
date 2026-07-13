@@ -98,6 +98,8 @@ class CoreHealthDto {
   checkedAt!: string;
   @ApiPropertyOptional({ nullable: true })
   error!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  errorRu!: string | null;
 }
 
 class WorkerHealthDto {

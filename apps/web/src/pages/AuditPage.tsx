@@ -100,7 +100,7 @@ export function AuditPage() {
             width: 160,
             render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm:ss'),
           },
-          { title: t('audit.action'), dataIndex: 'action' },
+          { title: t('audit.action'), dataIndex: 'action', render: (action: string) => t(`enums.auditAction.${action}`, { defaultValue: action }) },
           {
             title: t('audit.outcome'),
             dataIndex: 'outcome',

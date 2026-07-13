@@ -7,10 +7,11 @@ import { getSettings, updateSettings } from '@/api/settings';
 import { useAuth } from '@/auth/AuthContext';
 import { PageHeader } from '@/components/PageHeader';
 import { useApiErrorHandler } from '@/hooks/useApiError';
+import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
 
 export function SystemPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { canMutate } = useAuth();
   const showError = useApiErrorHandler();
   const queryClient = useQueryClient();
@@ -197,7 +198,15 @@ export function SystemPage() {
                     field: t('dashboard.latency'),
                     value: `${health.core.latencyMs} ms`,
                   },
-                  { field: t('app.error'), value: health.core.error ?? '—' },
+                  {
+                    field: t('app.error'),
+                    value:
+                      localizedRuntimeError(
+                        health.core.error,
+                        i18n.language,
+                        health.core.errorRu,
+                      ) ?? '—',
+                  },
                 ]
               : []
           }
@@ -220,7 +229,7 @@ export function SystemPage() {
           pagination={false}
           dataSource={health?.workers ?? dashboard?.workers ?? []}
           columns={[
-            { title: t('app.name'), dataIndex: 'name' },
+            { title: t('app.name'), dataIndex: 'name', render: (name: string) => t(`enums.workerName.${name}`, { defaultValue: name }) },
             {
               title: t('dashboard.workerState'),
               dataIndex: 'state',
@@ -237,7 +246,7 @@ export function SystemPage() {
               title: t('app.error'),
               dataIndex: 'error',
               ellipsis: true,
-              render: (v: string | null) => v || '—',
+              render: (v: string | null) => localizedRuntimeError(v, i18n.language) || '—',
             },
           ]}
         />

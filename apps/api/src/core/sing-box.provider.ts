@@ -34,6 +34,10 @@ import {
   type TrafficSnapshotResult,
   type VlessCredential,
 } from './core-provider';
+import {
+  localizeCoreHealthError,
+  localizeCoreStatsError,
+} from './core-user-messages';
 import { type RawV2RayStat, V2RayStatsAdapter } from './v2ray-stats.adapter';
 
 @Injectable()
@@ -306,12 +310,16 @@ export class SingBoxProvider extends CoreProvider {
       const body = asRecord(response.body);
       const version = typeof body?.version === 'string' ? body.version : null;
       if (response.status < 200 || response.status >= 300 || !version) {
+        const localized = localizeCoreHealthError(
+          `HTTP ${response.status} without a version`,
+        );
         return {
           healthy: false,
           version,
           latencyMs: roundLatency(response.latencyMs),
           checkedAt,
-          error: `Clash API /version returned HTTP ${response.status} without a version`,
+          error: localized.en,
+          errorRu: localized.ru,
         };
       }
       return {
@@ -320,14 +328,17 @@ export class SingBoxProvider extends CoreProvider {
         latencyMs: roundLatency(response.latencyMs),
         checkedAt,
         error: null,
+        errorRu: null,
       };
     } catch (error: unknown) {
+      const localized = localizeCoreHealthError(errorMessage(error));
       return {
         healthy: false,
         version: null,
         latencyMs: 0,
         checkedAt,
-        error: `Clash API health request failed: ${errorMessage(error)}`,
+        error: localized.en,
+        errorRu: localized.ru,
       };
     }
   }
@@ -343,20 +354,23 @@ export class SingBoxProvider extends CoreProvider {
       };
     } catch (error: unknown) {
       const code = numericErrorCode(error);
+      const errorCode =
+        code === 12
+          ? 'UNSUPPORTED'
+          : code === 14 || code === 4
+            ? 'UNAVAILABLE'
+            : 'QUERY_FAILED';
+      const localized = localizeCoreStatsError(
+        errorCode,
+        errorMessage(error),
+      );
       return {
         supported: false,
         capturedAt,
         error: {
-          code:
-            code === 12
-              ? 'UNSUPPORTED'
-              : code === 14 || code === 4
-                ? 'UNAVAILABLE'
-                : 'QUERY_FAILED',
-          message:
-            code === 12
-              ? 'The deployed sing-box binary lacks V2Ray API support'
-              : `V2Ray statistics query failed: ${errorMessage(error)}`,
+          code: errorCode,
+          message: localized.en,
+          messageRu: localized.ru,
         },
       };
     }
