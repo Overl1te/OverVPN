@@ -670,7 +670,9 @@ export function renderClashProfile(
             password: endpoint.password,
             sni: endpoint.tls.serverName,
             'skip-cert-verify': endpoint.tls.insecure,
-            ...(endpoint.tls.alpn.length > 0 ? { alpn: endpoint.tls.alpn } : {}),
+            ...(endpoint.tls.alpn.length > 0
+              ? { alpn: endpoint.tls.alpn }
+              : {}),
             ...(endpoint.obfs
               ? {
                   obfs: endpoint.obfs.type,
@@ -739,7 +741,9 @@ export function renderClashProfile(
             password: endpoint.password,
             sni: endpoint.tls.serverName,
             'skip-cert-verify': endpoint.tls.insecure,
-            ...(endpoint.tls.alpn.length > 0 ? { alpn: endpoint.tls.alpn } : {}),
+            ...(endpoint.tls.alpn.length > 0
+              ? { alpn: endpoint.tls.alpn }
+              : {}),
           },
         ];
       }

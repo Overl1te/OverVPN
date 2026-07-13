@@ -70,9 +70,7 @@ export function buildVlessXhttpTlsUri(input: {
     ['security', 'tls'],
     ['type', 'xhttp'],
     ['path', input.path],
-    ...(input.xhttpHost
-      ? [['host', input.xhttpHost] as const]
-      : []),
+    ...(input.xhttpHost ? [['host', input.xhttpHost] as const] : []),
     ['sni', input.sni],
     ['fp', 'chrome'],
     ['mode', input.mode],

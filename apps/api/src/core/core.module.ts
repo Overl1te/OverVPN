@@ -33,10 +33,7 @@ import {
   V2RayStatsAdapter,
 } from './v2ray-stats.adapter';
 import { XrayProvider } from './xray.provider';
-import {
-  GrpcXrayStatsAdapter,
-  XrayStatsAdapter,
-} from './xray-stats.adapter';
+import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
 
 @Global()
 @Module({

@@ -235,10 +235,10 @@ Env валидируется при старте API в `apps/api/src/config/env
 
 Ключевые файлы:
 
-| Engine | Provider | Entrypoint | CoreState id |
-| ------ | -------- | ---------- | ------------ |
-| SING_BOX | `sing-box.provider.ts` | `deploy/sing-box/entrypoint.sh` | `sing-box` |
-| XRAY | `xray.provider.ts` | `deploy/xray/entrypoint.sh` | `xray` |
+| Engine   | Provider               | Entrypoint                      | CoreState id |
+| -------- | ---------------------- | ------------------------------- | ------------ |
+| SING_BOX | `sing-box.provider.ts` | `deploy/sing-box/entrypoint.sh` | `sing-box`   |
+| XRAY     | `xray.provider.ts`     | `deploy/xray/entrypoint.sh`     | `xray`       |
 
 Абстракция: `EngineProvider` + `CoreEngineRegistry` + `CompositeCoreProvider` (facade для health/traffic/online). Apply оркестрирует `CoreApplyService` **по каждому engine отдельно**.
 
@@ -263,10 +263,10 @@ acquire Redis lock
 
 В Compose пути (см. `deploy/docker-compose.yml`):
 
-| Env | Назначение |
-| --- | ---------- |
-| `SING_BOX_*` | бинарь, config, LKG, Clash, V2Ray stats, reload |
-| `XRAY_*` | бинарь, config, LKG, Stats gRPC (`XRAY_STATS_ADDRESS`), reload |
+| Env          | Назначение                                                     |
+| ------------ | -------------------------------------------------------------- |
+| `SING_BOX_*` | бинарь, config, LKG, Clash, V2Ray stats, reload                |
+| `XRAY_*`     | бинарь, config, LKG, Stats gRPC (`XRAY_STATS_ADDRESS`), reload |
 
 Сервисы: `core` (sing-box) + `core-xray` (Xray). Внутренние stats-порты: sing-box `8080`/`9090`, Xray `10085`.
 
@@ -606,16 +606,16 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 ## Быстрый «где смотреть, если …»
 
-| Задача                               | Куда идти                                                                      |
-| ------------------------------------ | ------------------------------------------------------------------------------ |
+| Задача                               | Куда идти                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------ |
 | Новый протокол inbound               | `inbounds/` + engine provider + `PROTOCOL_ENGINE_MAP` + shared schemas + web Inbounds page |
-| Баг в подписке Clash                 | `subscriptions/`                                                               |
-| Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor` per engine, provider generation                      |
-| Пользователь не режется по квоте     | `limit-enforcer` / `limit-enforcement.ts`                                      |
-| Не логинится / cookie                | `auth/`, `AUTH_COOKIE_*`, `CORS_ORIGINS`                                       |
-| Apply откатывается                   | логи api + `CoreApplyRecord`, entrypoint reload handshake                      |
-| Нет кнопки в UI у readonly           | `MutateOnly` + RolesGuard                                                      |
-| Установка на сервере                 | `install.sh`, не Nest                                                          |
+| Баг в подписке Clash                 | `subscriptions/`                                                                           |
+| Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor` per engine, provider generation                       |
+| Пользователь не режется по квоте     | `limit-enforcer` / `limit-enforcement.ts`                                                  |
+| Не логинится / cookie                | `auth/`, `AUTH_COOKIE_*`, `CORS_ORIGINS`                                                   |
+| Apply откатывается                   | логи api + `CoreApplyRecord`, entrypoint reload handshake                                  |
+| Нет кнопки в UI у readonly           | `MutateOnly` + RolesGuard                                                                  |
+| Установка на сервере                 | `install.sh`, не Nest                                                                      |
 
 ---
 

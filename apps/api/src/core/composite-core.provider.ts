@@ -20,13 +20,15 @@ export class CompositeCoreProvider extends CoreProvider {
     super();
   }
 
-  renderConfig(_state: CoreDesiredState): RenderedCoreConfig {
+  renderConfig(state: CoreDesiredState): RenderedCoreConfig {
+    void state;
     throw new Error(
       'CompositeCoreProvider cannot render configs; use CoreApplyService with CoreEngineRegistry.get(engine)',
     );
   }
 
-  validate(_config: RenderedCoreConfig): Promise<CoreValidationResult> {
+  validate(config: RenderedCoreConfig): Promise<CoreValidationResult> {
+    void config;
     return Promise.reject(
       new Error(
         'CompositeCoreProvider cannot validate configs; use CoreApplyService with CoreEngineRegistry.get(engine)',
@@ -34,7 +36,8 @@ export class CompositeCoreProvider extends CoreProvider {
     );
   }
 
-  apply(_config: RenderedCoreConfig): Promise<CoreProviderApplyResult> {
+  apply(config: RenderedCoreConfig): Promise<CoreProviderApplyResult> {
+    void config;
     return Promise.reject(
       new Error(
         'CompositeCoreProvider cannot apply configs; use CoreApplyService with CoreEngineRegistry.get(engine)',
@@ -52,7 +55,8 @@ export class CompositeCoreProvider extends CoreProvider {
         return result;
       }),
     );
-    const healthy = results.length > 0 && results.every((result) => result.healthy);
+    const healthy =
+      results.length > 0 && results.every((result) => result.healthy);
     const firstError = results.find((result) => !result.healthy);
     return {
       healthy,
@@ -132,9 +136,7 @@ export class CompositeCoreProvider extends CoreProvider {
           partial = true;
         }
         warnings.push(
-          ...result.warnings.map(
-            (warning) => `${provider.engine}: ${warning}`,
-          ),
+          ...result.warnings.map((warning) => `${provider.engine}: ${warning}`),
         );
         clients.push(
           ...result.clients.map((client) => ({
@@ -169,14 +171,19 @@ function ensureUniqueConnectionId(
     XRAY: 'xray:',
   };
   const prefix = prefixes[engine];
-  if (connectionId.startsWith(prefix) || connectionId.startsWith(`${engine}:`)) {
+  if (
+    connectionId.startsWith(prefix) ||
+    connectionId.startsWith(`${engine}:`)
+  ) {
     return connectionId;
   }
   return `${engine}:${connectionId}`;
 }
 
 function aggregateVersions(versions: Array<string | null>): string | null {
-  const present = versions.filter((version): version is string => Boolean(version));
+  const present = versions.filter((version): version is string =>
+    Boolean(version),
+  );
   if (present.length === 0) {
     return null;
   }

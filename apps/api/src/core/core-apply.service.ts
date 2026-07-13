@@ -88,7 +88,7 @@ export class CoreApplyService {
       emptyPreview();
     return {
       ...primary,
-      engines: engines as Record<string, ConfigPreviewEngine>,
+      engines: engines,
     };
   }
 
@@ -161,7 +161,7 @@ export class CoreApplyService {
                 (primary?.diffSummary as Prisma.InputJsonValue) ?? undefined,
               errorMessage,
               rollbackOutcome,
-              engineResults: mappedResults as Prisma.InputJsonValue,
+              engineResults: mappedResults,
               completedAt,
             },
           });
@@ -244,7 +244,7 @@ export class CoreApplyService {
                 (primary?.diffSummary as Prisma.InputJsonValue) ?? undefined,
               errorMessage,
               rollbackOutcome,
-              engineResults: mappedResults as Prisma.InputJsonValue,
+              engineResults: mappedResults,
               appliedAt: allSucceeded
                 ? (primary?.appliedAt ?? completedAt)
                 : (succeededEngines[0]?.[1].appliedAt ?? null),
@@ -635,7 +635,7 @@ function parseEngineResults(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
-  return value as CoreApplySummary['engineResults'];
+  return value;
 }
 
 function aggregateApplyStatus(

@@ -423,7 +423,9 @@ export class SharedVolumeXrayReloadHandshakeAdapter extends XrayReloadHandshakeA
           continue;
         }
         if (acknowledgement.hash !== hash) {
-          throw new Error('Xray reload acknowledgement hash did not match request');
+          throw new Error(
+            'Xray reload acknowledgement hash did not match request',
+          );
         }
         if (acknowledgement.status !== 'ok') {
           throw new Error(

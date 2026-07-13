@@ -289,12 +289,7 @@ export const environmentSchema = z
       .min(3)
       .max(255)
       .default('127.0.0.1:10085'),
-    XRAY_API_LISTEN: z
-      .string()
-      .trim()
-      .min(3)
-      .max(255)
-      .default('0.0.0.0:10085'),
+    XRAY_API_LISTEN: z.string().trim().min(3).max(255).default('0.0.0.0:10085'),
     XRAY_PROCESS_TIMEOUT_MS: z.coerce
       .number()
       .int()

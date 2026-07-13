@@ -256,7 +256,9 @@ export class TrafficCollectorService {
     }
     return this.prisma.$transaction(
       async (tx) => {
-        const userIds = [...new Set(counters.map((counter) => counter.statsKey))];
+        const userIds = [
+          ...new Set(counters.map((counter) => counter.statsKey)),
+        ];
         const users = await tx.user.findMany({
           where: {
             id: { in: userIds },

@@ -462,9 +462,7 @@ export const coreHealthEngineSchema = z
 
 export const coreHealthSchema = coreHealthEngineSchema
   .extend({
-    engines: z
-      .partialRecord(z.enum(CORE_ENGINES), coreHealthEngineSchema)
-      .optional(),
+    engines: z.partialRecord(z.enum(CORE_ENGINES), coreHealthEngineSchema).optional(),
   })
   .strict();
 
@@ -963,12 +961,7 @@ export const vlessRealityInboundSettingsSchema = z
   });
 export type VlessRealityInboundSettings = z.infer<typeof vlessRealityInboundSettingsSchema>;
 
-export const vlessXhttpModeSchema = z.enum([
-  'auto',
-  'packet-up',
-  'stream-up',
-  'stream-one',
-]);
+export const vlessXhttpModeSchema = z.enum(['auto', 'packet-up', 'stream-up', 'stream-one']);
 export type VlessXhttpMode = z.infer<typeof vlessXhttpModeSchema>;
 
 const vlessXhttpPathSchema = z
@@ -1027,9 +1020,7 @@ export const vlessXhttpTlsInboundSettingsSchema = z
     tls: vlessXhttpTlsFilesInputSchema,
   })
   .strict();
-export type VlessXhttpTlsInboundSettings = z.infer<
-  typeof vlessXhttpTlsInboundSettingsSchema
->;
+export type VlessXhttpTlsInboundSettings = z.infer<typeof vlessXhttpTlsInboundSettingsSchema>;
 
 export const trojanFallbackInputSchema = z
   .object({
@@ -1338,9 +1329,7 @@ export const vlessXhttpTlsPublicConfigSchema = z
       .strict(),
   })
   .strict();
-export type VlessXhttpTlsPublicConfig = z.infer<
-  typeof vlessXhttpTlsPublicConfigSchema
->;
+export type VlessXhttpTlsPublicConfig = z.infer<typeof vlessXhttpTlsPublicConfigSchema>;
 
 export const trojanInboundPublicConfigSchema = z
   .object({
@@ -1748,9 +1737,7 @@ export const coreApplySummarySchema = z
     rollbackOutcome: z.string().nullable(),
     startedAt: isoDateTimeSchema.nullable(),
     completedAt: isoDateTimeSchema.nullable(),
-    engineResults: z
-      .partialRecord(z.enum(CORE_ENGINES), coreApplyEngineResultSchema)
-      .optional(),
+    engineResults: z.partialRecord(z.enum(CORE_ENGINES), coreApplyEngineResultSchema).optional(),
   })
   .strict();
 export type CoreApplySummary = z.infer<typeof coreApplySummarySchema>;
@@ -1784,9 +1771,7 @@ export type ConfigPreviewEngine = z.infer<typeof configPreviewEngineSchema>;
 /** Top-level fields mirror the primary (SING_BOX / first) engine for older clients. */
 export const configPreviewSchema = configPreviewEngineSchema
   .extend({
-    engines: z
-      .partialRecord(z.enum(CORE_ENGINES), configPreviewEngineSchema)
-      .optional(),
+    engines: z.partialRecord(z.enum(CORE_ENGINES), configPreviewEngineSchema).optional(),
   })
   .strict();
 export type ConfigPreviewResult = z.infer<typeof configPreviewSchema>;

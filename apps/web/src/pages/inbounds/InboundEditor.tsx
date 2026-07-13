@@ -172,11 +172,13 @@ function sanitizeInboundForm(
     const certificatePath =
       ('certificatePath' in formTls && typeof formTls.certificatePath === 'string'
         ? formTls.certificatePath
-        : undefined) || defaultsContext.tlsCertificatePath || undefined;
+        : undefined) ||
+      defaultsContext.tlsCertificatePath ||
+      undefined;
     const keyPath =
-      ('keyPath' in formTls && typeof formTls.keyPath === 'string'
-        ? formTls.keyPath
-        : undefined) || defaultsContext.tlsKeyPath || undefined;
+      ('keyPath' in formTls && typeof formTls.keyPath === 'string' ? formTls.keyPath : undefined) ||
+      defaultsContext.tlsKeyPath ||
+      undefined;
     const certificatePem =
       'certificatePem' in formTls && typeof formTls.certificatePem === 'string'
         ? formTls.certificatePem
@@ -210,8 +212,7 @@ function sanitizeInboundForm(
       ...settings,
       path: 'path' in settings && typeof settings.path === 'string' ? settings.path : preset.path,
       host: 'host' in settings ? settings.host : preset.host,
-      mode:
-        'mode' in settings && typeof settings.mode === 'string' ? settings.mode : preset.mode,
+      mode: 'mode' in settings && typeof settings.mode === 'string' ? settings.mode : preset.mode,
       tls,
     } as InboundEditorForm['settings'];
     return { ...values, settings };
@@ -228,10 +229,7 @@ function sanitizeInboundForm(
         tlsKeyPath: defaultsContext.tlsKeyPath,
       },
       listenOverrides(settings),
-    ) as Extract<
-      ReturnType<typeof buildDefaultInboundSettings>,
-      { tls: unknown }
-    > &
+    ) as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }> &
       InboundEditorForm['settings'];
     const presetTls = preset.tls;
     const formTls =
@@ -686,7 +684,11 @@ function VlessXhttpTlsFields({ detailed }: { detailed: boolean }) {
       <Form.Item name={['settings', 'host']} label={t('inbounds.xhttpHost')}>
         <Input autoComplete="off" placeholder={t('inbounds.xhttpHostOptional')} />
       </Form.Item>
-      <Form.Item name={['settings', 'mode']} label={t('inbounds.xhttpMode')} rules={[{ required: true }]}>
+      <Form.Item
+        name={['settings', 'mode']}
+        label={t('inbounds.xhttpMode')}
+        rules={[{ required: true }]}
+      >
         <Select options={VLESS_XHTTP_MODES.map((value) => ({ value, label: value }))} />
       </Form.Item>
       <Form.Item name={['settings', 'tls', 'mode']} hidden>
@@ -716,7 +718,10 @@ function VlessXhttpTlsFields({ detailed }: { detailed: boolean }) {
           >
             <Input.TextArea rows={3} autoComplete="off" />
           </Form.Item>
-          <Form.Item name={['settings', 'tls', 'privateKeyPem']} label={t('inbounds.privateKeyPem')}>
+          <Form.Item
+            name={['settings', 'tls', 'privateKeyPem']}
+            label={t('inbounds.privateKeyPem')}
+          >
             <Input.TextArea rows={3} autoComplete="off" />
           </Form.Item>
         </>

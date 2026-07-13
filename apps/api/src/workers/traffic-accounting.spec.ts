@@ -109,18 +109,12 @@ describe('traffic delta accounting', () => {
 
 describe('traffic collector multi-engine counters', () => {
   it('keeps per-engine cursors and sums user deltas across engines', () => {
-    const singBox = computeTrafficDelta(
-      `SING_BOX:${userId}`,
-      0,
-      15n,
-      29n,
-      {
-        lastUploadBytes: 10n,
-        lastDownloadBytes: 20n,
-        accountingEpoch: 0,
-        generation: 1,
-      },
-    );
+    const singBox = computeTrafficDelta(`SING_BOX:${userId}`, 0, 15n, 29n, {
+      lastUploadBytes: 10n,
+      lastDownloadBytes: 20n,
+      accountingEpoch: 0,
+      generation: 1,
+    });
     const xray = computeTrafficDelta(`XRAY:${userId}`, 0, 7n, 3n, {
       lastUploadBytes: 2n,
       lastDownloadBytes: 1n,

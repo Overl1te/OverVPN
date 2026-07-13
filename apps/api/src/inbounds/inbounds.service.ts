@@ -1067,10 +1067,7 @@ export class InboundsService {
       if (parsed.version !== 1) {
         throw new Error('Invalid credential payload');
       }
-      if (
-        protocol === 'VLESS_REALITY' ||
-        protocol === 'VLESS_XHTTP_TLS'
-      ) {
+      if (protocol === 'VLESS_REALITY' || protocol === 'VLESS_XHTTP_TLS') {
         if (
           !('uuid' in parsed) ||
           typeof parsed.uuid !== 'string' ||

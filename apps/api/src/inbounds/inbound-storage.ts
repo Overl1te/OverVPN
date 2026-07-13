@@ -119,9 +119,7 @@ export async function buildInboundStorage(
       protocol,
       storage: buildVlessXhttpTlsStorage(
         settings as VlessXhttpTlsInboundSettings,
-        previous?.protocol === 'VLESS_XHTTP_TLS'
-          ? previous.storage
-          : undefined,
+        previous?.protocol === 'VLESS_XHTTP_TLS' ? previous.storage : undefined,
       ),
     };
   }
@@ -221,7 +219,7 @@ export function storageFromInbound(
       protocol,
       storage: {
         publicConfig: publicConfig as VlessXhttpTlsPublicConfig,
-        secrets: secrets as VlessXhttpTlsInboundSecrets,
+        secrets: secrets,
       },
     };
   }

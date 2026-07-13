@@ -49,9 +49,7 @@ describe('SubscriptionProfileBuilder', () => {
         throw new Error('Unknown encrypted fixture');
       }),
     };
-    builder = createBuilder(
-      encryption as unknown as SecretEncryptionService,
-    );
+    builder = createBuilder(encryption as unknown as SecretEncryptionService);
     profile = builder.build(profileUser());
   });
 
@@ -364,9 +362,9 @@ describe('SubscriptionProfileBuilder', () => {
     expect(links).toBe(
       'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:443?encryption=none&security=tls&type=xhttp&path=%2Fapi%2Fv1%2Fws&host=cdn.example.com&sni=vpn.example.com&fp=chrome&mode=auto#Bob%20-%20Edge_XHTTP',
     );
-    expect(singBox.outbounds.filter((outbound) => outbound.type === 'vless')).toEqual(
-      [],
-    );
+    expect(
+      singBox.outbounds.filter((outbound) => outbound.type === 'vless'),
+    ).toEqual([]);
     expect(clash.proxies).toEqual([
       {
         name: 'vless-xhttp-tls-edge_xhttp',

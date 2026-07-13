@@ -336,10 +336,7 @@ export class CoreStateLoader {
     }
     try {
       const parsed = JSON.parse(this.encryption.decrypt(encrypted)) as unknown;
-      if (
-        protocol === 'VLESS_REALITY' ||
-        protocol === 'VLESS_XHTTP_TLS'
-      ) {
+      if (protocol === 'VLESS_REALITY' || protocol === 'VLESS_XHTTP_TLS') {
         return vlessCredentialSchema.parse(parsed);
       }
       return passwordCredentialSchema.parse(parsed);

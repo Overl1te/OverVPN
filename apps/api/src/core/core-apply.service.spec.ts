@@ -122,13 +122,14 @@ describe('CoreApplyService multi-engine apply', () => {
       user: {
         updateMany: userUpdateMany,
       },
-      $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
-        callback({
-          coreApplyRecord: { update, updateMany },
-          coreState: { upsert: coreStateUpsert },
-          inbound: { updateMany: inboundUpdateMany },
-          user: { updateMany: userUpdateMany },
-        }),
+      $transaction: jest.fn(
+        async (callback: (tx: unknown) => Promise<unknown>) =>
+          callback({
+            coreApplyRecord: { update, updateMany },
+            coreState: { upsert: coreStateUpsert },
+            inbound: { updateMany: inboundUpdateMany },
+            user: { updateMany: userUpdateMany },
+          }),
       ),
     } as unknown as PrismaService;
 
@@ -136,7 +137,9 @@ describe('CoreApplyService multi-engine apply', () => {
     const xray = new ValidationFailingProvider('XRAY');
     const registry = registryOf([singBox, xray]);
     const stateLoader = {
-      load: jest.fn((engine: CoreEngine) => Promise.resolve(emptyState(engine))),
+      load: jest.fn((engine: CoreEngine) =>
+        Promise.resolve(emptyState(engine)),
+      ),
     } as unknown as CoreStateLoader;
     const lock = {
       withLock: <T>(
@@ -148,8 +151,9 @@ describe('CoreApplyService multi-engine apply', () => {
       recordFailureSafely: jest.fn(() => Promise.resolve()),
       recordSafely: jest.fn(() => Promise.resolve()),
     } as unknown as AuditService;
+    const notifyApplyFailure = jest.fn(() => Promise.resolve());
     const notifications = {
-      notifyApplyFailure: jest.fn(() => Promise.resolve()),
+      notifyApplyFailure,
     } as unknown as TelegramNotificationService;
     const service = new CoreApplyService(
       prisma,
@@ -184,7 +188,7 @@ describe('CoreApplyService multi-engine apply', () => {
     expect(result.engineResults?.XRAY?.status).toBe('FAILED');
     expect(coreStateUpsert).toHaveBeenCalled();
     expect(userUpdateMany).not.toHaveBeenCalled();
-    expect(notifications.notifyApplyFailure).toHaveBeenCalled();
+    expect(notifyApplyFailure).toHaveBeenCalled();
   });
 });
 
@@ -322,7 +326,9 @@ class MemoryFileSystem extends CoreFileSystem {
 }
 
 function registryOf(providers: EngineProvider[]): CoreEngineRegistry {
-  const byEngine = new Map(providers.map((provider) => [provider.engine, provider]));
+  const byEngine = new Map(
+    providers.map((provider) => [provider.engine, provider]),
+  );
   return {
     get: (engine: CoreEngine) => {
       const provider = byEngine.get(engine);

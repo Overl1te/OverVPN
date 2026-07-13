@@ -39,10 +39,10 @@ OverVPN — **однонодовая** панель для выдачи дост
 
 ### Dual cores
 
-| Зона | Engine | Протоколы (MVP) | Compose service |
-| ---- | ------ | --------------- | --------------- |
-| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS | `core` |
-| Xray | `XRAY` | VLESS_XHTTP_TLS | `core-xray` |
+| Зона     | Engine     | Протоколы (MVP)                               | Compose service |
+| -------- | ---------- | --------------------------------------------- | --------------- |
+| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS | `core`          |
+| Xray     | `XRAY`     | VLESS_XHTTP_TLS                               | `core-xray`     |
 
 Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами обоих ядер. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`).
 
