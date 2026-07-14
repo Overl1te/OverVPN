@@ -3,9 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import {
   SUBSCRIPTION_FORMATS,
   buildSubscriptionPublicUrl,
+  renderSubscriptionAnnounce,
+  renderSubscriptionTitle,
   type UserStatus,
   type UserStatusReason,
-} from '@overvpn/shared/constants';
+} from '@overvpn/shared';
 import type {
   SubscriptionInfo,
   SubscriptionProfileDescriptor,
@@ -20,6 +22,14 @@ import {
   type SubscriptionProfileUser,
 } from './subscription-profile';
 
+const subscriptionPlanSelect = {
+  name: true,
+  subscriptionTitleTemplate: true,
+  subscriptionAnnounce: true,
+  subscriptionSupportUrl: true,
+  subscriptionWebPageUrl: true,
+} as const;
+
 const subscriptionInfoSelect = {
   id: true,
   identity: true,
@@ -31,6 +41,7 @@ const subscriptionInfoSelect = {
   usedUploadBytes: true,
   usedDownloadBytes: true,
   deletedAt: true,
+  plan: { select: subscriptionPlanSelect },
 } as const satisfies Prisma.UserSelect;
 
 const subscriptionUserSelect = {
@@ -53,6 +64,7 @@ const subscriptionUserSelect = {
           publicHost: true,
           publicPort: true,
           listenPort: true,
+          displayNameTemplate: true,
           config: true,
           secretDataEncrypted: true,
         },
@@ -92,6 +104,13 @@ export interface SubscriptionInfoSource {
   dataLimitBytes: bigint | null;
   usedUploadBytes: bigint;
   usedDownloadBytes: bigint;
+  plan: {
+    name: string;
+    subscriptionTitleTemplate: string | null;
+    subscriptionAnnounce: string | null;
+    subscriptionSupportUrl: string | null;
+    subscriptionWebPageUrl: string | null;
+  } | null;
 }
 
 @Injectable()
@@ -193,6 +212,18 @@ export function buildSubscriptionInfo(
         : 0n;
   const effective = effectiveStatus(source, total, now);
   const subscriptionUrl = buildSubscriptionPublicUrl(publicBaseUrl, token);
+  const brandingContext = {
+    username: source.username,
+    identity: source.identity,
+    planName: source.plan?.name ?? null,
+    traffic: {
+      uploadBytes: upload,
+      downloadBytes: download,
+      limitBytes: source.dataLimitBytes,
+      expireAt: source.expireAt,
+      now,
+    },
+  };
 
   return {
     identity: source.identity,
@@ -206,6 +237,16 @@ export function buildSubscriptionInfo(
     limitBytes: source.dataLimitBytes?.toString() ?? null,
     remainingBytes: remaining?.toString() ?? null,
     updateIntervalHours,
+    profileTitle: renderSubscriptionTitle(
+      source.plan?.subscriptionTitleTemplate,
+      brandingContext,
+    ),
+    announce: renderSubscriptionAnnounce(
+      source.plan?.subscriptionAnnounce,
+      brandingContext,
+    ),
+    supportUrl: source.plan?.subscriptionSupportUrl ?? null,
+    profileWebPageUrl: source.plan?.subscriptionWebPageUrl ?? null,
     subscriptionUrl,
     formats: [...SUBSCRIPTION_FORMATS],
     formatUrls: {
@@ -260,6 +301,16 @@ function toProfileUser(user: SubscriptionUserRow): SubscriptionProfileUser {
   return {
     identity: user.identity,
     username: user.username,
+    expireAt: user.expireAt,
+    dataLimitBytes: user.dataLimitBytes,
+    usedUploadBytes: user.usedUploadBytes,
+    usedDownloadBytes: user.usedDownloadBytes,
+    plan: user.plan
+      ? {
+          name: user.plan.name,
+          subscriptionTitleTemplate: user.plan.subscriptionTitleTemplate,
+        }
+      : null,
     inboundAssignments: user.inboundAssignments,
   };
 }

@@ -199,6 +199,8 @@ model User {
   nextResetAt        DateTime?               @db.Timestamptz(3)
   deviceLimit        Int?
   ipLimit            Int?
+  /** Sticky hold after device/IP limit trip; blocks flap ACTIVE↔LIMITED. */
+  identityLimitHoldUntil DateTime?           @db.Timestamptz(3)
   speedLimitBps      BigInt?
   subToken           String                  @unique @db.VarChar(64)
   planId             String?                 @db.Uuid
@@ -224,21 +226,25 @@ model User {
 }
 
 model Plan {
-  id                    String        @id @default(uuid()) @db.Uuid
-  name                  String        @unique @db.VarChar(100)
-  description           String?
-  status                PlanStatus    @default(ACTIVE)
-  defaultDataLimitBytes BigInt?
-  defaultExpiryDays     Int?
-  defaultDeviceLimit    Int?
-  defaultIpLimit        Int?
-  defaultSpeedLimitBps  BigInt?
-  defaultResetStrategy  ResetStrategy @default(NO_RESET)
-  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime      @updatedAt @db.Timestamptz(3)
-  archivedAt            DateTime?     @db.Timestamptz(3)
-  users                 User[]
-  planInbounds          PlanInbound[]
+  id                         String        @id @default(uuid()) @db.Uuid
+  name                       String        @unique @db.VarChar(100)
+  description                String?
+  status                     PlanStatus    @default(ACTIVE)
+  defaultDataLimitBytes      BigInt?
+  defaultExpiryDays          Int?
+  defaultDeviceLimit         Int?
+  defaultIpLimit             Int?
+  defaultSpeedLimitBps       BigInt?
+  defaultResetStrategy       ResetStrategy @default(NO_RESET)
+  subscriptionTitleTemplate  String?       @db.VarChar(200)
+  subscriptionAnnounce       String?       @db.VarChar(500)
+  subscriptionSupportUrl     String?       @db.VarChar(2048)
+  subscriptionWebPageUrl     String?       @db.VarChar(2048)
+  createdAt                  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime      @updatedAt @db.Timestamptz(3)
+  archivedAt                 DateTime?     @db.Timestamptz(3)
+  users                      User[]
+  planInbounds               PlanInbound[]
 
   @@index([status])
   @@map("plans")
@@ -254,6 +260,7 @@ model Inbound {
   publicHost          String?                 @db.VarChar(255)
   publicPort          Int?
   enabled             Boolean                 @default(true)
+  displayNameTemplate String?                 @db.VarChar(200)
   config              Json
   secretDataEncrypted String?
   revision            Int                     @default(1)

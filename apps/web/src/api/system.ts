@@ -1,4 +1,9 @@
-import type { GlobalUsage, SystemDashboard, SystemHealth } from '@overvpn/shared/schemas';
+import type {
+  GlobalUsage,
+  SystemDashboard,
+  SystemHealth,
+  SystemHostStats,
+} from '@overvpn/shared/schemas';
 import { apiRequest } from './client';
 
 export function getDashboard(
@@ -12,6 +17,10 @@ export function getDashboard(
 
 export function getSystemHealth(): Promise<SystemHealth> {
   return apiRequest<SystemHealth>('/admin/system/health');
+}
+
+export function getHostStats(): Promise<SystemHostStats> {
+  return apiRequest<SystemHostStats>('/admin/system/host');
 }
 
 export function getGlobalUsage(

@@ -13,17 +13,49 @@ export interface EnforceableUser {
   usedUploadBytes: bigint;
   usedDownloadBytes: bigint;
   deviceLimit: number | null;
-  ipLimit: number | null;
+  identityLimitHoldUntil: Date | null;
 }
 
 export interface ActiveIdentityCounts {
   devices: number;
-  ips: number;
 }
 
 export interface EnforcedStatus {
   status: UserStatus;
   statusReason: UserStatusReason | null;
+}
+
+export interface SessionIdentityRow {
+  userId: string;
+  deviceId: string | null;
+  ipAddress: string | null;
+}
+
+export function deviceKeyFromSession(session: {
+  deviceId: string | null;
+  ipAddress: string | null;
+}): string | null {
+  return (
+    session.deviceId ?? (session.ipAddress ? `ip:${session.ipAddress}` : null)
+  );
+}
+
+/** Aggregate distinct concurrent devices per user from online session rows. */
+export function countIdentitiesByUser(
+  sessions: SessionIdentityRow[],
+): Map<string, { devices: Set<string> }> {
+  const identities = new Map<string, { devices: Set<string> }>();
+  for (const session of sessions) {
+    const entry = identities.get(session.userId) ?? {
+      devices: new Set<string>(),
+    };
+    const device = deviceKeyFromSession(session);
+    if (device) {
+      entry.devices.add(device);
+    }
+    identities.set(session.userId, entry);
+  }
+  return identities;
 }
 
 export function evaluateEnforcedStatus(
@@ -46,10 +78,38 @@ export function evaluateEnforcedStatus(
   if (user.deviceLimit !== null && active.devices > user.deviceLimit) {
     return { status: 'LIMITED', statusReason: 'device' };
   }
-  if (user.ipLimit !== null && active.ips > user.ipLimit) {
-    return { status: 'LIMITED', statusReason: 'ip' };
+  if (
+    user.status === 'LIMITED' &&
+    user.statusReason === 'device' &&
+    user.identityLimitHoldUntil !== null &&
+    user.identityLimitHoldUntil > now
+  ) {
+    return {
+      status: 'LIMITED',
+      statusReason: 'device',
+    };
   }
   return { status: 'ACTIVE', statusReason: null };
+}
+
+export function nextIdentityLimitHoldUntil(
+  enforced: EnforcedStatus,
+  overDeviceLimit: boolean,
+  holdMs: number,
+  now: Date,
+  previousHoldUntil: Date | null,
+): Date | null {
+  if (
+    enforced.status === 'LIMITED' &&
+    enforced.statusReason === 'device' &&
+    overDeviceLimit
+  ) {
+    return new Date(now.getTime() + holdMs);
+  }
+  if (enforced.status === 'LIMITED' && enforced.statusReason === 'device') {
+    return previousHoldUntil;
+  }
+  return null;
 }
 
 export function nextResetAfterEnforcement(

@@ -23,6 +23,7 @@ import { Line } from '@ant-design/charts';
 import {
   createUser,
   getUser,
+  getUserConnectionIdentities,
   getUserSessions,
   getUserUsage,
   resetUserTraffic,
@@ -81,6 +82,13 @@ export function UserDetailPage() {
     queryKey: ['user-sessions', id],
     queryFn: () => getUserSessions(id!),
     enabled: !isNew && !!id,
+  });
+
+  const identitiesQuery = useQuery({
+    queryKey: ['user-connection-identities', id],
+    queryFn: () => getUserConnectionIdentities(id!),
+    enabled: !isNew && !!id,
+    refetchInterval: 15_000,
   });
 
   const plansQuery = useQuery({
@@ -276,9 +284,6 @@ export function UserDetailPage() {
                   <Descriptions.Item label={t('users.deviceLimit')}>
                     {user.deviceLimit ?? t('app.unlimited')}
                   </Descriptions.Item>
-                  <Descriptions.Item label={t('users.ipLimit')}>
-                    {user.ipLimit ?? t('app.unlimited')}
-                  </Descriptions.Item>
                   <Descriptions.Item label={t('users.resetStrategy')}>
                     {t(`enums.resetStrategy.${user.resetStrategy}`, {
                       defaultValue: user.resetStrategy,
@@ -410,6 +415,73 @@ export function UserDetailPage() {
                 ) : null}
               </Card>
 
+              <Card size="small" title={t('users.connectionIdentities')} style={{ marginTop: 12 }}>
+                {identitiesQuery.data ? (
+                  <>
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                      {t('users.connectionIdentitiesHint')}
+                    </Typography.Paragraph>
+                    <Space wrap style={{ marginBottom: 12 }}>
+                      <Tag>
+                        {t('users.lookbackMinutes', {
+                          minutes: Math.round(identitiesQuery.data.lookbackMs / 60_000),
+                        })}
+                      </Tag>
+                      <Tag>
+                        {t('users.identityCounts', {
+                          devices: identitiesQuery.data.deviceCount,
+                          deviceLimit: identitiesQuery.data.deviceLimit
+                            ? t('users.limitOf', { limit: identitiesQuery.data.deviceLimit })
+                            : '',
+                          online: identitiesQuery.data.ips.filter((row) => row.online).length,
+                        })}
+                      </Tag>
+                      {identitiesQuery.data.identityLimitHoldUntil ? (
+                        <Tag color="warning">
+                          {t('users.identityHoldUntil', {
+                            time: dayjs(identitiesQuery.data.identityLimitHoldUntil).format(
+                              'YYYY-MM-DD HH:mm',
+                            ),
+                          })}
+                        </Tag>
+                      ) : null}
+                    </Space>
+                    <Table
+                      size="small"
+                      rowKey="key"
+                      pagination={false}
+                      dataSource={identitiesQuery.data.ips}
+                      locale={{ emptyText: '—' }}
+                      columns={[
+                        { title: t('online.ip'), dataIndex: 'ipAddress' },
+                        {
+                          title: t('users.sessionCount'),
+                          dataIndex: 'sessionCount',
+                          width: 90,
+                        },
+                        {
+                          title: t('users.onlineNow'),
+                          dataIndex: 'online',
+                          width: 90,
+                          render: (online: boolean) =>
+                            online ? <Tag color="success">online</Tag> : <Tag>off</Tag>,
+                        },
+                        {
+                          title: t('users.firstSeen'),
+                          dataIndex: 'firstSeenAt',
+                          render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                        },
+                        {
+                          title: t('users.lastSeen'),
+                          dataIndex: 'lastSeenAt',
+                          render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                        },
+                      ]}
+                    />
+                  </>
+                ) : null}
+              </Card>
+
               <Card size="small" title={t('users.sessions')} style={{ marginTop: 12 }}>
                 <Table
                   size="small"
@@ -423,6 +495,11 @@ export function UserDetailPage() {
                     {
                       title: t('online.connectedAt'),
                       dataIndex: 'connectedAt',
+                      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                    },
+                    {
+                      title: t('users.lastSeen'),
+                      dataIndex: 'lastSeenAt',
                       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
                     },
                   ]}

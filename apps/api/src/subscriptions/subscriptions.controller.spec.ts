@@ -29,6 +29,10 @@ describe('SubscriptionsController', () => {
     limitBytes: '2000',
     remainingBytes: '1000',
     updateIntervalHours: 6,
+    profileTitle: 'OverVPN - alice',
+    announce: null,
+    supportUrl: null,
+    profileWebPageUrl: null,
     subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
     formats: ['sing-box', 'links', 'clash'],
     formatUrls: {
@@ -149,6 +153,7 @@ describe('SubscriptionsController', () => {
     const response = await request(app.getHttpServer())
       .get(`/api/sub/${TOKEN}`)
       .set('Accept', 'text/html,application/xhtml+xml')
+      .set('Accept-Language', 'en-US,en;q=0.9')
       .set(
         'User-Agent',
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
@@ -156,12 +161,27 @@ describe('SubscriptionsController', () => {
       .expect(200);
 
     expect(response.headers['content-type']).toMatch(/^text\/html/);
+    expect(response.headers.vary).toContain('Accept-Language');
     expect(response.text).toContain('OverVPN');
     expect(response.text).toContain('alice');
     expect(response.text).toContain('Active');
     expect(response.text).toContain(info.formatUrls.links);
     expect(service.info).toHaveBeenCalledWith(TOKEN);
     expect(builder.render).not.toHaveBeenCalled();
+  });
+
+  it('localizes the HTML status page from Accept-Language', async () => {
+    service.info.mockClear();
+    const response = await request(app.getHttpServer())
+      .get(`/api/sub/${TOKEN}`)
+      .set('Accept', 'text/html')
+      .set('Accept-Language', 'ru-RU,ru;q=0.9')
+      .set('User-Agent', 'Mozilla/5.0')
+      .expect(200);
+
+    expect(response.text).toContain('lang="ru"');
+    expect(response.text).toContain('Активен');
+    expect(response.text).toContain('Копировать URL');
   });
 
   it('still returns a profile when a browser asks for an explicit format', async () => {

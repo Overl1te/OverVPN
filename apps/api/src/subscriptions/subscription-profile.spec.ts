@@ -69,7 +69,7 @@ describe('SubscriptionProfileBuilder', () => {
     expect(first).toBe(second);
     expect(proxy).toEqual({
       type: 'hysteria2',
-      tag: 'hy2-edge_eu',
+      tag: 'Alice / Europe - Edge_EU',
       server: 'vpn.example.com',
       server_port: 8443,
       password: 'p@ssword /?# ü',
@@ -94,7 +94,7 @@ describe('SubscriptionProfileBuilder', () => {
     expect(parsed.outbounds[1]).toMatchObject({
       type: 'urltest',
       tag: 'auto',
-      outbounds: ['hy2-edge_eu'],
+      outbounds: ['Alice / Europe - Edge_EU'],
     });
     expect(parsed.inbounds[0]).toMatchObject({
       type: 'tun',
@@ -136,7 +136,7 @@ describe('SubscriptionProfileBuilder', () => {
     expect(yaml).not.toContain('*a');
     expect(parsed.proxies).toEqual([
       {
-        name: 'hy2-edge_eu',
+        name: 'Alice / Europe - Edge_EU',
         type: 'hysteria2',
         server: 'vpn.example.com',
         port: 8443,
@@ -154,12 +154,12 @@ describe('SubscriptionProfileBuilder', () => {
       {
         name: 'PROXY',
         type: 'select',
-        proxies: ['AUTO', 'hy2-edge_eu', 'DIRECT'],
+        proxies: ['AUTO', 'Alice / Europe - Edge_EU', 'DIRECT'],
       },
       {
         name: 'AUTO',
         type: 'url-test',
-        proxies: ['hy2-edge_eu'],
+        proxies: ['Alice / Europe - Edge_EU'],
         url: 'https://www.gstatic.com/generate_204',
         interval: 300,
         tolerance: 50,
@@ -187,6 +187,7 @@ describe('SubscriptionProfileBuilder', () => {
           publicHost: 'vpn.example.com',
           publicPort: 9443,
           listenPort: 9443,
+          displayNameTemplate: null,
           config: {
             handshakeServer: 'www.cloudflare.com',
             handshakePort: 443,
@@ -211,6 +212,7 @@ describe('SubscriptionProfileBuilder', () => {
           publicHost: 'vpn.example.com',
           publicPort: 8388,
           listenPort: 8388,
+          displayNameTemplate: null,
           config: {
             method: '2022-blake3-aes-256-gcm',
             passwordPresent: true,
@@ -317,6 +319,11 @@ describe('SubscriptionProfileBuilder', () => {
     const user: SubscriptionProfileUser = {
       identity: 'Bob',
       username: 'bob',
+      expireAt: null,
+      dataLimitBytes: null,
+      usedUploadBytes: 0n,
+      usedDownloadBytes: 0n,
+      plan: null,
       inboundAssignments: [
         {
           id: 'assignment-xhttp',
@@ -328,6 +335,7 @@ describe('SubscriptionProfileBuilder', () => {
             publicHost: 'vpn.example.com',
             publicPort: 443,
             listenPort: 443,
+            displayNameTemplate: null,
             config: {
               path: '/api/v1/ws',
               host: 'cdn.example.com',
@@ -367,7 +375,7 @@ describe('SubscriptionProfileBuilder', () => {
     ).toEqual([]);
     expect(clash.proxies).toEqual([
       {
-        name: 'vless-xhttp-tls-edge_xhttp',
+        name: 'Bob - Edge_XHTTP',
         type: 'vless',
         server: 'vpn.example.com',
         port: 443,
@@ -391,6 +399,11 @@ function profileUser(): SubscriptionProfileUser {
   return {
     identity: 'Alice / Europe',
     username: 'alice',
+    expireAt: null,
+    dataLimitBytes: null,
+    usedUploadBytes: 0n,
+    usedDownloadBytes: 0n,
+    plan: null,
     inboundAssignments: [
       {
         id: 'assignment-id',
@@ -402,6 +415,7 @@ function profileUser(): SubscriptionProfileUser {
           publicHost: 'vpn.example.com',
           publicPort: 8443,
           listenPort: 443,
+          displayNameTemplate: null,
           config: {
             upMbps: 100,
             downMbps: 300,

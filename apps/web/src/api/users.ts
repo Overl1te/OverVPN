@@ -2,6 +2,7 @@ import type {
   BulkUserActionRequest,
   CreateUser,
   UpdateUser,
+  UserConnectionIdentities,
   UserListQuery,
   UserResult,
   UserUsageSummary,
@@ -83,4 +84,12 @@ export function getUserUsage(
 
 export function getUserSessions(id: string): Promise<OnlineSession[]> {
   return apiRequest<OnlineSession[]>(`/admin/users/${id}/sessions`);
+}
+
+export function getUserConnectionIdentities(
+  id: string,
+): Promise<UserConnectionIdentities> {
+  return apiRequest<UserConnectionIdentities>(
+    `/admin/users/${id}/connection-identities`,
+  );
 }

@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type {
   BulkUserAction,
   UserStatusReason,
@@ -8,6 +9,7 @@ import type {
   CreateUser,
   UpdateUser,
   UsageDateRangeQuery,
+  UserConnectionIdentities,
   UserListQuery,
   UserResult,
   UserUsageSummary,
@@ -18,10 +20,12 @@ import type {
   AuthenticatedAdmin,
   RequestMetadata,
 } from '../common/authorization';
+import type { AppEnvironment } from '../config/environment';
 import { CoreChangeDispatcher } from '../core/core-change-dispatcher';
 import type { Plan, Prisma, User } from '../generated/prisma/client';
 import { PlanAssignmentSyncService } from '../inbounds/plan-assignment-sync.service';
 import { PrismaService } from '../infrastructure/infrastructure.module';
+import { deviceKeyFromSession } from '../workers/limit-enforcement';
 import {
   calculateNextResetAt,
   createSubscriptionToken,
@@ -30,12 +34,21 @@ import {
 
 @Injectable()
 export class UsersService {
+  private readonly lookbackMs: number;
+  private readonly sessionTimeoutMs: number;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly coreChanges: CoreChangeDispatcher,
     private readonly planAssignments: PlanAssignmentSyncService,
-  ) {}
+    config: ConfigService<AppEnvironment, true>,
+  ) {
+    this.lookbackMs = config.get('IDENTITY_LOOKBACK_MS', { infer: true });
+    this.sessionTimeoutMs = config.get('ONLINE_SESSION_TIMEOUT_MS', {
+      infer: true,
+    });
+  }
 
   async list(query: UserListQuery): Promise<{
     items: UserResult[];
@@ -148,10 +161,9 @@ export class UsersService {
                 input.deviceLimit === undefined
                   ? (plan?.defaultDeviceLimit ?? null)
                   : input.deviceLimit,
+              // IP limit is unused; concurrent seats use deviceLimit only.
               ipLimit:
-                input.ipLimit === undefined
-                  ? (plan?.defaultIpLimit ?? null)
-                  : input.ipLimit,
+                input.ipLimit === undefined ? null : input.ipLimit,
               speedLimitBps: this.resolveBigInt(
                 input.speedLimitBps,
                 plan?.defaultSpeedLimitBps,
@@ -292,7 +304,7 @@ export class UsersService {
               input.ipLimit !== undefined
                 ? input.ipLimit
                 : applyingPlan
-                  ? plan.defaultIpLimit
+                  ? null
                   : before.ipLimit,
             speedLimitBps:
               input.speedLimitBps !== undefined
@@ -301,6 +313,14 @@ export class UsersService {
                   ? plan.defaultSpeedLimitBps
                   : before.speedLimitBps,
             disabledAt: normalized.disabledAt,
+            identityLimitHoldUntil:
+              normalized.status === 'ACTIVE' ||
+              normalized.status === 'EXPIRED' ||
+              normalized.status === 'DISABLED' ||
+              (normalized.status === 'LIMITED' &&
+                normalized.statusReason === 'quota')
+                ? null
+                : undefined,
             needsApply: true,
             revision: { increment: 1 },
           },
@@ -759,6 +779,127 @@ export class UsersService {
     }));
   }
 
+  async connectionIdentities(id: string): Promise<UserConnectionIdentities> {
+    const user = await this.requireUser(id);
+    const now = new Date();
+    const lookbackCutoff = new Date(now.getTime() - this.lookbackMs);
+    const onlineCutoff = new Date(now.getTime() - this.sessionTimeoutMs);
+    const sessions = await this.prisma.onlineSession.findMany({
+      where: {
+        userId: id,
+        lastSeenAt: { gte: lookbackCutoff },
+      },
+      select: {
+        ipAddress: true,
+        deviceId: true,
+        connectedAt: true,
+        lastSeenAt: true,
+        disconnectedAt: true,
+      },
+      orderBy: [{ lastSeenAt: 'desc' }, { connectedAt: 'asc' }],
+    });
+
+    type Agg = {
+      key: string;
+      kind: 'ip' | 'device';
+      ipAddress: string | null;
+      deviceId: string | null;
+      firstSeenAt: Date;
+      lastSeenAt: Date;
+      sessionCount: number;
+      online: boolean;
+    };
+    const ips = new Map<string, Agg>();
+    const devices = new Map<string, Agg>();
+
+    for (const session of sessions) {
+      const online =
+        session.disconnectedAt === null && session.lastSeenAt >= onlineCutoff;
+      if (session.ipAddress) {
+        const existing = ips.get(session.ipAddress);
+        if (!existing) {
+          ips.set(session.ipAddress, {
+            key: session.ipAddress,
+            kind: 'ip',
+            ipAddress: session.ipAddress,
+            deviceId: null,
+            firstSeenAt: session.connectedAt,
+            lastSeenAt: session.lastSeenAt,
+            sessionCount: 1,
+            online,
+          });
+        } else {
+          existing.sessionCount += 1;
+          if (session.connectedAt < existing.firstSeenAt) {
+            existing.firstSeenAt = session.connectedAt;
+          }
+          if (session.lastSeenAt > existing.lastSeenAt) {
+            existing.lastSeenAt = session.lastSeenAt;
+          }
+          existing.online = existing.online || online;
+        }
+      }
+      const deviceKey = deviceKeyFromSession(session);
+      if (deviceKey) {
+        const existing = devices.get(deviceKey);
+        if (!existing) {
+          devices.set(deviceKey, {
+            key: deviceKey,
+            kind: 'device',
+            ipAddress: session.ipAddress,
+            deviceId: session.deviceId ?? deviceKey,
+            firstSeenAt: session.connectedAt,
+            lastSeenAt: session.lastSeenAt,
+            sessionCount: 1,
+            online,
+          });
+        } else {
+          existing.sessionCount += 1;
+          if (session.connectedAt < existing.firstSeenAt) {
+            existing.firstSeenAt = session.connectedAt;
+          }
+          if (session.lastSeenAt > existing.lastSeenAt) {
+            existing.lastSeenAt = session.lastSeenAt;
+          }
+          existing.online = existing.online || online;
+          if (!existing.ipAddress && session.ipAddress) {
+            existing.ipAddress = session.ipAddress;
+          }
+        }
+      }
+    }
+
+    const toDto = (item: Agg) => ({
+      key: item.key,
+      kind: item.kind,
+      ipAddress: item.ipAddress,
+      deviceId: item.deviceId,
+      firstSeenAt: item.firstSeenAt.toISOString(),
+      lastSeenAt: item.lastSeenAt.toISOString(),
+      sessionCount: item.sessionCount,
+      online: item.online,
+    });
+
+    const ipList = [...ips.values()]
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+      .map(toDto);
+    const deviceList = [...devices.values()]
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+      .map(toDto);
+
+    return {
+      lookbackMs: this.lookbackMs,
+      identityLimitHoldUntil:
+        user.identityLimitHoldUntil?.toISOString() ?? null,
+      deviceLimit: user.deviceLimit,
+      ipLimit: user.ipLimit,
+      deviceCount: deviceList.length,
+      ipCount: ipList.length,
+      ips: ipList,
+      devices: deviceList,
+    };
+  }
+
   private bulkUpdate(
     input: BulkUserActionRequest,
     user: User,
@@ -771,24 +912,37 @@ export class UsersService {
         status: 'DISABLED',
         statusReason: 'manual',
         disabledAt: now,
+        identityLimitHoldUntil: null,
       };
     }
     if (input.action === 'enable') {
-      return normalizeUserStatus(user, 'ACTIVE', null, now);
+      return {
+        ...normalizeUserStatus(user, 'ACTIVE', null, now),
+        identityLimitHoldUntil: null,
+      };
     }
     if (input.action === 'reset-traffic') {
+      const normalized = normalizeUserStatus(
+        { ...user, usedUploadBytes: 0n, usedDownloadBytes: 0n },
+        user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
+        user.statusReason as UserStatusReason | null,
+        now,
+      );
       return {
         usedUploadBytes: 0n,
         usedDownloadBytes: 0n,
         accountingEpoch: { increment: 1 },
         trafficResetAt: now,
         nextResetAt: calculateNextResetAt(user.resetStrategy, now),
-        ...normalizeUserStatus(
-          { ...user, usedUploadBytes: 0n, usedDownloadBytes: 0n },
-          user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
-          user.statusReason as UserStatusReason | null,
-          now,
-        ),
+        ...normalized,
+        identityLimitHoldUntil:
+          normalized.status === 'ACTIVE' ||
+          normalized.status === 'EXPIRED' ||
+          normalized.status === 'DISABLED' ||
+          (normalized.status === 'LIMITED' &&
+            normalized.statusReason === 'quota')
+            ? null
+            : undefined,
       };
     }
     if (input.action === 'extend') {
@@ -796,14 +950,23 @@ export class UsersService {
       const expireAt = new Date(
         base.getTime() + input.days * 24 * 60 * 60 * 1_000,
       );
+      const normalized = normalizeUserStatus(
+        { ...user, expireAt },
+        user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
+        user.statusReason as UserStatusReason | null,
+        now,
+      );
       return {
         expireAt,
-        ...normalizeUserStatus(
-          { ...user, expireAt },
-          user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
-          user.statusReason as UserStatusReason | null,
-          now,
-        ),
+        ...normalized,
+        identityLimitHoldUntil:
+          normalized.status === 'ACTIVE' ||
+          normalized.status === 'EXPIRED' ||
+          normalized.status === 'DISABLED' ||
+          (normalized.status === 'LIMITED' &&
+            normalized.statusReason === 'quota')
+            ? null
+            : undefined,
       };
     }
     if (input.action === 'set-plan') {
@@ -816,21 +979,30 @@ export class UsersService {
         now,
       );
       const resetStrategy = plan.defaultResetStrategy;
+      const normalized = normalizeUserStatus(
+        { ...user, dataLimitBytes: plan.defaultDataLimitBytes, expireAt },
+        user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
+        user.statusReason as UserStatusReason | null,
+        now,
+      );
       return {
         plan: { connect: { id: plan.id } },
         dataLimitBytes: plan.defaultDataLimitBytes,
         expireAt,
         deviceLimit: plan.defaultDeviceLimit,
-        ipLimit: plan.defaultIpLimit,
+        ipLimit: null,
         speedLimitBps: plan.defaultSpeedLimitBps,
         resetStrategy,
         nextResetAt: calculateNextResetAt(resetStrategy, now),
-        ...normalizeUserStatus(
-          { ...user, dataLimitBytes: plan.defaultDataLimitBytes, expireAt },
-          user.status === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
-          user.statusReason as UserStatusReason | null,
-          now,
-        ),
+        ...normalized,
+        identityLimitHoldUntil:
+          normalized.status === 'ACTIVE' ||
+          normalized.status === 'EXPIRED' ||
+          normalized.status === 'DISABLED' ||
+          (normalized.status === 'LIMITED' &&
+            normalized.statusReason === 'quota')
+            ? null
+            : undefined,
       };
     }
     return { subToken: rotationToken ?? createSubscriptionToken() };
@@ -916,6 +1088,8 @@ export class UsersService {
       nextResetAt: user.nextResetAt?.toISOString() ?? null,
       deviceLimit: user.deviceLimit,
       ipLimit: user.ipLimit,
+      identityLimitHoldUntil:
+        user.identityLimitHoldUntil?.toISOString() ?? null,
       speedLimitBps: user.speedLimitBps?.toString() ?? null,
       subToken: user.subToken,
       planId: user.planId,

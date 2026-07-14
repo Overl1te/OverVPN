@@ -236,6 +236,44 @@ class SystemDashboardDto {
   workers!: WorkerHealthDto[];
 }
 
+class HostCpuDto {
+  @ApiProperty({ minimum: 1 })
+  cores!: number;
+  @ApiProperty({ minimum: 0, maximum: 100 })
+  usagePercent!: number;
+}
+
+class HostMemoryDto {
+  @ApiProperty({ type: String })
+  totalBytes!: string;
+  @ApiProperty({ type: String })
+  usedBytes!: string;
+  @ApiProperty({ type: String })
+  availableBytes!: string;
+}
+
+class HostNetworkDto {
+  @ApiProperty({ type: String })
+  inboundBytes!: string;
+  @ApiProperty({ type: String })
+  outboundBytes!: string;
+  @ApiProperty({ type: String })
+  inboundBytesPerSecond!: string;
+  @ApiProperty({ type: String })
+  outboundBytesPerSecond!: string;
+}
+
+class SystemHostStatsDto {
+  @ApiProperty({ format: 'date-time' })
+  checkedAt!: string;
+  @ApiProperty({ type: HostCpuDto })
+  cpu!: HostCpuDto;
+  @ApiProperty({ type: HostMemoryDto })
+  memory!: HostMemoryDto;
+  @ApiProperty({ type: HostNetworkDto })
+  network!: HostNetworkDto;
+}
+
 @ApiTags('admin online sessions')
 @ApiBearerAuth()
 @Controller('admin/online-sessions')
@@ -285,5 +323,11 @@ export class SystemController {
   @ApiOkResponse({ type: SystemHealthDto })
   health() {
     return this.system.healthDetails();
+  }
+
+  @Get('host')
+  @ApiOkResponse({ type: SystemHostStatsDto })
+  host() {
+    return this.system.hostStats();
   }
 }

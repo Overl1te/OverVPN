@@ -42,6 +42,7 @@ describe('subscription token rotation', () => {
         syncUserToInboundIds: jest.fn().mockResolvedValue(undefined),
         syncAllUsersOnPlan: jest.fn().mockResolvedValue(undefined),
       } as never,
+      usersConfig(),
     );
     const subscriptions = new SubscriptionsService(
       prisma as unknown as PrismaService,
@@ -108,6 +109,7 @@ describe('subscription token rotation', () => {
         syncUserToInboundIds: jest.fn().mockResolvedValue(undefined),
         syncAllUsersOnPlan: jest.fn().mockResolvedValue(undefined),
       } as never,
+      usersConfig(),
     );
 
     const result = await users.rotateSubscription(user.id, actor, metadata);
@@ -207,6 +209,16 @@ function profileBuilder(): SubscriptionProfileBuilder {
   } as unknown as SubscriptionProfileBuilder;
 }
 
+function usersConfig(): ConfigService<AppEnvironment, true> {
+  return {
+    get: (key: keyof AppEnvironment) => {
+      if (key === 'IDENTITY_LOOKBACK_MS') return 1_800_000;
+      if (key === 'ONLINE_SESSION_TIMEOUT_MS') return 90_000;
+      throw new Error(`Unexpected config key ${key}`);
+    },
+  } as unknown as ConfigService<AppEnvironment, true>;
+}
+
 function config(): ConfigService<AppEnvironment, true> {
   return {
     get: (key: keyof AppEnvironment) => {
@@ -236,6 +248,7 @@ function storedUser(): User {
     nextResetAt: null,
     deviceLimit: null,
     ipLimit: null,
+    identityLimitHoldUntil: null,
     speedLimitBps: null,
     subToken: OLD_TOKEN,
     planId: null,

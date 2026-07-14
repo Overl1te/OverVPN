@@ -18,10 +18,13 @@ type PlanFormValues = {
   defaultDataLimitGiB?: number | null;
   defaultExpiryDays?: number | null;
   defaultDeviceLimit?: number | null;
-  defaultIpLimit?: number | null;
   defaultSpeedLimitBps?: string | null;
   defaultResetStrategy?: string;
   inboundIds?: string[];
+  subscriptionTitleTemplate?: string | null;
+  subscriptionAnnounce?: string | null;
+  subscriptionSupportUrl?: string | null;
+  subscriptionWebPageUrl?: string | null;
 };
 
 function bytesToGiB(bytes: string | null | undefined): number | null {
@@ -80,10 +83,14 @@ export function PlansPage() {
         defaultDataLimitBytes: giBToBytes(values.defaultDataLimitGiB),
         defaultExpiryDays: values.defaultExpiryDays,
         defaultDeviceLimit: values.defaultDeviceLimit,
-        defaultIpLimit: values.defaultIpLimit,
+        defaultIpLimit: null,
         defaultSpeedLimitBps: values.defaultSpeedLimitBps || null,
         defaultResetStrategy: values.defaultResetStrategy,
         inboundIds: values.inboundIds,
+        subscriptionTitleTemplate: values.subscriptionTitleTemplate || null,
+        subscriptionAnnounce: values.subscriptionAnnounce || null,
+        subscriptionSupportUrl: values.subscriptionSupportUrl || null,
+        subscriptionWebPageUrl: values.subscriptionWebPageUrl || null,
       };
       if (editingId) {
         return updatePlan(editingId, payload as never);
@@ -178,10 +185,13 @@ export function PlansPage() {
                       defaultDataLimitGiB: bytesToGiB(row.defaultDataLimitBytes),
                       defaultExpiryDays: row.defaultExpiryDays,
                       defaultDeviceLimit: row.defaultDeviceLimit,
-                      defaultIpLimit: row.defaultIpLimit,
                       defaultSpeedLimitBps: row.defaultSpeedLimitBps,
                       defaultResetStrategy: row.defaultResetStrategy,
                       inboundIds: row.inboundIds,
+                      subscriptionTitleTemplate: row.subscriptionTitleTemplate,
+                      subscriptionAnnounce: row.subscriptionAnnounce,
+                      subscriptionSupportUrl: row.subscriptionSupportUrl,
+                      subscriptionWebPageUrl: row.subscriptionWebPageUrl,
                     });
                     setModalOpen(true);
                   }}
@@ -242,10 +252,11 @@ export function PlansPage() {
           <Form.Item name="defaultExpiryDays" label={t('app.days')}>
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="defaultDeviceLimit" label={t('users.deviceLimit')}>
-            <InputNumber min={1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="defaultIpLimit" label={t('users.ipLimit')}>
+          <Form.Item
+            name="defaultDeviceLimit"
+            label={t('users.deviceLimit')}
+            extra={t('users.deviceLimitHint')}
+          >
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="defaultSpeedLimitBps" label={t('users.speedLimit')}>
@@ -261,6 +272,34 @@ export function PlansPage() {
           </Form.Item>
           <Form.Item name="inboundIds" label={t('plans.inboundIds')}>
             <Select mode="multiple" options={inboundOptions} />
+          </Form.Item>
+          <Form.Item
+            name="subscriptionTitleTemplate"
+            label={t('plans.subscriptionTitleTemplate')}
+            extra={t('plans.subscriptionTitleTemplateHint')}
+          >
+            <Input placeholder="{product} - {username}" maxLength={200} />
+          </Form.Item>
+          <Form.Item
+            name="subscriptionAnnounce"
+            label={t('plans.subscriptionAnnounce')}
+            extra={t('plans.subscriptionAnnounceHint')}
+          >
+            <Input.TextArea rows={2} maxLength={500} showCount />
+          </Form.Item>
+          <Form.Item
+            name="subscriptionSupportUrl"
+            label={t('plans.subscriptionSupportUrl')}
+            extra={t('plans.subscriptionSupportUrlHint')}
+          >
+            <Input placeholder="https://t.me/your_support" maxLength={2048} />
+          </Form.Item>
+          <Form.Item
+            name="subscriptionWebPageUrl"
+            label={t('plans.subscriptionWebPageUrl')}
+            extra={t('plans.subscriptionWebPageUrlHint')}
+          >
+            <Input placeholder="https://example.com/info" maxLength={2048} />
           </Form.Item>
         </Form>
       </Modal>

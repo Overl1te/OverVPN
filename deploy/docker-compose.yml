@@ -73,6 +73,8 @@ x-api-environment: &api-environment
   ONLINE_SESSION_TIMEOUT_MS: ${ONLINE_SESSION_TIMEOUT_MS:-90000}
   ONLINE_SESSION_RETENTION_DAYS: ${ONLINE_SESSION_RETENTION_DAYS:-30}
   ENFORCEMENT_INTERVAL_MS: ${ENFORCEMENT_INTERVAL_MS:-30000}
+  IDENTITY_LOOKBACK_MS: ${IDENTITY_LOOKBACK_MS:-1800000}
+  IDENTITY_LIMIT_HOLD_MS: ${IDENTITY_LIMIT_HOLD_MS:-900000}
   TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
   TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
   TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
@@ -286,7 +288,9 @@ services:
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      HOST_PROC: /host/proc
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -297,6 +301,7 @@ services:
       core-xray:
         condition: service_healthy
     volumes:
+      - /proc:/host/proc:ro
       - singbox_config:/var/lib/sing-box
       - singbox_reload:/var/lib/overvpn/reload
       - singbox_state:/var/lib/sing-box-state

@@ -75,6 +75,14 @@ class SubscriptionInfoDto implements SubscriptionInfo {
   remainingBytes!: string | null;
   @ApiProperty({ minimum: 1, description: 'Client refresh interval in hours.' })
   updateIntervalHours!: number;
+  @ApiProperty({ description: 'Resolved profile title for VPN clients.' })
+  profileTitle!: string;
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  announce!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uri' })
+  supportUrl!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uri' })
+  profileWebPageUrl!: string | null;
   @ApiProperty({ format: 'uri' })
   subscriptionUrl!: string;
   @ApiProperty({ enum: SUBSCRIPTION_FORMATS, isArray: true })
@@ -96,6 +104,18 @@ const profileResponseHeaders = {
   'profile-title': {
     description: 'UTF-8 profile title encoded as base64:<base64>.',
     schema: { type: 'string' },
+  },
+  announce: {
+    description: 'Optional UTF-8 announcement encoded as base64:<base64>.',
+    schema: { type: 'string' },
+  },
+  'support-url': {
+    description: 'Optional support / Telegram URL for clients.',
+    schema: { type: 'string', format: 'uri' },
+  },
+  'profile-web-page-url': {
+    description: 'Optional informational web page URL for clients.',
+    schema: { type: 'string', format: 'uri' },
   },
   'RateLimit-Limit': {
     description: 'Effective request limit for the active window.',
@@ -230,9 +250,12 @@ export class SubscriptionsController {
     const userAgent = request.headers['user-agent'];
     if (prefersSubscriptionHtmlPage(query.format, accept, userAgent)) {
       const info = await this.subscriptions.info(token);
-      setSubscriptionHeaders(response, info);
+      setSubscriptionHeaders(response, info, true);
       response.type('text/html; charset=utf-8');
-      return renderSubscriptionStatusPage(info);
+      return renderSubscriptionStatusPage(
+        info,
+        headerValue(request.headers['accept-language']),
+      );
     }
 
     const access = await this.subscriptions.profile(token);
@@ -375,9 +398,17 @@ function preferredAcceptFormat(
   return undefined;
 }
 
+function headerValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+}
+
 function setSubscriptionHeaders(
   response: Response,
   info: SubscriptionInfo,
+  htmlPage = false,
 ): void {
   response.setHeader('subscription-userinfo', formatSubscriptionUserinfo(info));
   response.setHeader(
@@ -386,14 +417,29 @@ function setSubscriptionHeaders(
   );
   response.setHeader(
     'profile-title',
-    `base64:${Buffer.from(`OverVPN - ${info.username}`, 'utf8').toString(
-      'base64',
-    )}`,
+    `base64:${Buffer.from(info.profileTitle, 'utf8').toString('base64')}`,
   );
+  if (info.announce) {
+    response.setHeader(
+      'announce',
+      `base64:${Buffer.from(info.announce, 'utf8').toString('base64')}`,
+    );
+  }
+  if (info.supportUrl) {
+    response.setHeader('support-url', info.supportUrl);
+  }
+  if (info.profileWebPageUrl) {
+    response.setHeader('profile-web-page-url', info.profileWebPageUrl);
+  }
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   response.setHeader('Pragma', 'no-cache');
   response.setHeader('X-Content-Type-Options', 'nosniff');
-  response.setHeader('Vary', 'Accept, User-Agent');
+  response.setHeader(
+    'Vary',
+    htmlPage
+      ? 'Accept, User-Agent, Accept-Language'
+      : 'Accept, User-Agent',
+  );
 }
 
 function contentDisposition(

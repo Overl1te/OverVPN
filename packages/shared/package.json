@@ -23,6 +23,10 @@
     "./schemas": {
       "types": "./src/schemas.ts",
       "default": "./dist/schemas.js"
+    },
+    "./subscription-templates": {
+      "types": "./src/subscription-templates.ts",
+      "default": "./dist/subscription-templates.js"
     }
   },
   "scripts": {

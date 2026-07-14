@@ -12,6 +12,7 @@ import type { TelegramNotificationService } from '../notifications/telegram-noti
 import { LimitEnforcerService } from './limit-enforcer.service';
 import {
   evaluateEnforcedStatus,
+  nextIdentityLimitHoldUntil,
   type EnforceableUser,
 } from './limit-enforcement';
 import type { WorkerHealthService } from './worker-health.service';
@@ -23,7 +24,7 @@ describe('limit enforcement decisions', () => {
     expect(
       evaluateEnforcedStatus(
         state({ expireAt: now }),
-        { devices: 0, ips: 0 },
+        { devices: 0 },
         now,
       ),
     ).toEqual({ status: 'EXPIRED', statusReason: 'expired' });
@@ -37,27 +38,27 @@ describe('limit enforcement decisions', () => {
           usedUploadBytes: 40n,
           usedDownloadBytes: 60n,
         }),
-        { devices: 0, ips: 0 },
+        { devices: 0 },
         now,
       ),
     ).toEqual({ status: 'LIMITED', statusReason: 'quota' });
   });
 
-  it('enforces distinct device and IP limits', () => {
+  it('enforces concurrent device limit only', () => {
     expect(
       evaluateEnforcedStatus(
         state({ deviceLimit: 1 }),
-        { devices: 2, ips: 1 },
+        { devices: 2 },
         now,
       ),
     ).toEqual({ status: 'LIMITED', statusReason: 'device' });
     expect(
       evaluateEnforcedStatus(
-        state({ ipLimit: 1 }),
-        { devices: 1, ips: 2 },
+        state({ deviceLimit: 1 }),
+        { devices: 1 },
         now,
       ),
-    ).toEqual({ status: 'LIMITED', statusReason: 'ip' });
+    ).toEqual({ status: 'ACTIVE', statusReason: null });
   });
 
   it('preserves a manually disabled user', () => {
@@ -69,7 +70,7 @@ describe('limit enforcement decisions', () => {
           expireAt: now,
           dataLimitBytes: 0n,
         }),
-        { devices: 10, ips: 10 },
+        { devices: 10 },
         now,
       ),
     ).toEqual({ status: 'DISABLED', statusReason: 'manual' });
@@ -79,10 +80,89 @@ describe('limit enforcement decisions', () => {
     expect(
       evaluateEnforcedStatus(
         state({ status: 'LIMITED', statusReason: 'quota' }),
-        { devices: 0, ips: 0 },
+        { devices: 0 },
         now,
       ),
     ).toEqual({ status: 'ACTIVE', statusReason: null });
+  });
+
+  it('keeps device LIMITED while sticky hold has not expired', () => {
+    expect(
+      evaluateEnforcedStatus(
+        state({
+          status: 'LIMITED',
+          statusReason: 'device',
+          identityLimitHoldUntil: new Date('2026-07-12T12:15:00.000Z'),
+        }),
+        { devices: 0 },
+        now,
+      ),
+    ).toEqual({ status: 'LIMITED', statusReason: 'device' });
+  });
+
+  it('recovers legacy IP LIMITED immediately (IP limit no longer enforced)', () => {
+    expect(
+      evaluateEnforcedStatus(
+        state({
+          status: 'LIMITED',
+          statusReason: 'ip',
+          identityLimitHoldUntil: new Date('2026-07-12T12:15:00.000Z'),
+        }),
+        { devices: 0 },
+        now,
+      ),
+    ).toEqual({ status: 'ACTIVE', statusReason: null });
+  });
+
+  it('recovers device LIMITED only after sticky hold expires', () => {
+    expect(
+      evaluateEnforcedStatus(
+        state({
+          status: 'LIMITED',
+          statusReason: 'device',
+          identityLimitHoldUntil: new Date('2026-07-12T11:59:00.000Z'),
+        }),
+        { devices: 0 },
+        now,
+      ),
+    ).toEqual({ status: 'ACTIVE', statusReason: null });
+  });
+
+  it('refreshes identity hold while still over the device limit', () => {
+    expect(
+      nextIdentityLimitHoldUntil(
+        { status: 'LIMITED', statusReason: 'device' },
+        true,
+        900_000,
+        now,
+        null,
+      ),
+    ).toEqual(new Date('2026-07-12T12:15:00.000Z'));
+  });
+
+  it('preserves identity hold after kick until cooldown elapses', () => {
+    const previous = new Date('2026-07-12T12:10:00.000Z');
+    expect(
+      nextIdentityLimitHoldUntil(
+        { status: 'LIMITED', statusReason: 'device' },
+        false,
+        900_000,
+        now,
+        previous,
+      ),
+    ).toBe(previous);
+  });
+
+  it('clears identity hold when returning to ACTIVE', () => {
+    expect(
+      nextIdentityLimitHoldUntil(
+        { status: 'ACTIVE', statusReason: null },
+        false,
+        900_000,
+        now,
+        new Date('2026-07-12T12:10:00.000Z'),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -147,6 +227,79 @@ describe('LimitEnforcerService scheduling and apply retries', () => {
     expect(fixture.applySystem).toHaveBeenCalledTimes(2);
     expect(user.needsApply).toBe(false);
   });
+
+  it('limits when two devices are online concurrently', async () => {
+    const user = userFixture({
+      deviceLimit: 1,
+      status: 'ACTIVE',
+    });
+    const sessions = [
+      {
+        userId: user.id,
+        deviceId: null,
+        ipAddress: '1.1.1.1',
+      },
+      {
+        userId: user.id,
+        deviceId: null,
+        ipAddress: '2.2.2.2',
+      },
+    ];
+    const fixture = serviceFixture([user], ['SUCCEEDED'], sessions);
+
+    await expect(fixture.service.runOnce(now)).resolves.toMatchObject({
+      status: 'HEALTHY',
+      statusChanges: 1,
+    });
+    expect(user.status).toBe('LIMITED');
+    expect(user.statusReason).toBe('device');
+    expect(user.identityLimitHoldUntil).toEqual(
+      new Date('2026-07-12T12:15:00.000Z'),
+    );
+
+    fixture.setSessions([]);
+    await expect(fixture.service.runOnce(now)).resolves.toMatchObject({
+      status: 'HEALTHY',
+      statusChanges: 0,
+    });
+    expect(user.status).toBe('LIMITED');
+    expect(user.statusReason).toBe('device');
+
+    await expect(
+      fixture.service.runOnce(new Date('2026-07-12T12:16:00.000Z')),
+    ).resolves.toMatchObject({
+      status: 'HEALTHY',
+      statusChanges: 1,
+    });
+    expect(user.status).toBe('ACTIVE');
+    expect(user.statusReason).toBeNull();
+    expect(user.identityLimitHoldUntil).toBeNull();
+  });
+
+  it('does not limit a single online device even if ipLimit legacy field is set', async () => {
+    const user = userFixture({
+      deviceLimit: 1,
+      ipLimit: 1,
+      status: 'ACTIVE',
+    });
+    const fixture = serviceFixture(
+      [user],
+      ['SUCCEEDED'],
+      [
+        {
+          userId: user.id,
+          deviceId: null,
+          ipAddress: '1.1.1.1',
+        },
+      ],
+    );
+
+    await expect(fixture.service.runOnce(now)).resolves.toMatchObject({
+      status: 'HEALTHY',
+      statusChanges: 0,
+    });
+    expect(user.status).toBe('ACTIVE');
+  });
 });
 
 function state(overrides: Partial<EnforceableUser> = {}): EnforceableUser {
@@ -158,7 +311,7 @@ function state(overrides: Partial<EnforceableUser> = {}): EnforceableUser {
     usedUploadBytes: 0n,
     usedDownloadBytes: 0n,
     deviceLimit: null,
-    ipLimit: null,
+    identityLimitHoldUntil: null,
     ...overrides,
   };
 }
@@ -182,6 +335,7 @@ function userFixture(overrides: Partial<User> = {}): User {
     nextResetAt: null,
     deviceLimit: null,
     ipLimit: null,
+    identityLimitHoldUntil: null,
     speedLimitBps: null,
     subToken: 'token',
     planId: null,
@@ -195,7 +349,16 @@ function userFixture(overrides: Partial<User> = {}): User {
   };
 }
 
-function serviceFixture(users: User[], applyStatuses: string[]) {
+function serviceFixture(
+  users: User[],
+  applyStatuses: string[],
+  sessions: Array<{
+    userId: string;
+    deviceId: string | null;
+    ipAddress: string | null;
+  }> = [],
+) {
+  let currentSessions = sessions;
   const userDelegate = {
     findMany: jest.fn().mockResolvedValue(users),
     count: jest.fn(() =>
@@ -221,7 +384,7 @@ function serviceFixture(users: User[], applyStatuses: string[]) {
   const tx = {
     user: userDelegate,
     onlineSession: {
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: jest.fn(() => Promise.resolve(currentSessions)),
     },
   };
   const prisma = {
@@ -278,6 +441,7 @@ function serviceFixture(users: User[], applyStatuses: string[]) {
     WORKERS_ENABLED: true,
     WORKER_LOCK_TTL_MS: 60_000,
     ONLINE_SESSION_TIMEOUT_MS: 90_000,
+    IDENTITY_LIMIT_HOLD_MS: 900_000,
   } satisfies Partial<AppEnvironment>;
   const config = {
     get: (key: keyof AppEnvironment) =>
@@ -294,6 +458,15 @@ function serviceFixture(users: User[], applyStatuses: string[]) {
       config,
     ),
     applySystem,
+    setSessions(
+      next: Array<{
+        userId: string;
+        deviceId: string | null;
+        ipAddress: string | null;
+      }>,
+    ) {
+      currentSessions = next;
+    },
   };
 }
 

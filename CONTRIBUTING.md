@@ -295,7 +295,7 @@ acquire Redis lock
 | `DailyUsageAggregatorService`   | агрегация в `UsageDaily`                              | `TRAFFIC_AGGREGATION_*`                                 |
 | `OnlineSessionCollectorService` | активные клиенты                                      | `ONLINE_COLLECTION_INTERVAL_MS`                         |
 | `OnlineSessionSweeperService`   | закрытие протухших сессий                             | `ONLINE_SWEEP_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS` |
-| `LimitEnforcerService`          | expire / quota / device / IP → статусы + side effects | `ENFORCEMENT_INTERVAL_MS`                               |
+| `LimitEnforcerService`          | expire / quota / concurrent devices → статусы + side effects | `ENFORCEMENT_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS`, `IDENTITY_LIMIT_HOLD_MS` |
 | `WorkerHealthService`           | статусы для dashboard                                 | —                                                       |
 
 Распределённые lock’и через Redis (`WORKER_LOCK_TTL_MS`), чтобы при случайном втором инстансе API не дублировать работу (в проде всё равно ожидается один api-контейнер).

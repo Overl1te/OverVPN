@@ -63,6 +63,14 @@ class CreatePlanDto {
   defaultResetStrategy?: string;
   @ApiPropertyOptional({ type: [String], format: 'uuid', maxItems: 128 })
   inboundIds?: string[];
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  subscriptionTitleTemplate?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  subscriptionAnnounce?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionSupportUrl?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionWebPageUrl?: string | null;
 }
 
 class UpdatePlanDto extends PartialType(CreatePlanDto) {}
@@ -88,6 +96,14 @@ class PlanDto implements PlanResult {
   defaultSpeedLimitBps!: string | null;
   @ApiProperty({ enum: ['NO_RESET', 'DAILY', 'MONTHLY', 'YEARLY'] })
   defaultResetStrategy!: 'NO_RESET' | 'DAILY' | 'MONTHLY' | 'YEARLY';
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  subscriptionTitleTemplate!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  subscriptionAnnounce!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionSupportUrl!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionWebPageUrl!: string | null;
   @ApiProperty({ type: [String], format: 'uuid' })
   inboundIds!: string[];
   @ApiProperty()

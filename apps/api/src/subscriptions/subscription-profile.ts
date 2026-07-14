@@ -1,9 +1,11 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
-  PRODUCT_NAME,
+  renderEndpointDisplayName,
+  renderSubscriptionTitle,
+  uniquifyDisplayNames,
   type InboundProtocol,
   type SubscriptionFormat,
-} from '@overvpn/shared/constants';
+} from '@overvpn/shared';
 import type {
   Hysteria2SubscriptionEndpoint,
   ShadowsocksSubscriptionEndpoint,
@@ -46,6 +48,7 @@ export interface SubscriptionInboundRecord {
   publicHost: string | null;
   publicPort: number | null;
   listenPort: number;
+  displayNameTemplate: string | null;
   config: unknown;
   secretDataEncrypted: string | null;
 }
@@ -56,9 +59,19 @@ export interface SubscriptionAssignmentRecord {
   inbound: SubscriptionInboundRecord;
 }
 
+export interface SubscriptionProfilePlan {
+  name: string;
+  subscriptionTitleTemplate: string | null;
+}
+
 export interface SubscriptionProfileUser {
   identity: string;
   username: string;
+  expireAt: Date | null;
+  dataLimitBytes: bigint | null;
+  usedUploadBytes: bigint;
+  usedDownloadBytes: bigint;
+  plan: SubscriptionProfilePlan | null;
   inboundAssignments: SubscriptionAssignmentRecord[];
 }
 
@@ -74,6 +87,7 @@ interface SubscriptionProtocolAdapter {
     assignment: SubscriptionAssignmentRecord,
     user: SubscriptionProfileUser,
     tag: string,
+    displayName: string,
   ): SubscriptionEndpoint;
 }
 
@@ -87,6 +101,7 @@ export class Hysteria2SubscriptionAdapter implements SubscriptionProtocolAdapter
     assignment: SubscriptionAssignmentRecord,
     user: SubscriptionProfileUser,
     tag: string,
+    displayName: string,
   ): Hysteria2SubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost) {
@@ -111,7 +126,7 @@ export class Hysteria2SubscriptionAdapter implements SubscriptionProtocolAdapter
     return {
       protocol: 'HYSTERIA2',
       tag,
-      displayName: `${user.identity} - ${inbound.tag}`,
+      displayName,
       server: inbound.publicHost,
       port: inbound.publicPort ?? inbound.listenPort,
       password: credential,
@@ -168,6 +183,7 @@ export class VlessRealitySubscriptionAdapter implements SubscriptionProtocolAdap
     assignment: SubscriptionAssignmentRecord,
     user: SubscriptionProfileUser,
     tag: string,
+    displayName: string,
   ): VlessRealitySubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost) {
@@ -189,10 +205,11 @@ export class VlessRealitySubscriptionAdapter implements SubscriptionProtocolAdap
       this.encryption,
       assignment.credentialEncrypted,
     );
+    void user;
     return {
       protocol: 'VLESS_REALITY',
       tag,
-      displayName: `${user.identity} - ${inbound.tag}`,
+      displayName,
       server: inbound.publicHost,
       port: inbound.publicPort ?? inbound.listenPort,
       uuid,
@@ -217,6 +234,7 @@ export class VlessXhttpTlsSubscriptionAdapter implements SubscriptionProtocolAda
     assignment: SubscriptionAssignmentRecord,
     user: SubscriptionProfileUser,
     tag: string,
+    displayName: string,
   ): VlessXhttpTlsSubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost) {
@@ -230,10 +248,11 @@ export class VlessXhttpTlsSubscriptionAdapter implements SubscriptionProtocolAda
       this.encryption,
       assignment.credentialEncrypted,
     );
+    void user;
     return {
       protocol: 'VLESS_XHTTP_TLS',
       tag,
-      displayName: `${user.identity} - ${inbound.tag}`,
+      displayName,
       server: inbound.publicHost,
       port: inbound.publicPort ?? inbound.listenPort,
       uuid,
@@ -257,6 +276,7 @@ export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
     assignment: SubscriptionAssignmentRecord,
     user: SubscriptionProfileUser,
     tag: string,
+    displayName: string,
   ): TrojanSubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost) {
@@ -271,10 +291,11 @@ export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
       assignment.credentialEncrypted,
       normalizeTrojanPassword,
     );
+    void user;
     return {
       protocol: 'TROJAN',
       tag,
-      displayName: `${user.identity} - ${inbound.tag}`,
+      displayName,
       server: inbound.publicHost,
       port: inbound.publicPort ?? inbound.listenPort,
       password,
@@ -297,6 +318,7 @@ export class ShadowsocksSubscriptionAdapter implements SubscriptionProtocolAdapt
     assignment: SubscriptionAssignmentRecord,
     user: SubscriptionProfileUser,
     tag: string,
+    displayName: string,
   ): ShadowsocksSubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost || !inbound.secretDataEncrypted) {
@@ -319,10 +341,11 @@ export class ShadowsocksSubscriptionAdapter implements SubscriptionProtocolAdapt
       assignment.credentialEncrypted,
       (value) => normalizeShadowsocksPassword(config.data.method, value),
     );
+    void user;
     return {
       protocol: 'SHADOWSOCKS',
       tag,
-      displayName: `${user.identity} - ${inbound.tag}`,
+      displayName,
       server: inbound.publicHost,
       port: inbound.publicPort ?? inbound.listenPort,
       method: config.data.method,
@@ -360,7 +383,18 @@ export class SubscriptionProfileBuilder {
 
   build(user: SubscriptionProfileUser): SubscriptionProfileDescriptor {
     const tagAllocator = new DeterministicTagAllocator();
-    const endpoints = [...user.inboundAssignments]
+    const brandingContext = {
+      username: user.username,
+      identity: user.identity,
+      planName: user.plan?.name ?? null,
+      traffic: {
+        uploadBytes: user.usedUploadBytes,
+        downloadBytes: user.usedDownloadBytes,
+        limitBytes: user.dataLimitBytes,
+        expireAt: user.expireAt,
+      },
+    };
+    const provisional = [...user.inboundAssignments]
       .sort(compareAssignments)
       .flatMap((assignment) => {
         const adapter = this.adapters.get(assignment.inbound.protocol);
@@ -370,8 +404,28 @@ export class SubscriptionProfileBuilder {
         const tag = tagAllocator.allocate(
           `${protocolPrefix(adapter.protocol)}-${assignment.inbound.tag}`,
         );
-        return [adapter.build(assignment, user, tag)];
+        const displayName = renderEndpointDisplayName(
+          assignment.inbound.displayNameTemplate,
+          {
+            ...brandingContext,
+            tag: assignment.inbound.tag,
+            protocol: assignment.inbound.protocol,
+          },
+        );
+        return [
+          {
+            endpoint: adapter.build(assignment, user, tag, displayName),
+          },
+        ];
       });
+
+    const uniqueNames = uniquifyDisplayNames(
+      provisional.map((item) => item.endpoint.displayName),
+    );
+    const endpoints = provisional.map((item, index) => ({
+      ...item.endpoint,
+      displayName: uniqueNames[index]!,
+    }));
 
     const warnings: string[] = [];
     if (endpoints.some((endpoint) => endpoint.protocol === 'VLESS_XHTTP_TLS')) {
@@ -381,7 +435,10 @@ export class SubscriptionProfileBuilder {
     }
 
     return {
-      title: `${PRODUCT_NAME} - ${user.username}`,
+      title: renderSubscriptionTitle(
+        user.plan?.subscriptionTitleTemplate,
+        brandingContext,
+      ),
       identity: user.identity,
       username: user.username,
       endpoints,
@@ -422,7 +479,7 @@ export function renderSingBoxProfile(
   const singBoxEndpoints = profile.endpoints.filter(
     (endpoint) => endpoint.protocol !== 'VLESS_XHTTP_TLS',
   );
-  const endpointTags = singBoxEndpoints.map((endpoint) => endpoint.tag);
+  const endpointTags = singBoxEndpoints.map((endpoint) => endpoint.displayName);
   const proxyOutbounds = singBoxEndpoints.map((endpoint) =>
     renderSingBoxOutbound(endpoint),
   );
@@ -521,7 +578,7 @@ function renderSingBoxOutbound(
   if (endpoint.protocol === 'HYSTERIA2') {
     const outbound: Record<string, unknown> = {
       type: 'hysteria2',
-      tag: endpoint.tag,
+      tag: endpoint.displayName,
       server: endpoint.server,
       server_port: endpoint.port,
       password: endpoint.password,
@@ -550,7 +607,7 @@ function renderSingBoxOutbound(
   if (endpoint.protocol === 'VLESS_REALITY') {
     return {
       type: 'vless',
-      tag: endpoint.tag,
+      tag: endpoint.displayName,
       server: endpoint.server,
       server_port: endpoint.port,
       uuid: endpoint.uuid,
@@ -573,7 +630,7 @@ function renderSingBoxOutbound(
   if (endpoint.protocol === 'TROJAN') {
     return {
       type: 'trojan',
-      tag: endpoint.tag,
+      tag: endpoint.displayName,
       server: endpoint.server,
       server_port: endpoint.port,
       password: endpoint.password,
@@ -587,7 +644,7 @@ function renderSingBoxOutbound(
   }
   return {
     type: 'shadowsocks',
-    tag: endpoint.tag,
+    tag: endpoint.displayName,
     server: endpoint.server,
     server_port: endpoint.port,
     method: endpoint.method,
@@ -663,7 +720,7 @@ export function renderClashProfile(
       if (endpoint.protocol === 'HYSTERIA2') {
         return [
           {
-            name: endpoint.tag,
+            name: endpoint.displayName,
             type: 'hysteria2',
             server: endpoint.server,
             port: endpoint.port,
@@ -691,7 +748,7 @@ export function renderClashProfile(
       if (endpoint.protocol === 'VLESS_REALITY') {
         return [
           {
-            name: endpoint.tag,
+            name: endpoint.displayName,
             type: 'vless',
             server: endpoint.server,
             port: endpoint.port,
@@ -713,7 +770,7 @@ export function renderClashProfile(
         // Mihomo-style VLESS + network xhttp
         return [
           {
-            name: endpoint.tag,
+            name: endpoint.displayName,
             type: 'vless',
             server: endpoint.server,
             port: endpoint.port,
@@ -734,7 +791,7 @@ export function renderClashProfile(
       if (endpoint.protocol === 'TROJAN') {
         return [
           {
-            name: endpoint.tag,
+            name: endpoint.displayName,
             type: 'trojan',
             server: endpoint.server,
             port: endpoint.port,
@@ -749,7 +806,7 @@ export function renderClashProfile(
       }
       return [
         {
-          name: endpoint.tag,
+          name: endpoint.displayName,
           type: 'ss',
           server: endpoint.server,
           port: endpoint.port,

@@ -197,6 +197,7 @@ export const userSchema = z
     nextResetAt: isoDateTimeSchema.nullable(),
     deviceLimit: z.number().int().positive().nullable(),
     ipLimit: z.number().int().positive().nullable(),
+    identityLimitHoldUntil: isoDateTimeSchema.nullable(),
     speedLimitBps: byteCountSchema.nullable(),
     subToken: z.string(),
     planId: idSchema.nullable(),
@@ -381,6 +382,36 @@ export const onlineSessionSchema = z
   })
   .strict();
 
+export const userConnectionIdentitySchema = z
+  .object({
+    key: z.string().min(1).max(255),
+    kind: z.enum(['ip', 'device']),
+    ipAddress: z.string().nullable(),
+    deviceId: z.string().nullable(),
+    firstSeenAt: isoDateTimeSchema,
+    lastSeenAt: isoDateTimeSchema,
+    sessionCount: z.number().int().nonnegative(),
+    online: z.boolean(),
+  })
+  .strict();
+export type UserConnectionIdentity = z.infer<typeof userConnectionIdentitySchema>;
+
+export const userConnectionIdentitiesSchema = z
+  .object({
+    lookbackMs: z.number().int().positive(),
+    identityLimitHoldUntil: isoDateTimeSchema.nullable(),
+    deviceLimit: z.number().int().positive().nullable(),
+    ipLimit: z.number().int().positive().nullable(),
+    deviceCount: z.number().int().nonnegative(),
+    ipCount: z.number().int().nonnegative(),
+    ips: z.array(userConnectionIdentitySchema),
+    devices: z.array(userConnectionIdentitySchema),
+  })
+  .strict();
+export type UserConnectionIdentities = z.infer<
+  typeof userConnectionIdentitiesSchema
+>;
+
 export const onlineSessionListQuerySchema = paginationQuerySchema
   .extend({
     userId: idSchema.optional(),
@@ -532,6 +563,43 @@ export const systemHealthSchema = z
   .strict();
 export type SystemHealth = z.infer<typeof systemHealthSchema>;
 
+/** Host device stats for the admin overview (CPU / RAM / NIC), Marzban-style. */
+export const systemHostStatsSchema = z
+  .object({
+    checkedAt: isoDateTimeSchema,
+    cpu: z
+      .object({
+        cores: z.number().int().positive(),
+        usagePercent: z.number().min(0).max(100),
+      })
+      .strict(),
+    memory: z
+      .object({
+        totalBytes: byteCountSchema,
+        usedBytes: byteCountSchema,
+        availableBytes: byteCountSchema,
+      })
+      .strict(),
+    network: z
+      .object({
+        inboundBytes: byteCountSchema,
+        outboundBytes: byteCountSchema,
+        inboundBytesPerSecond: byteCountSchema,
+        outboundBytesPerSecond: byteCountSchema,
+      })
+      .strict(),
+  })
+  .strict();
+export type SystemHostStats = z.infer<typeof systemHostStatsSchema>;
+
+const subscriptionTitleTemplateSchema = z.string().trim().max(200);
+const subscriptionAnnounceSchema = z.string().trim().max(500);
+const optionalHttpUrlSchema = z.union([
+  z.url().max(2048),
+  z.literal(''),
+  z.null(),
+]);
+
 export const planSchema = z
   .object({
     id: idSchema,
@@ -544,6 +612,10 @@ export const planSchema = z
     defaultIpLimit: z.number().int().positive().nullable(),
     defaultSpeedLimitBps: byteCountSchema.nullable(),
     defaultResetStrategy: resetStrategySchema,
+    subscriptionTitleTemplate: z.string().nullable(),
+    subscriptionAnnounce: z.string().nullable(),
+    subscriptionSupportUrl: z.string().nullable(),
+    subscriptionWebPageUrl: z.string().nullable(),
     inboundIds: z.array(idSchema),
     userCount: z.number().int().nonnegative(),
     createdAt: isoDateTimeSchema,
@@ -562,6 +634,10 @@ const planFields = {
   defaultIpLimit: z.number().int().min(1).max(10_000).nullable().optional(),
   defaultSpeedLimitBps: byteCountSchema.nullable().optional(),
   defaultResetStrategy: resetStrategySchema.optional(),
+  subscriptionTitleTemplate: subscriptionTitleTemplateSchema.nullable().optional(),
+  subscriptionAnnounce: subscriptionAnnounceSchema.nullable().optional(),
+  subscriptionSupportUrl: optionalHttpUrlSchema.optional(),
+  subscriptionWebPageUrl: optionalHttpUrlSchema.optional(),
   inboundIds: z.array(idSchema).max(128).optional(),
 };
 
@@ -571,6 +647,20 @@ export const createPlanSchema = z
   .transform((value) => ({
     ...value,
     inboundIds: [...new Set(value.inboundIds ?? [])],
+    ...(value.subscriptionTitleTemplate !== undefined
+      ? {
+          subscriptionTitleTemplate: emptyToNull(value.subscriptionTitleTemplate),
+        }
+      : {}),
+    ...(value.subscriptionAnnounce !== undefined
+      ? { subscriptionAnnounce: emptyToNull(value.subscriptionAnnounce) }
+      : {}),
+    ...(value.subscriptionSupportUrl !== undefined
+      ? { subscriptionSupportUrl: emptyToNull(value.subscriptionSupportUrl) }
+      : {}),
+    ...(value.subscriptionWebPageUrl !== undefined
+      ? { subscriptionWebPageUrl: emptyToNull(value.subscriptionWebPageUrl) }
+      : {}),
   }));
 export type CreatePlan = z.infer<typeof createPlanSchema>;
 
@@ -584,8 +674,29 @@ export const updatePlanSchema = z
   .transform((value) => ({
     ...value,
     inboundIds: value.inboundIds ? [...new Set(value.inboundIds)] : undefined,
+    ...(value.subscriptionTitleTemplate !== undefined
+      ? {
+          subscriptionTitleTemplate: emptyToNull(value.subscriptionTitleTemplate),
+        }
+      : {}),
+    ...(value.subscriptionAnnounce !== undefined
+      ? { subscriptionAnnounce: emptyToNull(value.subscriptionAnnounce) }
+      : {}),
+    ...(value.subscriptionSupportUrl !== undefined
+      ? { subscriptionSupportUrl: emptyToNull(value.subscriptionSupportUrl) }
+      : {}),
+    ...(value.subscriptionWebPageUrl !== undefined
+      ? { subscriptionWebPageUrl: emptyToNull(value.subscriptionWebPageUrl) }
+      : {}),
   }));
 export type UpdatePlan = z.infer<typeof updatePlanSchema>;
+
+function emptyToNull(value: string | null): string | null {
+  if (value === null || value.trim() === '') {
+    return null;
+  }
+  return value;
+}
 
 export const planListQuerySchema = paginationQuerySchema
   .extend({
@@ -1140,6 +1251,7 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
     .object({
       tag: singBoxTagSchema,
       protocol: z.literal('HYSTERIA2'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: hysteria2InboundSettingsSchema,
     })
     .strict(),
@@ -1147,6 +1259,7 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
     .object({
       tag: singBoxTagSchema,
       protocol: z.literal('VLESS_REALITY'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: vlessRealityInboundSettingsSchema,
     })
     .strict(),
@@ -1154,6 +1267,7 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
     .object({
       tag: singBoxTagSchema,
       protocol: z.literal('VLESS_XHTTP_TLS'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: vlessXhttpTlsInboundSettingsSchema,
     })
     .strict(),
@@ -1161,6 +1275,7 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
     .object({
       tag: singBoxTagSchema,
       protocol: z.literal('TROJAN'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: trojanInboundSettingsSchema,
     })
     .strict(),
@@ -1168,6 +1283,7 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
     .object({
       tag: singBoxTagSchema,
       protocol: z.literal('SHADOWSOCKS'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: shadowsocksInboundSettingsSchema,
     })
     .strict(),
@@ -1178,6 +1294,7 @@ export const updateInboundSchema = z
   .object({
     tag: singBoxTagSchema.optional(),
     protocol: inboundProtocolSchema.optional(),
+    displayNameTemplate: z.string().trim().max(200).nullable().optional(),
     settings: z
       .union([
         hysteria2InboundSettingsSchema,
@@ -1356,6 +1473,7 @@ export type ShadowsocksInboundPublicConfig = z.infer<typeof shadowsocksInboundPu
 const inboundResultCommonFields = {
   id: idSchema,
   tag: z.string(),
+  displayNameTemplate: z.string().nullable(),
   revision: z.number().int().positive(),
   needsApply: z.boolean(),
   assignmentCount: z.number().int().nonnegative(),
@@ -1573,6 +1691,10 @@ export const subscriptionInfoSchema = z
     limitBytes: byteCountSchema.nullable(),
     remainingBytes: byteCountSchema.nullable(),
     updateIntervalHours: z.number().int().positive(),
+    profileTitle: z.string().min(1).max(200),
+    announce: z.string().max(500).nullable(),
+    supportUrl: z.string().max(2048).nullable(),
+    profileWebPageUrl: z.string().max(2048).nullable(),
     subscriptionUrl: z.url(),
     formats: z.array(subscriptionFormatSchema).length(SUBSCRIPTION_FORMATS.length),
     formatUrls: z

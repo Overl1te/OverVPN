@@ -25,6 +25,7 @@ describe('subscription information', () => {
         dataLimitBytes: 1_000n,
         usedUploadBytes: 400n,
         usedDownloadBytes: 600n,
+        plan: null,
       },
       TOKEN,
       'https://vpn.example.com',
@@ -44,6 +45,10 @@ describe('subscription information', () => {
       limitBytes: '1000',
       remainingBytes: '0',
       updateIntervalHours: 6,
+      profileTitle: 'OverVPN - alice',
+      announce: null,
+      supportUrl: null,
+      profileWebPageUrl: null,
       subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
       formats: ['sing-box', 'links', 'clash'],
       formatUrls: {
@@ -68,6 +73,7 @@ describe('subscription information', () => {
         dataLimitBytes: null,
         usedUploadBytes: 12n,
         usedDownloadBytes: 34n,
+        plan: null,
       },
       TOKEN,
       'https://vpn.example.com',
@@ -267,6 +273,7 @@ function userRow() {
     usedUploadBytes: 10n,
     usedDownloadBytes: 20n,
     deletedAt: null,
+    plan: null,
     inboundAssignments: [],
   };
 }

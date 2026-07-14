@@ -53,6 +53,8 @@ class CreateInboundDto {
   tag!: string;
   @ApiProperty({ enum: INBOUND_PROTOCOLS })
   protocol!: (typeof INBOUND_PROTOCOLS)[number];
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  displayNameTemplate?: string | null;
   @ApiProperty({
     type: 'object',
     additionalProperties: true,
@@ -67,6 +69,8 @@ class UpdateInboundDto {
   tag?: string;
   @ApiPropertyOptional({ enum: INBOUND_PROTOCOLS })
   protocol?: (typeof INBOUND_PROTOCOLS)[number];
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  displayNameTemplate?: string | null;
   @ApiPropertyOptional({
     type: 'object',
     additionalProperties: true,

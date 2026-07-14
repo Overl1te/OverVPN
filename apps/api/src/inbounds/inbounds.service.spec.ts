@@ -72,6 +72,7 @@ describe('InboundsService VLESS Reality create', () => {
       publicHost: 'vpn.example.com',
       publicPort: 4443,
       enabled: true,
+      displayNameTemplate: null,
       config: {
         handshakeServer: 'www.cloudflare.com',
         handshakePort: 443,

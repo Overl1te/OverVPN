@@ -179,7 +179,9 @@ overvpn uninstall              # удалить установку
 | `ACTIVE`   | доступ разрешён         |
 | `DISABLED` | выключен вручную        |
 | `EXPIRED`  | истёк срок              |
-| `LIMITED`  | квота / устройство / IP |
+| `LIMITED`  | квота / устройства |
+
+Лимит устройств = максимум **одновременных** онлайн-клиентов. Без HWID «устройство» ≈ публичный source IP. Смена сети ок, если онлайн одно соединение; ПК + телефон вместе при лимите 1 — нет. При превышении статус `LIMITED` удерживается минимум `IDENTITY_LIMIT_HOLD_MS` (по умолчанию 15 мин). Отдельный лимит IP не применяется. В карточке пользователя — статистика IP за `IDENTITY_LOOKBACK_MS` (только обзор, не enforcement).
 
 Причина отключения видна в UI (`statusReason`).
 
@@ -191,7 +193,7 @@ overvpn uninstall              # удалить установку
 
 ### 4. Мониторинг
 
-- **Dashboard** — онлайн, статусы, здоровье ядра, воркеры, throughput
+- **Dashboard** — CPU / RAM / сеть, онлайн, статусы, здоровье ядра, воркеры, throughput
 - **Online sessions** — активные и исторические сессии
 - **Audit** — журнал действий администраторов
 
@@ -263,7 +265,12 @@ curl -o clash.yaml "$SUB_URL?format=clash"
 curl "$SUB_URL/info"
 ```
 
-Заголовки ответа (где применимо): `subscription-userinfo`, `profile-update-interval`.
+Заголовки ответа (где применимо): `subscription-userinfo`, `profile-update-interval`, `profile-title`, опционально `announce`, `support-url`, `profile-web-page-url`.
+
+Кастомизация брендинга:
+
+- **План** — шаблон названия подписки, announce, ссылки support/Telegram и info page (`{username}`, `{used}`, `{limit}`, `{expire}`, …).
+- **Точка входа** — шаблон имени подключения для всех форматов (`{identity}`, `{tag}`, `{protocol}`, …). Эмодзи допускаются. Пустые поля = прежние дефолты (`OverVPN - {username}`, `{identity} - {tag}`).
 
 **Ротация токена** (старый URL сразу мёртв, VPN-пароли не меняются):
 

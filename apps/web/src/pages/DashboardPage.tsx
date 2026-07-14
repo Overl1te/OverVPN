@@ -1,12 +1,28 @@
-import { Card, Col, Row, Statistic, Table, Tag, Typography, Alert } from 'antd';
+import { Alert, Card, Col, Progress, Row, Statistic, Table, Tag, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Column } from '@ant-design/charts';
-import { getDashboard, getSystemHealth } from '@/api/system';
+import { getDashboard, getHostStats, getSystemHealth } from '@/api/system';
 import { PageHeader } from '@/components/PageHeader';
 import { formatBytes, formatBytesPerSecond } from '@/utils/format';
 import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
+
+function memoryPercent(used: string | undefined, total: string | undefined): number {
+  if (!used || !total) {
+    return 0;
+  }
+  try {
+    const usedN = BigInt(used);
+    const totalN = BigInt(total);
+    if (totalN <= 0n) {
+      return 0;
+    }
+    return Math.min(100, Number((usedN * 1000n) / totalN) / 10);
+  } catch {
+    return 0;
+  }
+}
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
@@ -20,9 +36,15 @@ export function DashboardPage() {
     queryFn: () => getSystemHealth(),
     refetchInterval: 15_000,
   });
+  const hostQuery = useQuery({
+    queryKey: ['system-host'],
+    queryFn: () => getHostStats(),
+    refetchInterval: 5_000,
+  });
 
   const data = dashboardQuery.data;
   const health = healthQuery.data;
+  const host = hostQuery.data;
 
   const series =
     data?.traffic.period.series.map((point) => ({
@@ -36,10 +58,90 @@ export function DashboardPage() {
     { day: point.day, type: t('app.download'), value: point.download },
   ]);
 
+  const ramPercent = memoryPercent(host?.memory.usedBytes, host?.memory.totalBytes);
+
   return (
     <div>
       <PageHeader title={t('dashboard.title')} />
       <Row gutter={[12, 12]}>
+        <Col xs={24} sm={12} lg={8}>
+          <Card size="small" loading={hostQuery.isLoading}>
+            <Typography.Text type="secondary">{t('dashboard.cpu')}</Typography.Text>
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16 }}>
+              <Progress
+                type="circle"
+                percent={host?.cpu.usagePercent ?? 0}
+                size={72}
+                strokeColor="#0f766e"
+                format={(percent) => `${percent ?? 0}%`}
+              />
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>
+                  {host ? `${host.cpu.usagePercent}%` : '—'}
+                </div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('dashboard.cpuCores', { count: host?.cpu.cores ?? 0 })}
+                </Typography.Text>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card size="small" loading={hostQuery.isLoading}>
+            <Typography.Text type="secondary">{t('dashboard.memory')}</Typography.Text>
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16 }}>
+              <Progress
+                type="circle"
+                percent={ramPercent}
+                size={72}
+                strokeColor="#0e7490"
+                format={(percent) => `${percent ?? 0}%`}
+              />
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.2 }}>
+                  {host ? formatBytes(host.memory.usedBytes) : '—'}
+                </div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('dashboard.memoryOf', {
+                    total: host ? formatBytes(host.memory.totalBytes) : '—',
+                  })}
+                </Typography.Text>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={24} lg={8}>
+          <Card size="small" loading={hostQuery.isLoading}>
+            <Typography.Text type="secondary">{t('dashboard.network')}</Typography.Text>
+            <Row gutter={8} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <Statistic
+                  title={t('dashboard.networkIn')}
+                  value={host ? formatBytesPerSecond(host.network.inboundBytesPerSecond) : '—'}
+                  valueStyle={{ fontSize: 18 }}
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('dashboard.networkTotal')}:{' '}
+                  {host ? formatBytes(host.network.inboundBytes) : '—'}
+                </Typography.Text>
+              </Col>
+              <Col span={12}>
+                <Statistic
+                  title={t('dashboard.networkOut')}
+                  value={host ? formatBytesPerSecond(host.network.outboundBytesPerSecond) : '—'}
+                  valueStyle={{ fontSize: 18 }}
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('dashboard.networkTotal')}:{' '}
+                  {host ? formatBytes(host.network.outboundBytes) : '—'}
+                </Typography.Text>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
         <Col xs={24} sm={12} lg={6}>
           <Card size="small">
             <Statistic title={t('dashboard.online')} value={data?.online.active ?? '—'} />

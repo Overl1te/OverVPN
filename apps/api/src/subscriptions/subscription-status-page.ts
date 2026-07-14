@@ -1,4 +1,67 @@
+import type { Locale } from '@overvpn/shared/constants';
+import { SUPPORTED_LOCALES } from '@overvpn/shared/constants';
 import type { SubscriptionInfo } from '@overvpn/shared/schemas';
+
+type StatusPageCopy = {
+  status: string;
+  expiry: string;
+  used: string;
+  limit: string;
+  remaining: string;
+  uploadDownload: string;
+  subscription: string;
+  copyUrl: string;
+  copied: string;
+  links: string;
+  clash: string;
+  singBox: string;
+  hintBefore: string;
+  hintAfter: string;
+  statusValue: string;
+  expireValue: string;
+  usedValue: string;
+  limitValue: string;
+  remainingValue: string;
+  uploadValue: string;
+  downloadValue: string;
+};
+
+const UI = {
+  en: {
+    status: 'Status',
+    expiry: 'Expiry',
+    used: 'Used',
+    limit: 'Limit',
+    remaining: 'Remaining',
+    uploadDownload: 'Upload / Download',
+    subscription: 'Subscription',
+    copyUrl: 'Copy URL',
+    copied: 'Copied',
+    links: 'Links',
+    clash: 'Clash',
+    singBox: 'sing-box',
+    hintBefore: 'Apps also read machine status at',
+    hintAfter:
+      '. Use the format links above if your client needs an explicit profile.',
+  },
+  ru: {
+    status: 'Статус',
+    expiry: 'Срок',
+    used: 'Использовано',
+    limit: 'Лимит',
+    remaining: 'Осталось',
+    uploadDownload: 'Отдача / Загрузка',
+    subscription: 'Подписка',
+    copyUrl: 'Копировать URL',
+    copied: 'Скопировано',
+    links: 'Ссылки',
+    clash: 'Clash',
+    singBox: 'sing-box',
+    hintBefore: 'Клиенты также читают машинный статус по',
+    hintAfter:
+      '. Используйте ссылки форматов выше, если клиенту нужен явный профиль.',
+  },
+} as const;
 
 function escapeHtml(value: string): string {
   return value
@@ -9,9 +72,12 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-function formatBytes(value: string | null | undefined): string {
+function formatBytes(
+  value: string | null | undefined,
+  locale: Locale,
+): string {
   if (value == null || value === '') {
-    return 'Unlimited';
+    return locale === 'ru' ? 'Без лимита' : 'Unlimited';
   }
   let n: bigint;
   try {
@@ -36,9 +102,28 @@ function formatBytes(value: string | null | undefined): string {
   return `${scaled.toFixed(digits)} ${units[unit]}`;
 }
 
-function daysRemaining(expireAt: string | null, now = new Date()): string {
+function russianDaysWord(days: number): string {
+  const mod100 = days % 100;
+  const mod10 = days % 10;
+  if (mod100 >= 11 && mod100 <= 14) {
+    return 'дней';
+  }
+  if (mod10 === 1) {
+    return 'день';
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return 'дня';
+  }
+  return 'дней';
+}
+
+function daysRemaining(
+  expireAt: string | null,
+  locale: Locale,
+  now = new Date(),
+): string {
   if (!expireAt) {
-    return 'No expiry';
+    return locale === 'ru' ? 'Без срока' : 'No expiry';
   }
   const expire = new Date(expireAt);
   const ms = expire.getTime() - now.getTime();
@@ -46,45 +131,122 @@ function daysRemaining(expireAt: string | null, now = new Date()): string {
     return expireAt;
   }
   if (ms <= 0) {
-    return 'Expired';
+    return locale === 'ru' ? 'Истекла' : 'Expired';
   }
   const days = Math.ceil(ms / (24 * 60 * 60 * 1_000));
+  if (locale === 'ru') {
+    return `Осталось ${days} ${russianDaysWord(days)}`;
+  }
   return days === 1 ? '1 day left' : `${days} days left`;
 }
 
-function statusLabel(status: SubscriptionInfo['status']): string {
-  switch (status) {
-    case 'ACTIVE':
-      return 'Active';
-    case 'DISABLED':
-      return 'Disabled';
-    case 'EXPIRED':
-      return 'Expired';
-    case 'LIMITED':
-      return 'Limited';
-    default:
-      return status;
+function statusLabel(
+  status: SubscriptionInfo['status'],
+  locale: Locale,
+): string {
+  const labels = {
+    en: {
+      ACTIVE: 'Active',
+      DISABLED: 'Disabled',
+      EXPIRED: 'Expired',
+      LIMITED: 'Limited',
+    },
+    ru: {
+      ACTIVE: 'Активен',
+      DISABLED: 'Отключён',
+      EXPIRED: 'Истёк',
+      LIMITED: 'Ограничен',
+    },
+  } as const;
+  return labels[locale][status] ?? status;
+}
+
+/**
+ * Prefer the highest-q supported tag from Accept-Language; default to ru.
+ */
+export function resolveSubscriptionPageLocale(
+  acceptLanguage: string | undefined,
+): Locale {
+  if (!acceptLanguage?.trim()) {
+    return 'ru';
   }
+
+  const scored = acceptLanguage
+    .split(',')
+    .map((entry, index) => {
+      const [tagPart = '', ...params] = entry.trim().split(';');
+      const tag = tagPart.trim().toLowerCase();
+      const qualityParam = params
+        .map((param) => param.trim())
+        .find((param) => param.startsWith('q='));
+      const quality = qualityParam ? Number(qualityParam.slice(2)) : 1;
+      return {
+        tag,
+        quality: Number.isFinite(quality) ? quality : 0,
+        index,
+      };
+    })
+    .filter((entry) => entry.tag && entry.quality > 0)
+    .sort(
+      (left, right) => right.quality - left.quality || left.index - right.index,
+    );
+
+  for (const entry of scored) {
+    if ((SUPPORTED_LOCALES as readonly string[]).includes(entry.tag)) {
+      return entry.tag as Locale;
+    }
+    const primary = entry.tag.split('-')[0];
+    if (
+      primary &&
+      (SUPPORTED_LOCALES as readonly string[]).includes(primary)
+    ) {
+      return primary as Locale;
+    }
+  }
+
+  return 'ru';
+}
+
+function buildCopy(
+  info: SubscriptionInfo,
+  locale: Locale,
+  now = new Date(),
+): StatusPageCopy {
+  const ui = UI[locale];
+  return {
+    ...ui,
+    statusValue: statusLabel(info.status, locale),
+    expireValue: daysRemaining(info.expireAt, locale, now),
+    usedValue: formatBytes(info.totalBytes, locale),
+    limitValue: formatBytes(info.limitBytes, locale),
+    remainingValue: formatBytes(info.remainingBytes, locale),
+    uploadValue: formatBytes(info.uploadBytes, locale),
+    downloadValue: formatBytes(info.downloadBytes, locale),
+  };
 }
 
 /**
  * Compact public status page for browsers hitting the subscription URL.
  * VPN clients continue to receive profile bodies via format negotiation.
  */
-export function renderSubscriptionStatusPage(info: SubscriptionInfo): string {
+export function renderSubscriptionStatusPage(
+  info: SubscriptionInfo,
+  acceptLanguage?: string,
+): string {
+  const initialLocale = resolveSubscriptionPageLocale(acceptLanguage);
+  const packs = {
+    en: buildCopy(info, 'en'),
+    ru: buildCopy(info, 'ru'),
+  } as const;
+  const copy = packs[initialLocale];
+
   const username = escapeHtml(info.username);
-  const status = escapeHtml(statusLabel(info.status));
-  const expire = escapeHtml(daysRemaining(info.expireAt));
+  const profileTitle = escapeHtml(info.profileTitle);
   const expireExact = info.expireAt
     ? escapeHtml(
         new Date(info.expireAt).toISOString().slice(0, 16).replace('T', ' '),
       )
     : '—';
-  const used = escapeHtml(formatBytes(info.totalBytes));
-  const limit = escapeHtml(formatBytes(info.limitBytes));
-  const remaining = escapeHtml(formatBytes(info.remainingBytes));
-  const upload = escapeHtml(formatBytes(info.uploadBytes));
-  const download = escapeHtml(formatBytes(info.downloadBytes));
   const subUrl = escapeHtml(info.subscriptionUrl);
   const linksUrl = escapeHtml(info.formatUrls.links);
   const clashUrl = escapeHtml(info.formatUrls.clash);
@@ -103,14 +265,15 @@ export function renderSubscriptionStatusPage(info: SubscriptionInfo): string {
       : info.status === 'DISABLED'
         ? 'bad'
         : 'warn';
+  const i18nJson = JSON.stringify(packs).replaceAll('<', '\\u003c');
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${initialLocale}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>OverVPN — ${username}</title>
+  <title>${profileTitle}</title>
   <style>
     :root {
       --bg: #0b1220;
@@ -139,12 +302,43 @@ export function renderSubscriptionStatusPage(info: SubscriptionInfo): string {
       width: min(40rem, 100%);
       margin: 0 auto;
     }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
     .brand {
       font-size: 0.85rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
-      margin-bottom: 0.5rem;
+    }
+    .lang {
+      display: inline-flex;
+      gap: 0.25rem;
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      padding: 0.15rem;
+      background: #121a2b;
+    }
+    .lang button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      padding: 0.35rem 0.55rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+    }
+    .lang button[aria-pressed="true"] {
+      background: #1a2438;
+      color: var(--text);
     }
     h1 {
       margin: 0 0 1.25rem;
@@ -216,26 +410,32 @@ export function renderSubscriptionStatusPage(info: SubscriptionInfo): string {
 </head>
 <body>
   <main>
-    <div class="brand">OverVPN</div>
+    <div class="top">
+      <div class="brand">OverVPN</div>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-locale="ru" aria-pressed="${initialLocale === 'ru' ? 'true' : 'false'}">RU</button>
+        <button type="button" data-locale="en" aria-pressed="${initialLocale === 'en' ? 'true' : 'false'}">EN</button>
+      </div>
+    </div>
     <h1>${username}</h1>
     <section class="card">
-      <div class="row"><span class="label">Status</span><span class="value status ${statusClass}">${status}</span></div>
-      <div class="row"><span class="label">Expiry</span><span class="value">${expire}<br /><small style="color:var(--muted);font-weight:500">${expireExact}</small></span></div>
-      <div class="row"><span class="label">Used</span><span class="value">${used}</span></div>
-      <div class="row"><span class="label">Limit</span><span class="value">${limit}</span></div>
-      <div class="row"><span class="label">Remaining</span><span class="value">${remaining}</span></div>
-      <div class="row"><span class="label">Upload / Download</span><span class="value">${upload} / ${download}</span></div>
+      <div class="row"><span class="label" data-i18n="status">${escapeHtml(copy.status)}</span><span class="value status ${statusClass}" data-i18n="statusValue">${escapeHtml(copy.statusValue)}</span></div>
+      <div class="row"><span class="label" data-i18n="expiry">${escapeHtml(copy.expiry)}</span><span class="value"><span data-i18n="expireValue">${escapeHtml(copy.expireValue)}</span><br /><small style="color:var(--muted);font-weight:500">${expireExact}</small></span></div>
+      <div class="row"><span class="label" data-i18n="used">${escapeHtml(copy.used)}</span><span class="value" data-i18n="usedValue">${escapeHtml(copy.usedValue)}</span></div>
+      <div class="row"><span class="label" data-i18n="limit">${escapeHtml(copy.limit)}</span><span class="value" data-i18n="limitValue">${escapeHtml(copy.limitValue)}</span></div>
+      <div class="row"><span class="label" data-i18n="remaining">${escapeHtml(copy.remaining)}</span><span class="value" data-i18n="remainingValue">${escapeHtml(copy.remainingValue)}</span></div>
+      <div class="row"><span class="label" data-i18n="uploadDownload">${escapeHtml(copy.uploadDownload)}</span><span class="value"><span data-i18n="uploadValue">${escapeHtml(copy.uploadValue)}</span> / <span data-i18n="downloadValue">${escapeHtml(copy.downloadValue)}</span></span></div>
     </section>
     <section class="card">
-      <div class="label" style="margin-bottom:0.75rem">Subscription</div>
+      <div class="label" style="margin-bottom:0.75rem" data-i18n="subscription">${escapeHtml(copy.subscription)}</div>
       <div class="actions">
-        <button class="btn primary" type="button" onclick="navigator.clipboard.writeText(${JSON.stringify(info.subscriptionUrl)})">Copy URL</button>
-        <a class="btn" href="${linksUrl}">Links</a>
-        <a class="btn" href="${clashUrl}">Clash</a>
-        <a class="btn" href="${singBoxUrl}">sing-box</a>
+        <button class="btn primary" type="button" id="copy-url" data-i18n="copyUrl">${escapeHtml(copy.copyUrl)}</button>
+        <a class="btn" href="${linksUrl}" data-i18n="links">${escapeHtml(copy.links)}</a>
+        <a class="btn" href="${clashUrl}" data-i18n="clash">${escapeHtml(copy.clash)}</a>
+        <a class="btn" href="${singBoxUrl}" data-i18n="singBox">${escapeHtml(copy.singBox)}</a>
       </div>
       <code>${subUrl}</code>
-      <p class="hint">Apps also read machine status at <code style="display:inline;padding:0.1rem 0.35rem">/info</code>. Use the format links above if your client needs an explicit profile.</p>
+      <p class="hint"><span data-i18n="hintBefore">${escapeHtml(copy.hintBefore)}</span> <code style="display:inline;padding:0.1rem 0.35rem">/info</code><span data-i18n="hintAfter">${escapeHtml(copy.hintAfter)}</span></p>
       <div class="actions" style="margin-top:0.85rem">
         <a class="btn" href="${happ}">Happ</a>
         <a class="btn" href="${hiddify}">Hiddify</a>
@@ -245,6 +445,99 @@ export function renderSubscriptionStatusPage(info: SubscriptionInfo): string {
       </div>
     </section>
   </main>
+  <script>
+    (function () {
+      var STORAGE_KEY = 'overvpn.sub.locale';
+      var packs = ${i18nJson};
+      var subUrl = ${JSON.stringify(info.subscriptionUrl)};
+      var current = document.documentElement.lang === 'en' ? 'en' : 'ru';
+
+      function supported(locale) {
+        return locale === 'ru' || locale === 'en';
+      }
+
+      function fromNavigator() {
+        var candidates = [];
+        if (typeof navigator !== 'undefined') {
+          if (navigator.languages && navigator.languages.length) {
+            for (var i = 0; i < navigator.languages.length; i++) {
+              candidates.push(navigator.languages[i]);
+            }
+          }
+          if (navigator.language) {
+            candidates.push(navigator.language);
+          }
+        }
+        for (var j = 0; j < candidates.length; j++) {
+          var tag = String(candidates[j] || '').toLowerCase();
+          if (tag.indexOf('ru') === 0) return 'ru';
+          if (tag.indexOf('en') === 0) return 'en';
+        }
+        return null;
+      }
+
+      function resolveLocale() {
+        try {
+          var stored = localStorage.getItem(STORAGE_KEY);
+          if (supported(stored)) return stored;
+        } catch (e) {}
+        return fromNavigator() || current;
+      }
+
+      function applyLocale(locale) {
+        if (!supported(locale) || !packs[locale]) return;
+        current = locale;
+        document.documentElement.lang = locale;
+        var pack = packs[locale];
+        var nodes = document.querySelectorAll('[data-i18n]');
+        for (var i = 0; i < nodes.length; i++) {
+          var key = nodes[i].getAttribute('data-i18n');
+          if (key && Object.prototype.hasOwnProperty.call(pack, key)) {
+            nodes[i].textContent = pack[key];
+          }
+        }
+        var buttons = document.querySelectorAll('.lang button[data-locale]');
+        for (var b = 0; b < buttons.length; b++) {
+          var btnLocale = buttons[b].getAttribute('data-locale');
+          buttons[b].setAttribute('aria-pressed', btnLocale === locale ? 'true' : 'false');
+        }
+      }
+
+      applyLocale(resolveLocale());
+
+      var langButtons = document.querySelectorAll('.lang button[data-locale]');
+      for (var k = 0; k < langButtons.length; k++) {
+        langButtons[k].addEventListener('click', function (event) {
+          var locale = event.currentTarget.getAttribute('data-locale');
+          if (!supported(locale)) return;
+          try { localStorage.setItem(STORAGE_KEY, locale); } catch (e) {}
+          applyLocale(locale);
+        });
+      }
+
+      var copyBtn = document.getElementById('copy-url');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+          var label = packs[current] ? packs[current].copyUrl : 'Copy URL';
+          var done = packs[current] ? packs[current].copied : 'Copied';
+          var reset = function () {
+            copyBtn.textContent = label;
+          };
+          var showDone = function () {
+            copyBtn.textContent = done;
+            setTimeout(reset, 1400);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(subUrl).then(showDone).catch(function () {
+              reset();
+            });
+          } else {
+            reset();
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>`;
 }

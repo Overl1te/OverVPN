@@ -7,6 +7,7 @@ import type {
   OnlineSessionListResponse,
   SystemDashboard,
   SystemHealth,
+  SystemHostStats,
   UsageDateRangeQuery,
 } from '@overvpn/shared/schemas';
 import { localizeThroughputReason } from '../core/core-user-messages';
@@ -22,6 +23,7 @@ import {
   WorkerHealthService,
   type WorkerHealthResult,
 } from '../workers/worker-health.service';
+import { HostMetricsService } from './host-metrics.service';
 
 @Injectable()
 export class SystemService {
@@ -31,11 +33,16 @@ export class SystemService {
     private readonly prisma: PrismaService,
     private readonly core: CoreProvider,
     private readonly workerHealth: WorkerHealthService,
+    private readonly hostMetrics: HostMetricsService,
     config: ConfigService<AppEnvironment, true>,
   ) {
     this.sessionTimeoutMs = config.get('ONLINE_SESSION_TIMEOUT_MS', {
       infer: true,
     });
+  }
+
+  hostStats(): SystemHostStats {
+    return this.hostMetrics.getStats();
   }
 
   async listOnlineSessions(

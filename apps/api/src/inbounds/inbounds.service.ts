@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   PROTOCOL_ENGINE_MAP,
   publishedListenPortForProtocol,
+  renderEndpointDisplayName,
   type CoreEngine,
   type InboundProtocol,
 } from '@overvpn/shared';
@@ -83,6 +84,7 @@ type AssignmentWithUser = UserInboundAssignment & {
     username: string;
     status: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'LIMITED';
     deletedAt: Date | null;
+    plan?: { name: string } | null;
   };
 };
 
@@ -206,6 +208,12 @@ export class InboundsService {
             publicPort: input.settings.publicPort ?? input.settings.listenPort,
             enabled: input.settings.enabled,
             disabledAt: input.settings.enabled ? null : new Date(),
+            displayNameTemplate:
+              input.displayNameTemplate === undefined ||
+              input.displayNameTemplate === null ||
+              input.displayNameTemplate.trim() === ''
+                ? null
+                : input.displayNameTemplate.trim(),
             config: built.storage.publicConfig,
             secretDataEncrypted: this.encryptSecrets(built.storage.secrets),
             needsApply: true,
@@ -303,6 +311,15 @@ export class InboundsService {
           where: { id },
           data: {
             tag: input.tag,
+            ...(input.displayNameTemplate !== undefined
+              ? {
+                  displayNameTemplate:
+                    input.displayNameTemplate === null ||
+                    input.displayNameTemplate.trim() === ''
+                      ? null
+                      : input.displayNameTemplate.trim(),
+                }
+              : {}),
             ...(input.settings
               ? {
                   listenHost: input.settings.listenHost,
@@ -792,7 +809,13 @@ export class InboundsService {
           reason: 'inbound_not_publicly_available',
         });
       }
-      const label = `${assignment.user.identity} - ${inbound.tag}`;
+      const label = renderEndpointDisplayName(inbound.displayNameTemplate, {
+        username: assignment.user.username,
+        identity: assignment.user.identity,
+        tag: inbound.tag,
+        protocol: inbound.protocol,
+        planName: assignment.user.plan?.name ?? null,
+      });
       const host = inbound.publicHost;
       const port = inbound.publicPort ?? inbound.listenPort;
       const generatedAt = new Date().toISOString();
@@ -937,6 +960,7 @@ export class InboundsService {
             username: true,
             status: true,
             deletedAt: true,
+            plan: { select: { name: true } },
           },
         },
       },
@@ -1210,6 +1234,7 @@ export class InboundsService {
     const common = {
       id: inbound.id,
       tag: inbound.tag,
+      displayNameTemplate: inbound.displayNameTemplate,
       revision: inbound.revision,
       needsApply: inbound.needsApply,
       assignmentCount: inbound._count.userAssignments,

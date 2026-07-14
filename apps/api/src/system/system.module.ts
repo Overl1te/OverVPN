@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CoreModule } from '../core/core.module';
 import { WorkersModule } from '../workers/workers.module';
+import { HostMetricsService } from './host-metrics.service';
 import {
   OnlineSessionsController,
   SystemController,
@@ -10,6 +11,6 @@ import { SystemService } from './system.service';
 @Module({
   imports: [CoreModule, WorkersModule],
   controllers: [OnlineSessionsController, SystemController],
-  providers: [SystemService],
+  providers: [SystemService, HostMetricsService],
 })
 export class SystemModule {}

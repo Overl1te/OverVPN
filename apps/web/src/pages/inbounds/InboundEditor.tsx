@@ -68,6 +68,7 @@ type EditorMode = 'simple' | 'detailed';
 
 type InboundEditorForm = {
   tag: string;
+  displayNameTemplate?: string | null;
   protocol: InboundProtocol;
   settings: CreateInbound['settings'];
 };
@@ -904,6 +905,7 @@ export function InboundEditor({
       const body = {
         tag: sanitized.tag,
         protocol: sanitized.protocol,
+        displayNameTemplate: values.displayNameTemplate || null,
         settings: sanitized.settings,
       };
       if (inbound) {
@@ -937,6 +939,7 @@ export function InboundEditor({
       inbound?.settings ?? buildDefaultInboundSettings(initialProtocol, defaultsContext);
     form.setFields([
       { name: 'tag', value: inbound?.tag ?? '' },
+      { name: 'displayNameTemplate', value: inbound?.displayNameTemplate ?? '' },
       { name: 'protocol', value: initialProtocol },
       { name: 'settings', value: initialSettings },
     ]);
@@ -1066,6 +1069,13 @@ export function InboundEditor({
 
           <Form.Item name="tag" label={t('inbounds.tag')} rules={[{ required: true }]}>
             <Input disabled={!!inbound} autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name="displayNameTemplate"
+            label={t('inbounds.displayNameTemplate')}
+            extra={t('inbounds.displayNameTemplateHint')}
+          >
+            <Input placeholder="{identity} - {tag}" maxLength={200} autoComplete="off" />
           </Form.Item>
           <Form.Item name="protocol" label={t('inbounds.protocol')}>
             <Select

@@ -9,7 +9,9 @@ import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 import { TelegramNotificationService } from '../notifications/telegram-notification.service';
 import {
+  countIdentitiesByUser,
   evaluateEnforcedStatus,
+  nextIdentityLimitHoldUntil,
   nextResetAfterEnforcement,
 } from './limit-enforcement';
 import { WorkerHealthService } from './worker-health.service';
@@ -42,6 +44,7 @@ export class LimitEnforcerService {
   private readonly enabled: boolean;
   private readonly lockTtlMs: number;
   private readonly sessionTimeoutMs: number;
+  private readonly identityHoldMs: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -57,6 +60,7 @@ export class LimitEnforcerService {
     this.sessionTimeoutMs = config.get('ONLINE_SESSION_TIMEOUT_MS', {
       infer: true,
     });
+    this.identityHoldMs = config.get('IDENTITY_LIMIT_HOLD_MS', { infer: true });
   }
 
   async runOnce(now = new Date()): Promise<EnforcementResult> {
@@ -70,7 +74,7 @@ export class LimitEnforcerService {
         this.lockTtlMs,
         async (assertOwned) => {
           await this.health.markRunning(WORKER_NAME, startedAt);
-          const staleCutoff = new Date(now.getTime() - this.sessionTimeoutMs);
+          const onlineCutoff = new Date(now.getTime() - this.sessionTimeoutMs);
           const outcome = await this.prisma.$transaction(
             async (tx) => {
               const [users, sessions] = await Promise.all([
@@ -81,7 +85,7 @@ export class LimitEnforcerService {
                 tx.onlineSession.findMany({
                   where: {
                     disconnectedAt: null,
-                    lastSeenAt: { gte: staleCutoff },
+                    lastSeenAt: { gte: onlineCutoff },
                   },
                   select: {
                     userId: true,
@@ -90,26 +94,7 @@ export class LimitEnforcerService {
                   },
                 }),
               ]);
-              const identities = new Map<
-                string,
-                { devices: Set<string>; ips: Set<string> }
-              >();
-              for (const session of sessions) {
-                const entry = identities.get(session.userId) ?? {
-                  devices: new Set<string>(),
-                  ips: new Set<string>(),
-                };
-                if (session.ipAddress) {
-                  entry.ips.add(session.ipAddress);
-                }
-                const device =
-                  session.deviceId ??
-                  (session.ipAddress ? `ip:${session.ipAddress}` : null);
-                if (device) {
-                  entry.devices.add(device);
-                }
-                identities.set(session.userId, entry);
-              }
+              const identities = countIdentitiesByUser(sessions);
 
               const transitions: StatusTransition[] = [];
               let resets = 0;
@@ -127,6 +112,10 @@ export class LimitEnforcerService {
                 const usedUploadBytes = due ? 0n : user.usedUploadBytes;
                 const usedDownloadBytes = due ? 0n : user.usedDownloadBytes;
                 const active = identities.get(user.id);
+                const activeDevices = active?.devices.size ?? 0;
+                const overDeviceLimit =
+                  user.deviceLimit !== null &&
+                  activeDevices > user.deviceLimit;
                 const enforced = evaluateEnforcedStatus(
                   {
                     ...user,
@@ -134,15 +123,29 @@ export class LimitEnforcerService {
                     usedDownloadBytes,
                   },
                   {
-                    devices: active?.devices.size ?? 0,
-                    ips: active?.ips.size ?? 0,
+                    devices: activeDevices,
                   },
                   now,
                 );
+                const nextHoldUntil = nextIdentityLimitHoldUntil(
+                  enforced,
+                  overDeviceLimit,
+                  this.identityHoldMs,
+                  now,
+                  user.identityLimitHoldUntil,
+                );
+                const holdChanged =
+                  (nextHoldUntil?.getTime() ?? null) !==
+                  (user.identityLimitHoldUntil?.getTime() ?? null);
                 const statusChanged =
                   enforced.status !== user.status ||
                   enforced.statusReason !== user.statusReason;
-                if (!due && !shouldRepairSchedule && !statusChanged) {
+                if (
+                  !due &&
+                  !shouldRepairSchedule &&
+                  !statusChanged &&
+                  !holdChanged
+                ) {
                   continue;
                 }
 
@@ -169,6 +172,9 @@ export class LimitEnforcerService {
                     enforced.status === 'DISABLED' ? user.disabledAt : null;
                   data.revision = { increment: 1 };
                   data.needsApply = true;
+                }
+                if (holdChanged) {
+                  data.identityLimitHoldUntil = nextHoldUntil;
                 }
                 const updated = await tx.user.update({
                   where: { id: user.id },
@@ -222,15 +228,17 @@ export class LimitEnforcerService {
                       before: {
                         status: user.status,
                         statusReason: user.statusReason,
+                        identityLimitHoldUntil: user.identityLimitHoldUntil,
                       },
                       after: {
                         status: enforced.status,
                         statusReason: enforced.statusReason,
+                        identityLimitHoldUntil: nextHoldUntil,
                       },
                       metadata: {
                         trigger: 'enforcement',
-                        activeDevices: active?.devices.size ?? 0,
-                        activeIps: active?.ips.size ?? 0,
+                        activeDevices,
+                        identityHoldMs: this.identityHoldMs,
                       },
                     },
                     tx,

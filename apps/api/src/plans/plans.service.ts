@@ -107,6 +107,10 @@ export class PlansService {
             defaultIpLimit: input.defaultIpLimit,
             defaultSpeedLimitBps: this.toBigInt(input.defaultSpeedLimitBps),
             defaultResetStrategy: input.defaultResetStrategy,
+            subscriptionTitleTemplate: input.subscriptionTitleTemplate ?? null,
+            subscriptionAnnounce: input.subscriptionAnnounce ?? null,
+            subscriptionSupportUrl: input.subscriptionSupportUrl ?? null,
+            subscriptionWebPageUrl: input.subscriptionWebPageUrl ?? null,
             planInbounds: {
               create: input.inboundIds.map((inboundId, priority) => ({
                 inboundId,
@@ -187,6 +191,10 @@ export class PlansService {
                 ? undefined
                 : this.toBigInt(input.defaultSpeedLimitBps),
             defaultResetStrategy: input.defaultResetStrategy,
+            subscriptionTitleTemplate: input.subscriptionTitleTemplate,
+            subscriptionAnnounce: input.subscriptionAnnounce,
+            subscriptionSupportUrl: input.subscriptionSupportUrl,
+            subscriptionWebPageUrl: input.subscriptionWebPageUrl,
           },
         });
         if (input.inboundIds) {
@@ -394,6 +402,10 @@ export class PlansService {
       defaultIpLimit: plan.defaultIpLimit,
       defaultSpeedLimitBps: plan.defaultSpeedLimitBps?.toString() ?? null,
       defaultResetStrategy: plan.defaultResetStrategy,
+      subscriptionTitleTemplate: plan.subscriptionTitleTemplate,
+      subscriptionAnnounce: plan.subscriptionAnnounce,
+      subscriptionSupportUrl: plan.subscriptionSupportUrl,
+      subscriptionWebPageUrl: plan.subscriptionWebPageUrl,
       inboundIds: plan.planInbounds.map((item) => item.inboundId),
       userCount: plan._count.users,
       createdAt: plan.createdAt.toISOString(),

@@ -1,5 +1,7 @@
+import type { ConfigService } from '@nestjs/config';
 import type { AuditService } from '../audit/audit.service';
 import type { AuthenticatedAdmin } from '../common/authorization';
+import type { AppEnvironment } from '../config/environment';
 import type { Plan, User } from '../generated/prisma/client';
 import type { PrismaService } from '../infrastructure/infrastructure.module';
 import { UsersService } from './users.service';
@@ -44,6 +46,7 @@ describe('UsersService bulk actions', () => {
       nextResetAt: null,
       deviceLimit: 1,
       ipLimit: 1,
+      identityLimitHoldUntil: null,
       speedLimitBps: null,
       subToken: 'old-subscription-token',
       planId: null,
@@ -65,6 +68,10 @@ describe('UsersService bulk actions', () => {
       defaultIpLimit: 2,
       defaultSpeedLimitBps: 50_000_000n,
       defaultResetStrategy: 'MONTHLY',
+      subscriptionTitleTemplate: null,
+      subscriptionAnnounce: null,
+      subscriptionSupportUrl: null,
+      subscriptionWebPageUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       archivedAt: null,
@@ -139,6 +146,14 @@ describe('UsersService bulk actions', () => {
       record: jest.fn().mockResolvedValue(undefined),
       recordFailureSafely: jest.fn().mockResolvedValue(undefined),
     };
+    const configValues = {
+      IDENTITY_LOOKBACK_MS: 1_800_000,
+      ONLINE_SESSION_TIMEOUT_MS: 90_000,
+    } satisfies Partial<AppEnvironment>;
+    const config = {
+      get: (key: keyof AppEnvironment) =>
+        configValues[key as keyof typeof configValues],
+    } as ConfigService<AppEnvironment, true>;
     service = new UsersService(
       prismaMock as unknown as PrismaService,
       audit as unknown as AuditService,
@@ -148,6 +163,7 @@ describe('UsersService bulk actions', () => {
         syncUserToInboundIds: jest.fn().mockResolvedValue(undefined),
         syncAllUsersOnPlan: jest.fn().mockResolvedValue(undefined),
       } as never,
+      config,
     );
   });
 
@@ -211,7 +227,7 @@ describe('UsersService bulk actions', () => {
       planId: plan.id,
       dataLimitBytes: 1_000n,
       deviceLimit: 3,
-      ipLimit: 2,
+      ipLimit: null,
       speedLimitBps: 50_000_000n,
     });
 

@@ -147,6 +147,8 @@ class UserDto implements UserResult {
   deviceLimit!: number | null;
   @ApiPropertyOptional({ nullable: true })
   ipLimit!: number | null;
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  identityLimitHoldUntil!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true })
   speedLimitBps!: string | null;
   @ApiProperty()
@@ -257,6 +259,44 @@ class OnlineSessionDto {
   lastSeenAt!: string;
   @ApiPropertyOptional({ format: 'date-time', nullable: true })
   disconnectedAt!: string | null;
+}
+
+class UserConnectionIdentityDto {
+  @ApiProperty()
+  key!: string;
+  @ApiProperty({ enum: ['ip', 'device'] })
+  kind!: 'ip' | 'device';
+  @ApiPropertyOptional({ nullable: true })
+  ipAddress!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  deviceId!: string | null;
+  @ApiProperty({ format: 'date-time' })
+  firstSeenAt!: string;
+  @ApiProperty({ format: 'date-time' })
+  lastSeenAt!: string;
+  @ApiProperty({ minimum: 0 })
+  sessionCount!: number;
+  @ApiProperty()
+  online!: boolean;
+}
+
+class UserConnectionIdentitiesDto {
+  @ApiProperty({ minimum: 1 })
+  lookbackMs!: number;
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  identityLimitHoldUntil!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  deviceLimit!: number | null;
+  @ApiPropertyOptional({ nullable: true })
+  ipLimit!: number | null;
+  @ApiProperty({ minimum: 0 })
+  deviceCount!: number;
+  @ApiProperty({ minimum: 0 })
+  ipCount!: number;
+  @ApiProperty({ type: [UserConnectionIdentityDto] })
+  ips!: UserConnectionIdentityDto[];
+  @ApiProperty({ type: [UserConnectionIdentityDto] })
+  devices!: UserConnectionIdentityDto[];
 }
 
 @ApiTags('admin users')
@@ -396,5 +436,15 @@ export class UsersController {
   @ApiOkResponse({ type: [OnlineSessionDto] })
   sessions(@ZodParam('id', idSchema) id: string) {
     return this.users.recentSessions(id);
+  }
+
+  @Get(':id/connection-identities')
+  @ApiOperation({
+    summary:
+      'Distinct IPs/devices seen for this user within the identity lookback window',
+  })
+  @ApiOkResponse({ type: UserConnectionIdentitiesDto })
+  connectionIdentities(@ZodParam('id', idSchema) id: string) {
+    return this.users.connectionIdentities(id);
   }
 }

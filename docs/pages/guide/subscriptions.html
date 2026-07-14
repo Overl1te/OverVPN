@@ -14,6 +14,20 @@ curl -o links.txt "$SUB_URL?format=links"  # список ссылок
 curl -o clash.yaml "$SUB_URL?format=clash"  # Clash Meta
 curl "$SUB_URL/info"  # метаданные подписки</code></pre>
 
+<h2>Брендинг подписки</h2>
+<p>
+  Название подписки, announce и ссылки (Telegram / info) настраиваются в
+  <strong>плане</strong>. Имя подключения — шаблон на
+  <strong>точке входа</strong>. Пустые поля оставляют дефолты
+  (<code>OverVPN - {username}</code>, <code>{identity} - {tag}</code>).
+</p>
+<p>
+  Заголовки: <code>subscription-userinfo</code>,
+  <code>profile-update-interval</code>, <code>profile-title</code>, опционально
+  <code>announce</code>, <code>support-url</code>,
+  <code>profile-web-page-url</code>.
+</p>
+
 <h2>Ротация токена</h2>
 <ul>
   <li>В UI — <strong>Rotate subscription</strong></li>
