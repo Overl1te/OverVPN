@@ -34,7 +34,13 @@ async function bootstrap(): Promise<void> {
     origin: config.get('CORS_ORIGINS', { infer: true }),
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Accept', 'Authorization', 'Content-Type', 'X-Request-ID'],
+    allowedHeaders: [
+      'Accept',
+      'Authorization',
+      'Content-Type',
+      'X-Request-ID',
+      'X-OverVPN-Support',
+    ],
     exposedHeaders: [
       'X-Request-ID',
       'subscription-userinfo',

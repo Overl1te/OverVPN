@@ -456,6 +456,7 @@ export const workerHealthSchema = z
       'online-collector',
       'online-sweeper',
       'limit-enforcer',
+      'update-checker',
     ]),
     state: z.enum([
       'NOT_RUN',
@@ -589,6 +590,26 @@ export const systemHostStatsSchema = z
   })
   .strict();
 export type SystemHostStats = z.infer<typeof systemHostStatsSchema>;
+
+/** Panel/API update check against the repo tip (no GitHub Releases required). */
+export const systemUpdateStatusSchema = z
+  .object({
+    checkedAt: isoDateTimeSchema.nullable(),
+    updateAvailable: z.boolean(),
+    currentSha: z.string().nullable(),
+    latestSha: z.string().nullable(),
+    latestShortSha: z.string().nullable(),
+    latestHtmlUrl: z.string().nullable(),
+    channel: z.string(),
+    checkEnabled: z.boolean(),
+    currentKnown: z.boolean(),
+    error: z.string().nullable(),
+    errorRu: z.string().nullable(),
+    applyHint: z.string(),
+    applyHintRu: z.string(),
+  })
+  .strict();
+export type SystemUpdateStatus = z.infer<typeof systemUpdateStatusSchema>;
 
 const subscriptionTitleTemplateSchema = z.string().trim().max(200);
 const subscriptionAnnounceSchema = z.string().trim().max(500);

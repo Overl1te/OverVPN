@@ -2,19 +2,23 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { UserStatus } from '@overvpn/shared/constants';
 import type { AppEnvironment } from '../config/environment';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class TelegramNotificationService {
   private readonly logger = new Logger(TelegramNotificationService.name);
-  private readonly enabled: boolean;
-  private readonly token: string | null;
-  private readonly chatId: string | null;
+  private readonly envEnabled: boolean;
+  private readonly envToken: string | null;
+  private readonly envChatId: string | null;
   private readonly timeoutMs: number;
 
-  constructor(config: ConfigService<AppEnvironment, true>) {
-    this.enabled = config.get('TELEGRAM_ENABLED', { infer: true });
-    this.token = config.get('TELEGRAM_BOT_TOKEN', { infer: true }) ?? null;
-    this.chatId = config.get('TELEGRAM_CHAT_ID', { infer: true }) ?? null;
+  constructor(
+    private readonly settings: SettingsService,
+    config: ConfigService<AppEnvironment, true>,
+  ) {
+    this.envEnabled = config.get('TELEGRAM_ENABLED', { infer: true });
+    this.envToken = config.get('TELEGRAM_BOT_TOKEN', { infer: true }) ?? null;
+    this.envChatId = config.get('TELEGRAM_CHAT_ID', { infer: true }) ?? null;
     this.timeoutMs = config.get('TELEGRAM_TIMEOUT_MS', { infer: true });
   }
 
@@ -48,8 +52,28 @@ export class TelegramNotificationService {
     );
   }
 
+  async notifyUpdateAvailable(input: {
+    currentSha: string;
+    latestSha: string;
+    latestHtmlUrl: string;
+    channel: string;
+  }): Promise<void> {
+    const current = input.currentSha.slice(0, 7);
+    const latest = input.latestSha.slice(0, 7);
+    await this.send(
+      [
+        `OverVPN update available (${input.channel}): ${current} → ${latest}`,
+        `Apply on host: sudo overvpn update`,
+        input.latestHtmlUrl,
+        `Доступно обновление OverVPN (${input.channel}): ${current} → ${latest}`,
+        `На сервере: sudo overvpn update`,
+      ].join('\n'),
+    );
+  }
+
   private async send(text: string): Promise<void> {
-    if (!this.enabled || !this.token || !this.chatId) {
+    const target = await this.resolveTarget();
+    if (!target) {
       return;
     }
     const controller = new AbortController();
@@ -57,12 +81,12 @@ export class TelegramNotificationService {
     timeout.unref();
     try {
       const response = await fetch(
-        `https://api.telegram.org/bot${this.token}/sendMessage`,
+        `https://api.telegram.org/bot${target.token}/sendMessage`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: this.chatId,
+            chat_id: target.chatId,
             text,
             disable_web_page_preview: true,
           }),
@@ -76,10 +100,31 @@ export class TelegramNotificationService {
     } catch (error: unknown) {
       const message = sanitize(
         error instanceof Error ? error.message : String(error),
-      ).replaceAll(this.token, '[REDACTED]');
+      ).replaceAll(target.token, '[REDACTED]');
       this.logger.warn(`Telegram notification failed: ${message}`);
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  private async resolveTarget(): Promise<{
+    token: string;
+    chatId: string;
+  } | null> {
+    try {
+      const resolved = await this.settings.resolveTelegramDelivery();
+      if (!resolved.enabled || !resolved.token || !resolved.chatId) {
+        return null;
+      }
+      return { token: resolved.token, chatId: resolved.chatId };
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Telegram credential resolve failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      if (!this.envEnabled || !this.envToken || !this.envChatId) {
+        return null;
+      }
+      return { token: this.envToken, chatId: this.envChatId };
     }
   }
 }

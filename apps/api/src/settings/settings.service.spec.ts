@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import type { AuditService } from '../audit/audit.service';
 import { SecretEncryptionService } from '../auth/auth-crypto';
+import type { SupportIntegrityService } from '../common/support-integrity';
 import type { AppEnvironment } from '../config/environment';
 import type { PrismaService } from '../infrastructure/infrastructure.module';
 import { SettingsService } from './settings.service';
@@ -73,11 +74,16 @@ describe('SettingsService', () => {
       recordFailureSafely: () => Promise.resolve(undefined),
     } as unknown as AuditService;
     const encryption = new SecretEncryptionService(testConfig());
+    const supportIntegrity = {
+      assertIntact: jest.fn(),
+      isIntact: jest.fn(() => true),
+    } as unknown as SupportIntegrityService;
     const service = new SettingsService(
       prisma,
       audit,
       encryption,
       testConfig(),
+      supportIntegrity,
     );
 
     const initial = await service.get();

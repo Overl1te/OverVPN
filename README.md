@@ -131,6 +131,7 @@ overvpn logs api               # только API
 overvpn info                   # URL, хосты, bootstrap-учётка
 overvpn edit                   # открыть .env в $EDITOR
 overvpn restart                # перезапуск стека
+overvpn check-update           # есть ли новый образ в GHCR (без установки)
 overvpn update                 # pull новых образов из GHCR
 overvpn update --build         # пересобрать локально
 overvpn nginx                  # пересобрать Nginx/сертификаты из конфига установки
@@ -138,6 +139,8 @@ overvpn bootstrap              # пересоздать/обновить вла�
 overvpn up | down              # поднять / остановить
 overvpn uninstall              # удалить установку
 ```
+
+Панель тоже показывает статус обновления (Обзор / Система) и раз в несколько часов опрашивает GitHub `master` без Releases. Если в Settings включён Telegram — пришлёт уведомление. Применение только через `overvpn update` на хосте.
 
 ### Порты
 

@@ -9,6 +9,7 @@ export const WORKER_NAMES = [
   'online-collector',
   'online-sweeper',
   'limit-enforcer',
+  'update-checker',
 ] as const;
 
 export type WorkerName = (typeof WORKER_NAMES)[number];
@@ -77,6 +78,9 @@ export class WorkerHealthService {
         infer: true,
       }),
       'limit-enforcer': config.get('ENFORCEMENT_INTERVAL_MS', { infer: true }),
+      'update-checker': config.get('UPDATE_CHECK_INTERVAL_MS', {
+        infer: true,
+      }),
     };
   }
 

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Button, Card, Form, Input, InputNumber, Switch, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { getDashboard, getSystemHealth } from '@/api/system';
+import { checkForUpdates, getDashboard, getSystemHealth, getUpdateStatus } from '@/api/system';
 import { getSettings, updateSettings } from '@/api/settings';
 import { useAuth } from '@/auth/AuthContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -16,6 +16,7 @@ export function SystemPage() {
   const showError = useApiErrorHandler();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const isRu = i18n.language.startsWith('ru');
 
   const healthQuery = useQuery({
     queryKey: ['system-health-detail'],
@@ -31,6 +32,12 @@ export function SystemPage() {
   const settingsQuery = useQuery({
     queryKey: ['system-settings'],
     queryFn: getSettings,
+  });
+
+  const updateQuery = useQuery({
+    queryKey: ['system-updates'],
+    queryFn: getUpdateStatus,
+    refetchInterval: 60_000,
   });
 
   useEffect(() => {
@@ -57,13 +64,108 @@ export function SystemPage() {
     onError: showError,
   });
 
+  const checkUpdateMutation = useMutation({
+    mutationFn: checkForUpdates,
+    onSuccess: (status) => {
+      void queryClient.invalidateQueries({ queryKey: ['system-updates'] });
+      if (status.updateAvailable) {
+        message.info(t('system.updateFound'));
+      } else if (status.error) {
+        message.warning(
+          localizedRuntimeError(status.error, i18n.language, status.errorRu) ??
+            t('system.updateCheckFailed'),
+        );
+      } else {
+        message.success(t('system.updateUpToDate'));
+      }
+    },
+    onError: showError,
+  });
+
   const health = healthQuery.data;
   const dashboard = dashboardQuery.data;
   const settings = settingsQuery.data;
+  const update = updateQuery.data;
 
   return (
     <div>
       <PageHeader title={t('system.title')} />
+
+      <Card
+        size="small"
+        title={t('system.updates')}
+        style={{ marginBottom: 12 }}
+        loading={updateQuery.isLoading}
+        extra={
+          <Button
+            size="small"
+            disabled={!canMutate}
+            loading={checkUpdateMutation.isPending}
+            onClick={() => checkUpdateMutation.mutate()}
+          >
+            {t('system.checkUpdates')}
+          </Button>
+        }
+      >
+        {update ? (
+          <Table<{ field: string; value: string }>
+            size="small"
+            pagination={false}
+            rowKey="field"
+            dataSource={[
+              {
+                field: t('system.updateStatus'),
+                value: update.updateAvailable
+                  ? t('system.updateAvailable')
+                  : update.currentKnown
+                    ? t('system.updateUpToDate')
+                    : t('system.updateUnknown'),
+              },
+              {
+                field: t('system.updateChannel'),
+                value: update.channel,
+              },
+              {
+                field: t('system.currentSha'),
+                value: update.currentSha?.slice(0, 12) ?? '—',
+              },
+              {
+                field: t('system.latestSha'),
+                value: update.latestShortSha ?? update.latestSha?.slice(0, 12) ?? '—',
+              },
+              {
+                field: t('system.lastChecked'),
+                value: update.checkedAt
+                  ? dayjs(update.checkedAt).format('YYYY-MM-DD HH:mm:ss')
+                  : '—',
+              },
+              {
+                field: t('system.applyUpdate'),
+                value: isRu ? update.applyHintRu : update.applyHint,
+              },
+              {
+                field: t('app.error'),
+                value: localizedRuntimeError(update.error, i18n.language, update.errorRu) ?? '—',
+              },
+            ]}
+            columns={[
+              { title: t('app.field'), dataIndex: 'field' },
+              {
+                title: t('app.value'),
+                dataIndex: 'value',
+                render: (value: string, row) =>
+                  row.field === t('system.latestSha') && update.latestHtmlUrl ? (
+                    <a href={update.latestHtmlUrl} target="_blank" rel="noreferrer">
+                      {value}
+                    </a>
+                  ) : (
+                    value
+                  ),
+              },
+            ]}
+          />
+        ) : null}
+      </Card>
 
       <Card
         size="small"

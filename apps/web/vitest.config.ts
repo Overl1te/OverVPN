@@ -16,6 +16,14 @@ export default defineConfig({
         replacement: path.resolve(rootDir, '../../packages/shared/src/schemas.ts'),
       },
       {
+        find: '@overvpn/shared/support-integrity',
+        replacement: path.resolve(rootDir, '../../packages/shared/src/support-integrity.ts'),
+      },
+      {
+        find: '@overvpn/shared/support-seal',
+        replacement: path.resolve(rootDir, '../../packages/shared/src/support-seal.ts'),
+      },
+      {
         find: '@overvpn/shared',
         replacement: path.resolve(rootDir, '../../packages/shared/src/index.ts'),
       },

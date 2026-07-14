@@ -60,6 +60,32 @@ a {
   white-space: nowrap;
 }
 
+.ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.ant-layout-sider-children .ant-menu {
+  flex: 1;
+  overflow: auto;
+}
+
+.support-dock {
+  padding: 8px 12px 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.support-button {
+  width: 100%;
+  justify-content: flex-start !important;
+  color: #94a3b8 !important;
+  padding-inline: 12px !important;
+}
+
+.support-button:hover {
+  color: #f87171 !important;
+}
+
 .login-brand {
   display: flex;
   align-items: center;

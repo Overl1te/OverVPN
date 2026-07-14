@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { PRODUCT_NAME } from '@overvpn/shared/constants';
 import type { Locale } from '@overvpn/shared/constants';
 import { useAuth } from '@/auth/AuthContext';
+import { SupportButton } from '@/components/SupportButton';
 import { persistLocale } from '@/i18n';
 import { useState } from 'react';
 
@@ -68,6 +69,7 @@ export function AdminLayout() {
           items={items}
           onClick={({ key }) => navigate(key)}
         />
+        <SupportButton collapsed={collapsed} />
       </Sider>
       <Layout>
         <Header className="admin-header">

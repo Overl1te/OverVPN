@@ -16,6 +16,7 @@ import type {
   AuthenticatedAdmin,
   RequestMetadata,
 } from '../common/authorization';
+import { SupportIntegrityService } from '../common/support-integrity';
 import type { AppEnvironment } from '../config/environment';
 import type {
   CoreApplyRecord,
@@ -65,6 +66,7 @@ export class CoreApplyService {
     private readonly fileSystem: CoreFileSystem,
     private readonly audit: AuditService,
     private readonly notifications: TelegramNotificationService,
+    private readonly supportIntegrity: SupportIntegrityService,
     config: ConfigService<AppEnvironment, true>,
   ) {
     this.configPaths = {
@@ -98,6 +100,7 @@ export class CoreApplyService {
     trigger: CoreApplyTrigger,
     metadata: RequestMetadata,
   ): Promise<CoreApplySummary> {
+    this.supportIntegrity.assertIntact();
     const startedAt = new Date();
     const initial = await this.prisma.coreApplyRecord.create({
       data: {

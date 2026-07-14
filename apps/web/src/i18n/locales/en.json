@@ -80,6 +80,10 @@
     "system": "System",
     "backups": "Backups"
   },
+  "support": {
+    "label": "Support",
+    "tooltip": "Support the OverVPN author"
+  },
   "auth": {
     "loginTitle": "Administrator sign-in",
     "username": "Username",
@@ -112,7 +116,9 @@
     "network": "Network",
     "networkIn": "Inbound",
     "networkOut": "Outbound",
-    "networkTotal": "Total"
+    "networkTotal": "Total",
+    "updateAvailable": "Update available ({{current}} → {{latest}})",
+    "updateChangelog": "View latest commit"
   },
   "users": {
     "title": "Users",
@@ -280,7 +286,8 @@
       "daily-aggregator": "Daily aggregator",
       "online-collector": "Online collector",
       "online-sweeper": "Online sweeper",
-      "limit-enforcer": "Limit enforcer"
+      "limit-enforcer": "Limit enforcer",
+      "update-checker": "Update checker"
     },
     "auditAction": {
       "ADMIN_LOGIN": "Admin login",
@@ -499,7 +506,20 @@
     "coreEngineVersion": "{{engine}} version / latency",
     "workers": "Background workers",
     "statusOk": "OK",
-    "statusDegraded": "Degraded"
+    "statusDegraded": "Degraded",
+    "updates": "Updates",
+    "checkUpdates": "Check now",
+    "updateStatus": "Status",
+    "updateAvailable": "Update available",
+    "updateUpToDate": "Up to date",
+    "updateUnknown": "Build identity unknown",
+    "updateFound": "A newer build is available",
+    "updateCheckFailed": "Update check failed",
+    "updateChannel": "Channel",
+    "currentSha": "Installed commit",
+    "latestSha": "Latest commit",
+    "lastChecked": "Last checked",
+    "applyUpdate": "How to update"
   },
   "backups": {
     "title": "Backups",

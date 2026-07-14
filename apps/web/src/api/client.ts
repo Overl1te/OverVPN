@@ -1,4 +1,6 @@
 import { errorEnvelopeSchema } from '@overvpn/shared/schemas';
+import { SUPPORT_MANIFEST } from '@overvpn/shared/support-integrity';
+import { getPanelSupportProof, isSupportPresent } from '@/components/SupportButton';
 
 export class ApiError extends Error {
   readonly code: string;
@@ -104,6 +106,8 @@ async function parseError(response: Response): Promise<ApiError> {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, query, auth = true, signal, skipRefresh = false } = options;
+  const upperMethod = method.toUpperCase();
+  const isMutation = upperMethod !== 'GET' && upperMethod !== 'HEAD' && upperMethod !== 'OPTIONS';
 
   const headers = new Headers();
   if (body !== undefined) {
@@ -114,6 +118,18 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
+  }
+  if (auth && isMutation) {
+    if (!isSupportPresent()) {
+      throw new ApiError({
+        code: 'SUPPORT_INTEGRITY_FAILED',
+        message: 'Author support attribution is missing or was tampered with',
+        messageRu: 'Атрибуция поддержки автора отсутствует или была изменена',
+        requestId: null,
+        status: 503,
+      });
+    }
+    headers.set(SUPPORT_MANIFEST.headerName, await getPanelSupportProof());
   }
 
   const response = await fetch(buildUrl(path, query), {

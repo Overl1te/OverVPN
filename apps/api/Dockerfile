@@ -85,6 +85,8 @@ RUN pnpm --filter @overvpn/api prisma:generate \
 
 FROM base AS runtime
 
+ARG OVERVPN_GIT_SHA=
+ENV OVERVPN_GIT_SHA="${OVERVPN_GIT_SHA}"
 ENV NODE_ENV="production"
 ENV HOST="0.0.0.0"
 ENV PORT="3000"

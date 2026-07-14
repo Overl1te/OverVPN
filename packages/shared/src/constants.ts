@@ -191,6 +191,10 @@ export const ERROR_MESSAGES = {
     en: 'An internal error occurred',
     ru: 'Произошла внутренняя ошибка',
   },
+  SUPPORT_INTEGRITY_FAILED: {
+    en: 'Author support attribution is missing or was tampered with',
+    ru: 'Атрибуция поддержки автора отсутствует или была изменена',
+  },
 } as const;
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
 

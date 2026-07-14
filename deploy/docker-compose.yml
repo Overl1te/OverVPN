@@ -77,6 +77,11 @@ x-api-environment: &api-environment
   ENFORCEMENT_INTERVAL_MS: ${ENFORCEMENT_INTERVAL_MS:-30000}
   IDENTITY_LOOKBACK_MS: ${IDENTITY_LOOKBACK_MS:-1800000}
   IDENTITY_LIMIT_HOLD_MS: ${IDENTITY_LIMIT_HOLD_MS:-900000}
+  UPDATE_CHECK_ENABLED: ${UPDATE_CHECK_ENABLED:-true}
+  UPDATE_CHECK_INTERVAL_MS: ${UPDATE_CHECK_INTERVAL_MS:-21600000}
+  UPDATE_CHECK_REPO: ${UPDATE_CHECK_REPO:-Overl1te/OverVPN}
+  UPDATE_CHECK_REF: ${UPDATE_CHECK_REF:-master}
+  UPDATE_CHECK_TIMEOUT_MS: ${UPDATE_CHECK_TIMEOUT_MS:-10000}
   TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
   TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
   TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
@@ -89,6 +94,8 @@ x-api-environment: &api-environment
 x-api-build: &api-build
   context: ..
   dockerfile: apps/api/Dockerfile
+  args:
+    OVERVPN_GIT_SHA: ${OVERVPN_GIT_SHA:-}
 
 x-service-security: &service-security
   security_opt:
@@ -225,8 +232,9 @@ services:
     build: *api-build
     restart: unless-stopped
     # Prefer the bind-mounted deploy script so reload can restart Xray when
-    # SIGHUP exits the process (observed with Xray 26.x).
-    entrypoint: ['/usr/bin/dumb-init', '--', '/entrypoint/xray-entrypoint.sh']
+    # SIGHUP exits the process (observed with Xray 26.x). Run via sh so the
+    # host file does not need the executable bit (common after extract/copy).
+    entrypoint: ['/usr/bin/dumb-init', '--', '/bin/sh', '/entrypoint/xray-entrypoint.sh']
     environment:
       XRAY_CONFIG_PATH: /var/lib/xray/config.json
       XRAY_RELOAD_REQUEST_PATH: /var/lib/overvpn/xray-reload/request

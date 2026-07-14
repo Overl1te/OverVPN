@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -15,7 +15,9 @@ import {
   onlineSessionListQuerySchema,
   usageDateRangeQuerySchema,
 } from '@overvpn/shared/schemas';
+import { Roles } from '../common/authorization';
 import { ZodQuery } from '../common/zod-validation';
+import { UpdateCheckerService } from '../workers/update-checker.service';
 import { SystemService } from './system.service';
 
 class PaginationDto {
@@ -274,6 +276,35 @@ class SystemHostStatsDto {
   network!: HostNetworkDto;
 }
 
+class SystemUpdateStatusDto {
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  checkedAt!: string | null;
+  @ApiProperty()
+  updateAvailable!: boolean;
+  @ApiPropertyOptional({ nullable: true })
+  currentSha!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  latestSha!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  latestShortSha!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  latestHtmlUrl!: string | null;
+  @ApiProperty()
+  channel!: string;
+  @ApiProperty()
+  checkEnabled!: boolean;
+  @ApiProperty()
+  currentKnown!: boolean;
+  @ApiPropertyOptional({ nullable: true })
+  error!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  errorRu!: string | null;
+  @ApiProperty()
+  applyHint!: string;
+  @ApiProperty()
+  applyHintRu!: string;
+}
+
 @ApiTags('admin online sessions')
 @ApiBearerAuth()
 @Controller('admin/online-sessions')
@@ -301,7 +332,10 @@ export class OnlineSessionsController {
 @ApiBearerAuth()
 @Controller('admin/system')
 export class SystemController {
-  constructor(private readonly system: SystemService) {}
+  constructor(
+    private readonly system: SystemService,
+    private readonly updates: UpdateCheckerService,
+  ) {}
 
   @Get('dashboard')
   @ApiQuery({ name: 'from', required: false, format: 'date' })
@@ -329,5 +363,18 @@ export class SystemController {
   @ApiOkResponse({ type: SystemHostStatsDto })
   host() {
     return this.system.hostStats();
+  }
+
+  @Get('updates')
+  @ApiOkResponse({ type: SystemUpdateStatusDto })
+  updateStatus() {
+    return this.updates.getStatus();
+  }
+
+  @Post('updates/check')
+  @Roles('OWNER', 'ADMIN')
+  @ApiOkResponse({ type: SystemUpdateStatusDto })
+  checkUpdates() {
+    return this.updates.checkNow();
   }
 }

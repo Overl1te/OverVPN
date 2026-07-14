@@ -10,6 +10,8 @@ import { AuthModule } from './auth/auth.module';
 import { BackupsModule } from './backups/backups.module';
 import { ApiExceptionFilter } from './common/api-error';
 import { JwtAuthenticationGuard, RolesGuard } from './common/authorization';
+import { SupportIntegrityGuard } from './common/support-integrity';
+import { SupportIntegrityModule } from './common/support-integrity.module';
 import { BigIntSerializationInterceptor } from './common/bigint-serialization';
 import type { AppEnvironment } from './config/environment';
 import { validateEnvironment } from './config/environment';
@@ -109,6 +111,7 @@ function requestId(request: IncomingMessage, response: ServerResponse): string {
       ],
     }),
     InfrastructureModule,
+    SupportIntegrityModule,
     AuditModule,
     CoreModule,
     AuthModule,
@@ -130,6 +133,10 @@ function requestId(request: IncomingMessage, response: ServerResponse): string {
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: SupportIntegrityGuard,
     },
     {
       provide: APP_INTERCEPTOR,

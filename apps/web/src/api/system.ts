@@ -3,6 +3,7 @@ import type {
   SystemDashboard,
   SystemHealth,
   SystemHostStats,
+  SystemUpdateStatus,
 } from '@overvpn/shared/schemas';
 import { apiRequest } from './client';
 
@@ -21,6 +22,16 @@ export function getSystemHealth(): Promise<SystemHealth> {
 
 export function getHostStats(): Promise<SystemHostStats> {
   return apiRequest<SystemHostStats>('/admin/system/host');
+}
+
+export function getUpdateStatus(): Promise<SystemUpdateStatus> {
+  return apiRequest<SystemUpdateStatus>('/admin/system/updates');
+}
+
+export function checkForUpdates(): Promise<SystemUpdateStatus> {
+  return apiRequest<SystemUpdateStatus>('/admin/system/updates/check', {
+    method: 'POST',
+  });
 }
 
 export function getGlobalUsage(

@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import type { CoreEngine } from '@overvpn/shared/constants';
 import type { AuditService } from '../audit/audit.service';
+import type { SupportIntegrityService } from '../common/support-integrity';
 import type { AppEnvironment } from '../config/environment';
 import type { CoreApplyRecord } from '../generated/prisma/client';
 import type { PrismaService } from '../infrastructure/infrastructure.module';
@@ -55,6 +56,10 @@ describe('CoreApplyService validation gate', () => {
     const notifications = {
       notifyApplyFailure: jest.fn(() => Promise.resolve()),
     } as unknown as TelegramNotificationService;
+    const supportIntegrity = {
+      assertIntact: jest.fn(),
+      isIntact: jest.fn(() => true),
+    } as unknown as SupportIntegrityService;
     const service = new CoreApplyService(
       prisma,
       registry,
@@ -63,6 +68,7 @@ describe('CoreApplyService validation gate', () => {
       fileSystem,
       audit,
       notifications,
+      supportIntegrity,
       fakeConfig(),
     );
 
@@ -155,6 +161,10 @@ describe('CoreApplyService multi-engine apply', () => {
     const notifications = {
       notifyApplyFailure,
     } as unknown as TelegramNotificationService;
+    const supportIntegrity = {
+      assertIntact: jest.fn(),
+      isIntact: jest.fn(() => true),
+    } as unknown as SupportIntegrityService;
     const service = new CoreApplyService(
       prisma,
       registry,
@@ -163,6 +173,7 @@ describe('CoreApplyService multi-engine apply', () => {
       new MemoryFileSystem(),
       audit,
       notifications,
+      supportIntegrity,
       fakeConfig(),
     );
 

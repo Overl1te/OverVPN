@@ -27,6 +27,14 @@
     "./subscription-templates": {
       "types": "./src/subscription-templates.ts",
       "default": "./dist/subscription-templates.js"
+    },
+    "./support-integrity": {
+      "types": "./src/support-integrity.ts",
+      "default": "./dist/support-integrity.js"
+    },
+    "./support-seal": {
+      "types": "./src/support-seal.ts",
+      "default": "./dist/support-seal.js"
     }
   },
   "scripts": {

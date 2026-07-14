@@ -145,7 +145,7 @@ cli_t() {
       install_success_subs) printf 'Подписки:     %s/api/sub/{TOKEN}  (корень хоста подписок — заглушка)' "$1" ;;
       install_success_vpn) printf 'VPN-хост:     %s  (publicHost для новых входящих)' "$1" ;;
       install_success_credentials) printf 'Учётные данные: %s' "$1" ;;
-      install_success_manage) printf 'Управление: %s status | logs | config | update | restart' "$1" ;;
+      install_success_manage) printf 'Управление: %s status | logs | check-update | update | restart' "$1" ;;
       unsupported_os) printf '%s' "Неподдерживаемая ОС: /etc/os-release не найден." ;;
       os_warning) printf 'Внимание: проверено на Ubuntu/Debian. Обнаружено: %s.' "$1" ;;
       installing_packages) printf '%s' "Устанавливаем необходимые пакеты…" ;;
@@ -214,6 +214,13 @@ cli_t() {
       restarted) printf '%s' "OverVPN перезапущен." ;;
       updating) printf 'Обновляем OverVPN (%s)…' "$1" ;;
       update_complete) printf '%s' "Обновление завершено." ;;
+      checking_updates) printf '%s' "Проверяем наличие обновлений…" ;;
+      update_available) printf 'Доступно обновление: локальный %s → remote %s' "$1" "$2" ;;
+      update_up_to_date) printf '%s' "Установлена актуальная версия образов." ;;
+      update_check_hint) printf '%s' "Чтобы обновить: sudo overvpn update" ;;
+      update_check_no_digest) printf '%s' "Не удалось получить digest образа (часто так с локальной сборкой). Смотрите статус в панели или выполните: sudo overvpn update" ;;
+      update_check_local) printf 'Локальный:  %s' "$1" ;;
+      update_check_remote) printf 'В реестре:  %s' "$1" ;;
       uninstall_warn) printf '%s' "Будут удалены контейнеры OverVPN, /opt/overvpn, сайт nginx и CLI." ;;
       prompt_wipe_volumes) printf '%s' "Удалить Docker volumes (БД/данные)? [Y/n] " ;;
       prompt_purge_certs) printf '%s' "Удалить сертификаты Let'\''s Encrypt для panel/sub/vpn? [Y/n] " ;;
@@ -288,7 +295,7 @@ cli_t() {
       install_success_subs) printf 'Subscriptions:%s/api/sub/{TOKEN}  (root / on sub host is only a stub)' "$1" ;;
       install_success_vpn) printf 'VPN host:     %s  (default publicHost for new inbounds)' "$1" ;;
       install_success_credentials) printf 'Credentials: %s' "$1" ;;
-      install_success_manage) printf 'Manage with: %s status | logs | config | update | restart' "$1" ;;
+      install_success_manage) printf 'Manage with: %s status | logs | check-update | update | restart' "$1" ;;
       unsupported_os) printf '%s' "Unsupported OS: /etc/os-release not found." ;;
       os_warning) printf 'Warning: tested on Ubuntu/Debian. Detected: %s.' "$1" ;;
       installing_packages) printf '%s' "Installing required packages..." ;;
@@ -357,6 +364,13 @@ cli_t() {
       restarted) printf '%s' "OverVPN restarted." ;;
       updating) printf 'Updating OverVPN (%s)...' "$1" ;;
       update_complete) printf '%s' "Update complete." ;;
+      checking_updates) printf '%s' "Checking for updates..." ;;
+      update_available) printf 'Update available: local %s → remote %s' "$1" "$2" ;;
+      update_up_to_date) printf '%s' "Images are up to date." ;;
+      update_check_hint) printf '%s' "To apply: sudo overvpn update" ;;
+      update_check_no_digest) printf '%s' "Could not resolve image digests (common with local --build). Check the panel or run: sudo overvpn update" ;;
+      update_check_local) printf 'Local:   %s' "$1" ;;
+      update_check_remote) printf 'Remote:  %s' "$1" ;;
       uninstall_warn) printf '%s' "This removes OverVPN containers, /opt/overvpn, nginx site, and CLI." ;;
       prompt_wipe_volumes) printf '%s' "Delete Docker volumes (DB/data)? [Y/n] " ;;
       prompt_purge_certs) printf '%s' "Delete Let'\''s Encrypt certs for panel/sub/vpn hosts? [Y/n] " ;;
@@ -510,6 +524,53 @@ compose_up() {
   compose up -d --force-recreate --no-deps core
   compose up -d --force-recreate --no-deps core-xray-config-init
   compose up -d --force-recreate --no-deps core-xray
+}
+
+image_repo_digest() {
+  local image=$1
+  docker image inspect --format '{{index .RepoDigests 0}}' "$image" 2>/dev/null \
+    | sed -n 's/.*@\(sha256:[0-9a-f]*\)$/\1/p' || true
+}
+
+remote_image_digest() {
+  local image=$1
+  docker buildx imagetools inspect "$image" --format '{{.Manifest.Digest}}' 2>/dev/null \
+    || docker manifest inspect "$image" 2>/dev/null \
+      | sed -n 's/.*"digest"[[:space:]]*:[[:space:]]*"\(sha256:[0-9a-f]*\)".*/\1/p' \
+      | head -n1 \
+    || true
+}
+
+cmd_check_update() {
+  check_root
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
+
+  colorized_echo blue "$(cli_t checking_updates)"
+  local image local_digest remote_digest
+  image="$(api_image_ref)"
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    colorized_echo yellow "$(cli_t update_check_no_digest)"
+    exit 0
+  fi
+  local_digest="$(image_repo_digest "$image")"
+  remote_digest="$(remote_image_digest "$image" | tr -d '"' | tr -d '\r' | head -n1)"
+
+  if [[ -z "$local_digest" || -z "$remote_digest" ]]; then
+    colorized_echo yellow "$(cli_t update_check_no_digest)"
+    [[ -n "$local_digest" ]] && colorized_echo blue "$(cli_t update_check_local "$local_digest")"
+    [[ -n "$remote_digest" ]] && colorized_echo blue "$(cli_t update_check_remote "$remote_digest")"
+    exit 0
+  fi
+
+  colorized_echo blue "$(cli_t update_check_local "$local_digest")"
+  colorized_echo blue "$(cli_t update_check_remote "$remote_digest")"
+  if [[ "$local_digest" == "$remote_digest" ]]; then
+    colorized_echo green "$(cli_t update_up_to_date)"
+    exit 0
+  fi
+  colorized_echo yellow "$(cli_t update_available "$local_digest" "$remote_digest")"
+  colorized_echo yellow "$(cli_t update_check_hint)"
+  exit 2
 }
 
 # Finished install (safe for up/down/update).
@@ -1308,6 +1369,12 @@ fetch_deploy_bundle() {
     fetch_raw_file "$branch" "$rel" "${APP_DIR}/${rel}"
   done
 
+  chmod 755 \
+    "${APP_DIR}/deploy/sing-box/entrypoint.sh" \
+    "${APP_DIR}/deploy/sing-box/bootstrap-config.sh" \
+    "${APP_DIR}/deploy/xray/entrypoint.sh" \
+    "${APP_DIR}/deploy/xray/bootstrap-config.sh"
+
   fetch_raw_file "$branch" "install.sh" "${APP_DIR}/install.sh"
   chmod 755 "${APP_DIR}/install.sh"
   printf 'slim\n' >"$INSTALL_MODE_FILE"
@@ -1593,7 +1660,7 @@ OverVPN management script
 
 Usage:
   ${APP_NAME} install [options]
-  ${APP_NAME} up | down | restart | status | logs [service] | update | uninstall
+  ${APP_NAME} up | down | restart | status | logs [service] | update | check-update | uninstall
   ${APP_NAME} info | edit | bootstrap | nginx | config | install-script
 
 Config (domains, nginx, certificates):
@@ -2141,6 +2208,7 @@ main() {
     status|ps) cmd_status ;;
     logs) cmd_logs "$@" ;;
     update) cmd_update "$@" ;;
+    check-update|check-updates) cmd_check_update ;;
     uninstall|remove) cmd_uninstall ;;
     info) cmd_info ;;
     edit|edit-env) cmd_edit ;;

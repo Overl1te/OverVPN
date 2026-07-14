@@ -8,6 +8,7 @@ import { LimitEnforcerService } from './limit-enforcer.service';
 import { OnlineSessionCollectorService } from './online-session-collector.service';
 import { OnlineSessionSweeperService } from './online-session-sweeper.service';
 import { TrafficCollectorService } from './traffic-collector.service';
+import { UpdateCheckerService } from './update-checker.service';
 import { WorkerHealthService } from './worker-health.service';
 import { WorkerSchedulerService } from './worker-scheduler.service';
 
@@ -25,6 +26,7 @@ import { WorkerSchedulerService } from './worker-scheduler.service';
     OnlineSessionCollectorService,
     OnlineSessionSweeperService,
     LimitEnforcerService,
+    UpdateCheckerService,
     WorkerSchedulerService,
   ],
   exports: [
@@ -34,6 +36,7 @@ import { WorkerSchedulerService } from './worker-scheduler.service';
     OnlineSessionCollectorService,
     OnlineSessionSweeperService,
     LimitEnforcerService,
+    UpdateCheckerService,
   ],
 })
 export class WorkersModule {}

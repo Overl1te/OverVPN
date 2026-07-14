@@ -80,6 +80,10 @@
     "system": "Система",
     "backups": "Резервные копии"
   },
+  "support": {
+    "label": "Поддержать",
+    "tooltip": "Поддержать автора OverVPN"
+  },
   "auth": {
     "loginTitle": "Вход администратора",
     "username": "Имя пользователя",
@@ -112,7 +116,9 @@
     "network": "Сеть",
     "networkIn": "Входящая",
     "networkOut": "Исходящая",
-    "networkTotal": "Всего"
+    "networkTotal": "Всего",
+    "updateAvailable": "Доступно обновление ({{current}} → {{latest}})",
+    "updateChangelog": "Открыть последний коммит"
   },
   "users": {
     "title": "Пользователи",
@@ -280,7 +286,8 @@
       "daily-aggregator": "Дневная агрегация",
       "online-collector": "Сбор онлайн-сессий",
       "online-sweeper": "Очистка сессий",
-      "limit-enforcer": "Контроль лимитов"
+      "limit-enforcer": "Контроль лимитов",
+      "update-checker": "Проверка обновлений"
     },
     "auditAction": {
       "ADMIN_LOGIN": "Вход администратора",
@@ -499,7 +506,20 @@
     "coreEngineVersion": "{{engine}}: версия / задержка",
     "workers": "Фоновые воркеры",
     "statusOk": "OK",
-    "statusDegraded": "Деградация"
+    "statusDegraded": "Деградация",
+    "updates": "Обновления",
+    "checkUpdates": "Проверить сейчас",
+    "updateStatus": "Статус",
+    "updateAvailable": "Доступно обновление",
+    "updateUpToDate": "Актуальная версия",
+    "updateUnknown": "Идентичность сборки неизвестна",
+    "updateFound": "Доступна более новая сборка",
+    "updateCheckFailed": "Не удалось проверить обновления",
+    "updateChannel": "Канал",
+    "currentSha": "Установленный коммит",
+    "latestSha": "Последний коммит",
+    "lastChecked": "Последняя проверка",
+    "applyUpdate": "Как обновить"
   },
   "backups": {
     "title": "Резервные копии",

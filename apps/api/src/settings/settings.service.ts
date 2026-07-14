@@ -11,6 +11,7 @@ import type {
   AuthenticatedAdmin,
   RequestMetadata,
 } from '../common/authorization';
+import { SupportIntegrityService } from '../common/support-integrity';
 import type { AppEnvironment } from '../config/environment';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 
@@ -41,11 +42,59 @@ export class SettingsService {
     private readonly audit: AuditService,
     private readonly encryption: SecretEncryptionService,
     private readonly config: ConfigService<AppEnvironment, true>,
+    private readonly supportIntegrity: SupportIntegrityService,
   ) {}
 
   async get(): Promise<SystemSettings> {
+    this.supportIntegrity.assertIntact();
     await this.ensureDefaults();
     return this.readMerged();
+  }
+
+  /**
+   * Resolve Telegram delivery from panel secrets (preferred) or env fallback.
+   * Used by notification senders — never expose these values to the API.
+   */
+  async resolveTelegramDelivery(): Promise<{
+    enabled: boolean;
+    token: string | null;
+    chatId: string | null;
+  }> {
+    await this.ensureDefaults();
+    const [settingsRow, tokenRow, chatRow] = await Promise.all([
+      this.prisma.systemConfig.findUnique({ where: { key: SETTINGS_KEY } }),
+      this.prisma.systemConfig.findUnique({
+        where: { key: TELEGRAM_TOKEN_KEY },
+      }),
+      this.prisma.systemConfig.findUnique({
+        where: { key: TELEGRAM_CHAT_KEY },
+      }),
+    ]);
+    const stored = parseStored(settingsRow?.value);
+    const envEnabled = this.config.get('TELEGRAM_ENABLED', { infer: true });
+    const envToken =
+      this.config.get('TELEGRAM_BOT_TOKEN', { infer: true }) ?? null;
+    const envChat =
+      this.config.get('TELEGRAM_CHAT_ID', { infer: true }) ?? null;
+    const enabled = stored.notifyTelegramEnabled ?? envEnabled;
+    const token =
+      this.decryptSecret(tokenRow?.value) ??
+      (typeof envToken === 'string' ? envToken : null);
+    const chatId =
+      this.decryptSecret(chatRow?.value) ??
+      (typeof envChat === 'string' ? envChat : null);
+    return { enabled, token, chatId };
+  }
+
+  private decryptSecret(value: unknown): string | null {
+    if (typeof value !== 'string' || value.length === 0) {
+      return null;
+    }
+    try {
+      return this.encryption.decrypt(value);
+    } catch {
+      return null;
+    }
   }
 
   async update(
@@ -53,6 +102,7 @@ export class SettingsService {
     actor: AuthenticatedAdmin,
     metadata: RequestMetadata,
   ): Promise<SystemSettings> {
+    this.supportIntegrity.assertIntact();
     const before = await this.get();
     try {
       await this.prisma.$transaction(async (tx) => {

@@ -194,6 +194,8 @@ jobs:
           push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
+          build-args: |
+            OVERVPN_GIT_SHA=${{ github.sha }}
           cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/api
           cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/api,mode=min
 

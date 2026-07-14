@@ -425,6 +425,38 @@ export const environmentSchema = z
       .min(0)
       .max(86_400_000)
       .default(900_000),
+    /** Git commit baked into the API image at build time (CI / local --build). */
+    OVERVPN_GIT_SHA: z.preprocess(
+      (value) => (value === '' || value === undefined ? undefined : value),
+      z
+        .string()
+        .trim()
+        .regex(/^[0-9a-f]{7,40}$/i, 'OVERVPN_GIT_SHA must be a git commit sha')
+        .optional(),
+    ),
+    UPDATE_CHECK_ENABLED: booleanFromEnvironment.default(true),
+    /** How often to poll GitHub for a newer commit on UPDATE_CHECK_REF (default 6h). */
+    UPDATE_CHECK_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .max(604_800_000)
+      .default(21_600_000),
+    UPDATE_CHECK_REPO: z
+      .string()
+      .trim()
+      .regex(
+        /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
+        'UPDATE_CHECK_REPO must be owner/name',
+      )
+      .default('Overl1te/OverVPN'),
+    UPDATE_CHECK_REF: z.string().trim().min(1).max(256).default('master'),
+    UPDATE_CHECK_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(60_000)
+      .default(10_000),
     TELEGRAM_ENABLED: booleanFromEnvironment.default(false),
     TELEGRAM_BOT_TOKEN: z.preprocess(
       (value) => (value === '' ? undefined : value),

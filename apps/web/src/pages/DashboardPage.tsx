@@ -2,7 +2,7 @@ import { Alert, Card, Col, Progress, Row, Statistic, Table, Tag, Typography } fr
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Column } from '@ant-design/charts';
-import { getDashboard, getHostStats, getSystemHealth } from '@/api/system';
+import { getDashboard, getHostStats, getSystemHealth, getUpdateStatus } from '@/api/system';
 import { PageHeader } from '@/components/PageHeader';
 import { formatBytes, formatBytesPerSecond } from '@/utils/format';
 import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
@@ -41,10 +41,16 @@ export function DashboardPage() {
     queryFn: () => getHostStats(),
     refetchInterval: 5_000,
   });
+  const updateQuery = useQuery({
+    queryKey: ['system-updates'],
+    queryFn: () => getUpdateStatus(),
+    refetchInterval: 60_000,
+  });
 
   const data = dashboardQuery.data;
   const health = healthQuery.data;
   const host = hostQuery.data;
+  const update = updateQuery.data;
 
   const series =
     data?.traffic.period.series.map((point) => ({
@@ -59,10 +65,32 @@ export function DashboardPage() {
   ]);
 
   const ramPercent = memoryPercent(host?.memory.usedBytes, host?.memory.totalBytes);
+  const isRu = i18n.language.startsWith('ru');
 
   return (
     <div>
       <PageHeader title={t('dashboard.title')} />
+      {update?.updateAvailable ? (
+        <Alert
+          style={{ marginBottom: 12 }}
+          type="info"
+          showIcon
+          message={t('dashboard.updateAvailable', {
+            current: update.currentSha?.slice(0, 7) ?? '—',
+            latest: update.latestShortSha ?? update.latestSha?.slice(0, 7) ?? '—',
+          })}
+          description={
+            <>
+              <div>{isRu ? update.applyHintRu : update.applyHint}</div>
+              {update.latestHtmlUrl ? (
+                <a href={update.latestHtmlUrl} target="_blank" rel="noreferrer">
+                  {t('dashboard.updateChangelog')}
+                </a>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={12} lg={8}>
           <Card size="small" loading={hostQuery.isLoading}>
