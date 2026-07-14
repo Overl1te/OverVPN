@@ -261,7 +261,7 @@ export class InboundsService {
     metadata: RequestMetadata,
   ) {
     try {
-      const inbound = await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         const before = await this.requireInbound(id, tx);
         if (input.protocol && input.protocol !== before.protocol) {
           throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
@@ -278,7 +278,12 @@ export class InboundsService {
           });
         }
         const previous = this.tryStorageFromInbound(before);
-        if (!input.settings && !previous) {
+        const brandingOnly =
+          input.settings === undefined &&
+          input.tag === undefined &&
+          input.protocol === undefined &&
+          input.displayNameTemplate !== undefined;
+        if (!input.settings && !previous && !brandingOnly) {
           throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
             reason: 'inbound_settings_migration_required',
           });
@@ -294,7 +299,7 @@ export class InboundsService {
                 processTimeoutMs: this.processTimeoutMs,
               },
             )
-          : previous!;
+          : previous;
         if (input.settings) {
           this.assertListenPortPublished(
             before.protocol,
@@ -320,7 +325,7 @@ export class InboundsService {
                       : input.displayNameTemplate.trim(),
                 }
               : {}),
-            ...(input.settings
+            ...(input.settings && built
               ? {
                   listenHost: input.settings.listenHost,
                   listenPort: input.settings.listenPort,
@@ -335,12 +340,18 @@ export class InboundsService {
                   ),
                 }
               : {}),
-            revision: { increment: 1 },
-            needsApply: true,
+            ...(brandingOnly
+              ? {}
+              : {
+                  revision: { increment: 1 },
+                  needsApply: true,
+                }),
           },
           include: { _count: { select: { userAssignments: true } } },
         });
-        await this.bumpDesiredRevision(tx, before.engine);
+        if (!brandingOnly) {
+          await this.bumpDesiredRevision(tx, before.engine);
+        }
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -354,14 +365,17 @@ export class InboundsService {
           },
           tx,
         );
-        return updated;
+        return { inbound: updated, brandingOnly };
       });
+      if (result.brandingOnly) {
+        return { inbound: this.toResult(result.inbound), apply: null };
+      }
       const apply = await this.applyMutation(
         actor,
         metadata,
-        `Update inbound ${inbound.tag}`,
+        `Update inbound ${result.inbound.tag}`,
       );
-      return { inbound: this.toResult(inbound), apply };
+      return { inbound: this.toResult(result.inbound), apply };
     } catch (error: unknown) {
       await this.recordMutationFailure(
         'INBOUND_UPDATE',

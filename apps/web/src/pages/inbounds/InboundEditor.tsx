@@ -156,6 +156,11 @@ function overlayPresetKeys<T extends Record<string, unknown>>(
   return next;
 }
 
+function stripPublicTlsLeftovers(tls: DirtySettings): void {
+  delete tls.certificatePemPresent;
+  delete tls.privateKeyPemPresent;
+}
+
 function resolveSingBoxTls(
   protocol: 'HYSTERIA2' | 'TROJAN',
   presetTls: Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>['tls'],
@@ -183,7 +188,7 @@ function resolveSingBoxTls(
       presetFiles?.keyPath ||
       defaultsContext.tlsKeyPath ||
       undefined;
-    return {
+    const tls = {
       ...(presetFiles ?? {
         mode: 'FILES' as const,
         sni: host || defaultsContext.publicHost,
@@ -198,7 +203,7 @@ function resolveSingBoxTls(
         keyPath: keyPath!,
       }),
       ...(formTls.mode === 'FILES' ? formTls : {}),
-      mode: 'FILES',
+      mode: 'FILES' as const,
       sni:
         (typeof formTls.sni === 'string' && formTls.sni) ||
         host ||
@@ -207,6 +212,8 @@ function resolveSingBoxTls(
       certificatePath: certificatePath!,
       keyPath: keyPath!,
     };
+    stripPublicTlsLeftovers(tls as DirtySettings);
+    return tls as Extract<ReturnType<typeof buildDefaultInboundSettings>, { tls: unknown }>['tls'];
   }
 
   const acmePreset =
@@ -241,6 +248,7 @@ function resolveSingBoxTls(
       (typeof formTls.dataDirectory === 'string' ? formTls.dataDirectory : undefined) ||
       acmePreset.dataDirectory,
   };
+  stripPublicTlsLeftovers(tls as DirtySettings);
   if (formEmail && isProbablyEmail(formEmail)) {
     tls.email = formEmail;
   } else {
@@ -351,14 +359,14 @@ export function sanitizeInboundForm(
       overrides,
     );
     if ('obfs' in settings && settings.obfs && typeof settings.obfs === 'object') {
-      const obfs = { ...settings.obfs } as { password?: string };
-      const password = obfs.password?.trim();
-      if (password) {
-        obfs.password = password;
-      } else {
-        delete obfs.password;
+      // Public inbound config uses passwordPresent; write schema only accepts password.
+      const raw = settings.obfs as { type?: string; password?: string };
+      if (raw.type === 'SALAMANDER') {
+        const password = raw.password?.trim();
+        (settings as { obfs: unknown }).obfs = password
+          ? { type: 'SALAMANDER', password }
+          : { type: 'SALAMANDER' };
       }
-      (settings as { obfs: unknown }).obfs = obfs;
     }
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
@@ -368,7 +376,9 @@ export function sanitizeInboundForm(
     const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
       'privateKey',
       'publicKey',
-    ]) as typeof preset;
+    ]) as typeof preset & Record<string, unknown>;
+    delete settings.publicKeyPresent;
+    delete settings.privateKeyPresent;
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
@@ -905,10 +915,26 @@ export function InboundEditor({
       const body = {
         tag: sanitized.tag,
         protocol: sanitized.protocol,
-        displayNameTemplate: values.displayNameTemplate || null,
+        displayNameTemplate: values.displayNameTemplate?.trim() || null,
         settings: sanitized.settings,
       };
       if (inbound) {
+        // Branding-only updates must not re-submit public config as write settings.
+        // When the editor only changed the display name, send that field alone.
+        const prevName = inbound.displayNameTemplate ?? null;
+        const nextName = body.displayNameTemplate;
+        const nameOnly =
+          nextName !== prevName &&
+          sanitized.tag === inbound.tag &&
+          sanitized.protocol === inbound.protocol &&
+          sanitized.settings.publicHost === inbound.settings.publicHost &&
+          sanitized.settings.enabled === inbound.settings.enabled &&
+          sanitized.settings.listenPort === inbound.settings.listenPort;
+        if (nameOnly) {
+          return updateInbound(inbound.id, {
+            displayNameTemplate: nextName,
+          });
+        }
         return updateInbound(inbound.id, body);
       }
       return createInbound(body as CreateInbound);

@@ -80,6 +80,72 @@ describe('sanitizeInboundForm', () => {
     expect(sanitized.settings).toHaveProperty('upMbps');
   });
 
+  it('strips public-config leftovers (passwordPresent / certificatePemPresent) on edit save', () => {
+    const sanitized = sanitizeInboundForm(
+      {
+        tag: 'poland',
+        protocol: 'HYSTERIA2',
+        displayNameTemplate: '🇵🇱 OverVPN ПОЛЬША - {protocol}',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 443,
+          publicHost: 'vpn.overl1te-private.online',
+          publicPort: 443,
+          enabled: true,
+          upMbps: null,
+          downMbps: null,
+          ignoreClientBandwidth: false,
+          obfs: {
+            type: 'SALAMANDER',
+            passwordPresent: true,
+          },
+          tls: {
+            mode: 'FILES',
+            sni: 'vpn.overl1te-private.online',
+            alpn: ['h3'],
+            minVersion: '1.2',
+            cipherSuites: [],
+            curvePreferences: [],
+            kernelTx: false,
+            kernelRx: false,
+            clientInsecure: false,
+            certificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
+            keyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
+            certificatePemPresent: false,
+            privateKeyPemPresent: false,
+          },
+          masquerade: null,
+          bindInterface: null,
+          routingMark: null,
+          reuseAddr: false,
+          netns: null,
+          tcpFastOpen: false,
+          tcpMultiPath: false,
+          disableTcpKeepAlive: false,
+          tcpKeepAlive: null,
+          tcpKeepAliveInterval: null,
+          udpFragment: null,
+          udpTimeout: null,
+          detour: null,
+          brutalDebug: false,
+        } as never,
+      },
+      defaults,
+    );
+
+    expect(sanitized.settings).toMatchObject({
+      obfs: { type: 'SALAMANDER' },
+      tls: {
+        mode: 'FILES',
+        certificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
+        keyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
+      },
+    });
+    expect(sanitized.settings.obfs).not.toHaveProperty('passwordPresent');
+    expect(sanitized.settings.tls).not.toHaveProperty('certificatePemPresent');
+    expect(sanitized.settings.tls).not.toHaveProperty('privateKeyPemPresent');
+  });
+
   it('strips leftover keys when saving Shadowsocks', () => {
     const sanitized = sanitizeInboundForm(
       {
