@@ -204,11 +204,7 @@ export function PlansPage() {
             title: t('plans.inboundIds'),
             dataIndex: 'inboundIds',
             render: (ids: string[]) =>
-              ids.length > 0 ? (
-                ids.length
-              ) : (
-                <Tag color="orange">{t('plans.inboundsEmpty')}</Tag>
-              ),
+              ids.length > 0 ? ids.length : <Tag color="orange">{t('plans.inboundsEmpty')}</Tag>,
           },
           {
             title: t('app.actions'),

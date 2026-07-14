@@ -845,8 +845,7 @@ export function InboundEditor({
     }
     const readOnly = settingsQuery.data.readOnly;
     return {
-      publicHost:
-        inbound?.settings.publicHost ?? readOnly.vpnPublicHost?.trim() ?? '',
+      publicHost: inbound?.settings.publicHost ?? readOnly.vpnPublicHost?.trim() ?? '',
       acmeHttpPort: readOnly.acmeHttpPort,
       acmeTlsPort: readOnly.acmeTlsPort,
       singBoxUdpPort: readOnly.singBoxUdpPort,

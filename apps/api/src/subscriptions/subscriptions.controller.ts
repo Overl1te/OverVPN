@@ -333,15 +333,19 @@ export function negotiateSubscriptionFormat(
   }
 
   const client = userAgent?.toLowerCase() ?? '';
-  if (/(?:mihomo|clash|stash|flclash)/.test(client)) {
-    return 'clash';
-  }
+  // Prefer URI links for URI-centric clients before Clash matching.
+  // HiddifyNext UA includes "like ClashMeta", which would otherwise select Clash
+  // YAML; Hiddify then line-trims the body and fails with "unable to determine
+  // config format". Happ and similar clients also expect a link list.
   if (
     /(?:v2rayn|v2rayng|v2raytun|shadowrocket|surge|happ|hiddify|nekoray|nekobox|streisand)/.test(
       client,
     )
   ) {
     return 'links';
+  }
+  if (/(?:mihomo|clash|stash|flclash)/.test(client)) {
+    return 'clash';
   }
   return 'sing-box';
 }

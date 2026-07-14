@@ -212,6 +212,12 @@ describe('subscription format negotiation', () => {
     ['*/*', 'v2rayN/7', 'links'],
     ['*/*', 'Happ/1.0', 'links'],
     ['*/*', 'HiddifyNext/1.0', 'links'],
+    // Real Hiddify desktop UA contains "ClashMeta" — must still get links.
+    [
+      '*/*',
+      'HiddifyNext/4.1.1 (windows) like ClashMeta v2ray sing-box',
+      'links',
+    ],
     ['*/*', 'nekoray/3', 'links'],
     [undefined, undefined, 'sing-box'],
   ] as const)(

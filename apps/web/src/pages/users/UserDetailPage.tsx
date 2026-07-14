@@ -274,8 +274,7 @@ export function UserDetailPage() {
                   notFoundContent={
                     activePlans.length === 0 ? (
                       <Typography.Text type="secondary">
-                        {t('users.noActivePlans')}{' '}
-                        <Link to="/plans">{t('nav.plans')}</Link>
+                        {t('users.noActivePlans')} <Link to="/plans">{t('nav.plans')}</Link>
                       </Typography.Text>
                     ) : undefined
                   }
