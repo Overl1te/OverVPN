@@ -321,12 +321,7 @@ export const environmentSchema = z
       .max(65_535)
       .default(8444),
     /** Published TCP port for Shadowsocks (compose → host). */
-    SING_BOX_SS_PORT: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(65_535)
-      .default(8445),
+    SING_BOX_SS_PORT: z.coerce.number().int().min(1).max(65_535).default(8445),
     SING_BOX_ACME_HTTP_PORT: z.coerce
       .number()
       .int()

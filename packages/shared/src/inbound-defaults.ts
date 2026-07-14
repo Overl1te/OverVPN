@@ -41,11 +41,7 @@ export function publishedListenPortForProtocol(
   protocol: InboundProtocol,
   context: Pick<
     InboundDefaultsContext,
-    | 'singBoxUdpPort'
-    | 'singBoxTcpPort'
-    | 'singBoxTrojanPort'
-    | 'singBoxSsPort'
-    | 'xrayListenPort'
+    'singBoxUdpPort' | 'singBoxTcpPort' | 'singBoxTrojanPort' | 'singBoxSsPort' | 'xrayListenPort'
   >,
 ): number {
   switch (protocol) {
