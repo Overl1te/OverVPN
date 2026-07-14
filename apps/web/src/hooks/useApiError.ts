@@ -1,4 +1,6 @@
 import { App as AntApp } from 'antd';
+import type { FormInstance } from 'antd/es/form';
+import type { NamePath } from 'antd/es/form/interface';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/api/client';
 
@@ -7,23 +9,31 @@ type ValidationIssue = {
   message?: string;
 };
 
-function firstValidationIssue(details: unknown): ValidationIssue | null {
+function allValidationIssues(details: unknown): ValidationIssue[] {
   if (!details || typeof details !== 'object') {
-    return null;
+    return [];
   }
   const issues = (details as { issues?: unknown }).issues;
   if (!Array.isArray(issues) || issues.length === 0) {
-    return null;
+    return [];
   }
-  const first = issues[0];
-  if (!first || typeof first !== 'object') {
-    return null;
-  }
-  const issue = first as ValidationIssue;
-  return {
-    path: typeof issue.path === 'string' ? issue.path : undefined,
-    message: typeof issue.message === 'string' ? issue.message : undefined,
-  };
+  return issues
+    .filter((item): item is object => !!item && typeof item === 'object')
+    .map((item) => {
+      const issue = item as ValidationIssue;
+      return {
+        path: typeof issue.path === 'string' ? issue.path : undefined,
+        message: typeof issue.message === 'string' ? issue.message : undefined,
+      };
+    })
+    .filter((issue) => issue.message);
+}
+
+function pathToName(path: string): NamePath {
+  return path.split('.').map((segment) => {
+    const asNumber = Number(segment);
+    return Number.isInteger(asNumber) && String(asNumber) === segment ? asNumber : segment;
+  });
 }
 
 function conflictDetailMessage(details: unknown, locale: string): string | null {
@@ -43,18 +53,46 @@ function conflictDetailMessage(details: unknown, locale: string): string | null 
   return null;
 }
 
-export function useApiErrorHandler() {
+/**
+ * Toast API errors. Pass an Ant Form instance to map VALIDATION_FAILED issues onto fields.
+ * The returned handler is a single-arg function so it matches react-query `onError`.
+ */
+export function useApiErrorHandler(form?: FormInstance) {
   const { t, i18n } = useTranslation();
   const { message } = AntApp.useApp();
 
-  return (error: unknown) => {
+  return (error: unknown): void => {
     if (error instanceof ApiError) {
       const conflictDetail = conflictDetailMessage(error.details, i18n.language);
       let text = conflictDetail ?? error.localized(i18n.language);
-      const issue = error.code === 'VALIDATION_FAILED' ? firstValidationIssue(error.details) : null;
-      if (!conflictDetail && issue?.path && issue.message) {
-        text = `${text} — ${t('app.validationDetails', { path: issue.path, message: issue.message })}`;
+      const issues = error.code === 'VALIDATION_FAILED' ? allValidationIssues(error.details) : [];
+      const first = issues[0];
+      if (!conflictDetail && first?.path && first.message) {
+        text = `${text} — ${t('app.validationDetails', { path: first.path, message: first.message })}`;
       }
+
+      if (form) {
+        if (issues.length > 0) {
+          form.setFields(
+            issues
+              .filter((issue): issue is ValidationIssue & { path: string; message: string } =>
+                Boolean(issue.path && issue.message),
+              )
+              .map((issue) => ({
+                name: pathToName(issue.path),
+                errors: [issue.message],
+              })),
+          );
+        } else if (conflictDetail) {
+          form.setFields([
+            {
+              name: ['settings', 'listenPort'],
+              errors: [conflictDetail],
+            },
+          ]);
+        }
+      }
+
       void message.error(
         error.requestId ? `${text} (${t('app.requestId')}: ${error.requestId})` : text,
       );

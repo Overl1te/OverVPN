@@ -11,6 +11,7 @@ import type { InboundProtocol } from '@overvpn/shared/constants';
 import type { CreateInbound, InboundResult } from '@overvpn/shared/schemas';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import {
+  App as AntApp,
   Button,
   Alert,
   Collapse,
@@ -26,14 +27,15 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { createInbound, updateInbound } from '@/api/inbounds';
 import { getSettings } from '@/api/settings';
 import { useApiErrorHandler } from '@/hooks/useApiError';
+import { notifyCoreApply } from '@/utils/notifyCoreApply';
 
 const SING_BOX_PROTOCOLS: InboundProtocol[] = [
   'HYSTERIA2',
@@ -817,41 +819,41 @@ export function InboundEditor({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const onError = useApiErrorHandler();
+  const { message: messageApi } = AntApp.useApp();
   const [form] = Form.useForm<InboundEditorForm>();
+  const onError = useApiErrorHandler(form);
   const protocol = Form.useWatch('protocol', form);
   const settings = Form.useWatch('settings', form);
   const [editorMode, setEditorMode] = useState<EditorMode>('simple');
   const [advancedJson, setAdvancedJson] = useState('');
   const [advancedTouched, setAdvancedTouched] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [protocolResetKey, setProtocolResetKey] = useState(0);
   const detailed = editorMode === 'detailed';
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
     queryFn: getSettings,
-    enabled: open && !inbound,
+    enabled: open,
   });
 
   const defaultsContext = useMemo((): InboundDefaultsContext | null => {
-    if (inbound) {
-      return {
-        publicHost: inbound.settings.publicHost,
-      };
-    }
     if (!settingsQuery.isSuccess) {
       return null;
     }
+    const readOnly = settingsQuery.data.readOnly;
     return {
-      publicHost: settingsQuery.data.readOnly.vpnPublicHost?.trim() ?? '',
-      acmeHttpPort: settingsQuery.data.readOnly.acmeHttpPort,
-      acmeTlsPort: settingsQuery.data.readOnly.acmeTlsPort,
-      singBoxUdpPort: settingsQuery.data.readOnly.singBoxUdpPort,
-      singBoxTcpPort: settingsQuery.data.readOnly.singBoxTcpPort,
-      xrayListenPort: settingsQuery.data.readOnly.xrayListenPort,
-      tlsCertificatePath: settingsQuery.data.readOnly.tlsCertificatePath,
-      tlsKeyPath: settingsQuery.data.readOnly.tlsKeyPath,
+      publicHost:
+        inbound?.settings.publicHost ?? readOnly.vpnPublicHost?.trim() ?? '',
+      acmeHttpPort: readOnly.acmeHttpPort,
+      acmeTlsPort: readOnly.acmeTlsPort,
+      singBoxUdpPort: readOnly.singBoxUdpPort,
+      singBoxTcpPort: readOnly.singBoxTcpPort,
+      xrayListenPort: readOnly.xrayListenPort,
+      tlsCertificatePath: readOnly.tlsCertificatePath,
+      tlsKeyPath: readOnly.tlsKeyPath,
     };
   }, [inbound, settingsQuery.data, settingsQuery.isSuccess]);
 
@@ -896,12 +898,27 @@ export function InboundEditor({
           typeof values.settings.tls.keyPath === 'string' &&
           values.settings.tls.keyPath.trim();
         if (!hasPem && !hasPaths) {
-          message.error(t('inbounds.xrayTlsPathsMissing'));
+          form.setFields([
+            {
+              name: ['settings', 'tls'],
+              errors: [t('inbounds.xrayTlsPathsMissing')],
+            },
+          ]);
+          void messageApi.error(t('inbounds.xrayTlsPathsMissing'));
           throw new Error('VLESS_XHTTP_TLS TLS certificate paths are not configured');
         }
       }
+      if (!values.settings.publicHost?.trim()) {
+        form.setFields([
+          {
+            name: ['settings', 'publicHost'],
+            errors: [t('inbounds.publicHostRequired')],
+          },
+        ]);
+        throw new Error('Public host is required');
+      }
       let sanitized = sanitizeInboundForm(values, defaultsContext);
-      if (editorMode === 'simple' && !inbound) {
+      if (editorMode === 'simple') {
         const port = publishedListenPortForProtocol(sanitized.protocol, defaultsContext);
         sanitized = {
           ...sanitized,
@@ -939,16 +956,23 @@ export function InboundEditor({
       }
       return createInbound(body as CreateInbound);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
-      onClose();
+      const { ok } = notifyCoreApply(result.apply, {
+        t,
+        messageApi,
+        navigate,
+      });
+      if (ok) {
+        onClose();
+      }
     },
     onError: onError,
   });
 
   const initialProtocol = inbound?.protocol ?? 'HYSTERIA2';
-  const isCreateLoading = !inbound && settingsQuery.isLoading;
-  const formReady = Boolean(inbound) || settingsQuery.isSuccess;
+  const isCreateLoading = settingsQuery.isLoading;
+  const formReady = settingsQuery.isSuccess;
 
   useEffect(() => {
     if (!open) {
@@ -969,9 +993,10 @@ export function InboundEditor({
       { name: 'protocol', value: initialProtocol },
       { name: 'settings', value: initialSettings },
     ]);
-    setEditorMode(inbound ? 'detailed' : 'simple');
+    setEditorMode('simple');
     setAdvancedJson(JSON.stringify(initialSettings, null, 2));
     setAdvancedTouched(false);
+    setProtocolResetKey(0);
   }, [open, formReady, defaultsContext, inbound, initialProtocol, form]);
 
   useEffect(() => {
@@ -1016,6 +1041,8 @@ export function InboundEditor({
       };
     }
     replaceFormSettings(form, value, nextSettings);
+    setProtocolResetKey((key) => key + 1);
+    void messageApi.info(t('inbounds.protocolReset'));
     if (!advancedTouched) {
       setAdvancedJson(JSON.stringify(nextSettings, null, 2));
     }
@@ -1103,7 +1130,11 @@ export function InboundEditor({
           >
             <Input placeholder="{identity} - {tag}" maxLength={200} autoComplete="off" />
           </Form.Item>
-          <Form.Item name="protocol" label={t('inbounds.protocol')}>
+          <Form.Item
+            name="protocol"
+            label={t('inbounds.protocol')}
+            extra={protocolResetKey > 0 ? t('inbounds.protocolReset') : undefined}
+          >
             <Select
               disabled={!!inbound}
               options={[
@@ -1134,20 +1165,31 @@ export function InboundEditor({
               <Tag>{t(`enums.coreEngine.${PROTOCOL_ENGINE_MAP[protocol]}`)}</Tag>
             </Form.Item>
           ) : null}
-          {protocol === 'VLESS_XHTTP_TLS' &&
-          !inbound &&
-          !defaultsContext?.tlsCertificatePath?.trim() ? (
+          {protocol === 'VLESS_XHTTP_TLS' && !defaultsContext?.tlsCertificatePath?.trim() ? (
             <Alert
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
-              message={t('inbounds.xrayTlsPathsMissing')}
+              message={t('inbounds.xrayTlsPathsMissingShort')}
             />
           ) : null}
 
           {detailed ? (
             <>
               <Typography.Title level={5}>{t('inbounds.sectionListen')}</Typography.Title>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={
+                  installPortInfo
+                    ? t('inbounds.installPortHint', {
+                        port: installPortInfo.port,
+                        transport: installPortInfo.transport.toUpperCase(),
+                      })
+                    : t('inbounds.installPort')
+                }
+              />
               <Space size="large" wrap>
                 <Form.Item
                   name={['settings', 'listenHost']}
@@ -1160,6 +1202,7 @@ export function InboundEditor({
                   name={['settings', 'listenPort']}
                   label={t('inbounds.listenPort')}
                   rules={[{ required: true }]}
+                  extra={t('inbounds.listenPortPublishedHint')}
                 >
                   <InputNumber min={1} max={65535} style={{ width: 140 }} />
                 </Form.Item>

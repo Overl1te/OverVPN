@@ -177,4 +177,51 @@ describe('sanitizeInboundForm', () => {
     expect(sanitized.settings).not.toHaveProperty('tls');
     expect(sanitized.settings).not.toHaveProperty('handshakeServer');
   });
+
+  it('strips public GET leftovers pasted via Advanced JSON (passwordPresent on root secrets)', () => {
+    const sanitized = sanitizeInboundForm(
+      {
+        tag: 'xray',
+        protocol: 'VLESS_XHTTP_TLS',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 9443,
+          publicHost: 'vpn.overl1te-private.online',
+          publicPort: 9443,
+          enabled: true,
+          path: '/api/v1/update',
+          host: 'vpn.overl1te-private.online',
+          mode: 'auto',
+          tls: {
+            mode: 'FILES',
+            sni: 'vpn.overl1te-private.online',
+            certificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
+            keyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
+            certificatePemPresent: false,
+            privateKeyPemPresent: false,
+          },
+          // public API shape leftovers
+          upMbps: null,
+          handshakeServer: 'www.cloudflare.com',
+          method: '2022-blake3-aes-256-gcm',
+        } as never,
+      },
+      defaults,
+    );
+
+    expect(sanitized.settings).toMatchObject({
+      path: '/api/v1/update',
+      mode: 'auto',
+      tls: {
+        mode: 'FILES',
+        certificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
+        keyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
+      },
+    });
+    expect(sanitized.settings.tls).not.toHaveProperty('certificatePemPresent');
+    expect(sanitized.settings.tls).not.toHaveProperty('privateKeyPemPresent');
+    expect(sanitized.settings).not.toHaveProperty('upMbps');
+    expect(sanitized.settings).not.toHaveProperty('handshakeServer');
+    expect(sanitized.settings).not.toHaveProperty('method');
+  });
 });

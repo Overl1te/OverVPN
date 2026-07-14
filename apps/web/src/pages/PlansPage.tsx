@@ -1,6 +1,20 @@
-import { Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table } from 'antd';
+import {
+  Alert,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { archivePlan, createPlan, deletePlan, listPlans, updatePlan } from '@/api/plans';
 import { listInbounds } from '@/api/inbounds';
@@ -11,6 +25,7 @@ import { useApiErrorHandler } from '@/hooks/useApiError';
 import { formatBytes } from '@/utils/format';
 
 const GIB = 1024 ** 3;
+const MBPS_TO_BPS = 1_000_000;
 
 type PlanFormValues = {
   name: string;
@@ -18,7 +33,7 @@ type PlanFormValues = {
   defaultDataLimitGiB?: number | null;
   defaultExpiryDays?: number | null;
   defaultDeviceLimit?: number | null;
-  defaultSpeedLimitBps?: string | null;
+  defaultSpeedLimitMbps?: number | null;
   defaultResetStrategy?: string;
   inboundIds?: string[];
   subscriptionTitleTemplate?: string | null;
@@ -45,16 +60,35 @@ function giBToBytes(giB: number | null | undefined): string | null {
   return String(Math.round(giB * GIB));
 }
 
+function bpsToMbps(bps: string | null | undefined): number | null {
+  if (!bps) {
+    return null;
+  }
+  try {
+    return Number(BigInt(bps)) / MBPS_TO_BPS;
+  } catch {
+    return null;
+  }
+}
+
+function mbpsToBps(mbps: number | null | undefined): string | null {
+  if (mbps == null || Number.isNaN(mbps) || mbps <= 0) {
+    return null;
+  }
+  return String(Math.round(mbps * MBPS_TO_BPS));
+}
+
 export function PlansPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const onError = useApiErrorHandler();
   const { canMutate } = useAuth();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form] = Form.useForm<PlanFormValues>();
+  const onError = useApiErrorHandler();
+  const onFormError = useApiErrorHandler(form);
 
   const plansQuery = useQuery({
     queryKey: ['plans', page, pageSize],
@@ -84,7 +118,7 @@ export function PlansPage() {
         defaultExpiryDays: values.defaultExpiryDays,
         defaultDeviceLimit: values.defaultDeviceLimit,
         defaultIpLimit: null,
-        defaultSpeedLimitBps: values.defaultSpeedLimitBps || null,
+        defaultSpeedLimitBps: mbpsToBps(values.defaultSpeedLimitMbps),
         defaultResetStrategy: values.defaultResetStrategy,
         inboundIds: values.inboundIds,
         subscriptionTitleTemplate: values.subscriptionTitleTemplate || null,
@@ -103,7 +137,7 @@ export function PlansPage() {
       setEditingId(null);
       form.resetFields();
     },
-    onError: onError,
+    onError: onFormError,
   });
 
   const archiveMutation = useMutation({
@@ -169,7 +203,12 @@ export function PlansPage() {
           {
             title: t('plans.inboundIds'),
             dataIndex: 'inboundIds',
-            render: (ids: string[]) => ids.length,
+            render: (ids: string[]) =>
+              ids.length > 0 ? (
+                ids.length
+              ) : (
+                <Tag color="orange">{t('plans.inboundsEmpty')}</Tag>
+              ),
           },
           {
             title: t('app.actions'),
@@ -185,7 +224,7 @@ export function PlansPage() {
                       defaultDataLimitGiB: bytesToGiB(row.defaultDataLimitBytes),
                       defaultExpiryDays: row.defaultExpiryDays,
                       defaultDeviceLimit: row.defaultDeviceLimit,
-                      defaultSpeedLimitBps: row.defaultSpeedLimitBps,
+                      defaultSpeedLimitMbps: bpsToMbps(row.defaultSpeedLimitBps),
                       defaultResetStrategy: row.defaultResetStrategy,
                       inboundIds: row.inboundIds,
                       subscriptionTitleTemplate: row.subscriptionTitleTemplate,
@@ -259,8 +298,17 @@ export function PlansPage() {
           >
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="defaultSpeedLimitBps" label={t('users.speedLimit')}>
-            <Input />
+          <Form.Item
+            name="defaultSpeedLimitMbps"
+            label={t('plans.speedLimit')}
+            extra={t('plans.speedLimitHint')}
+          >
+            <InputNumber
+              min={0}
+              step={1}
+              style={{ width: '100%' }}
+              placeholder={t('app.unlimited')}
+            />
           </Form.Item>
           <Form.Item name="defaultResetStrategy" label={t('users.resetStrategy')}>
             <Select
@@ -270,9 +318,34 @@ export function PlansPage() {
               }))}
             />
           </Form.Item>
-          <Form.Item name="inboundIds" label={t('plans.inboundIds')}>
+          <Form.Item
+            name="inboundIds"
+            label={t('plans.inboundIds')}
+            rules={[
+              {
+                required: true,
+                type: 'array',
+                min: 1,
+                message: t('plans.inboundsRequired'),
+              },
+            ]}
+            extra={t('plans.inboundsRequired')}
+          >
             <Select mode="multiple" options={inboundOptions} />
           </Form.Item>
+          {inboundOptions.length === 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={t('plans.inboundsEmpty')}
+              description={
+                <Typography.Text>
+                  {t('plans.inboundsRequired')} <Link to="/inbounds">{t('nav.inbounds')}</Link>
+                </Typography.Text>
+              }
+            />
+          ) : null}
           <Form.Item
             name="subscriptionTitleTemplate"
             label={t('plans.subscriptionTitleTemplate')}

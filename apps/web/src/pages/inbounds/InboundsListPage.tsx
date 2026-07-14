@@ -1,7 +1,8 @@
-import { Button, Input, Popconfirm, Space, Table, Tag, Typography } from 'antd';
+import { App as AntApp, Button, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { PROTOCOL_ENGINE_MAP } from '@overvpn/shared';
 import type { InboundProtocol } from '@overvpn/shared/constants';
 import type { InboundResult } from '@overvpn/shared/schemas';
@@ -15,19 +16,24 @@ import {
   revealAssignmentLink,
   rotateAssignmentCredential,
 } from '@/api/inbounds';
+import { listUsers } from '@/api/users';
 import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
+import { notifyCoreApply } from '@/utils/notifyCoreApply';
 import { InboundEditor } from './InboundEditor';
 
 function AssignmentsPanel({ inboundId }: { inboundId: string }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const onError = useApiErrorHandler();
+  const { message: messageApi } = AntApp.useApp();
   const { canMutate } = useAuth();
-  const [userId, setUserId] = useState('');
+  const [userId, setUserId] = useState<string | undefined>();
+  const [userSearch, setUserSearch] = useState('');
   const [revealed, setRevealed] = useState<Record<string, string>>({});
 
   const query = useQuery({
@@ -35,27 +41,52 @@ function AssignmentsPanel({ inboundId }: { inboundId: string }) {
     queryFn: () => listAssignments(inboundId, { page: 1, pageSize: 100 }),
   });
 
+  const usersQuery = useQuery({
+    queryKey: ['users', 'assign-options', userSearch],
+    queryFn: () =>
+      listUsers({
+        page: 1,
+        pageSize: 50,
+        search: userSearch || undefined,
+        status: 'ACTIVE',
+      }),
+    enabled: canMutate,
+  });
+
+  const userOptions = useMemo(() => {
+    const assigned = new Set((query.data?.items ?? []).map((item) => item.userId));
+    return (usersQuery.data?.items ?? [])
+      .filter((user) => !assigned.has(user.id))
+      .map((user) => ({
+        value: user.id,
+        label: `${user.username} (${user.identity})`,
+      }));
+  }, [query.data?.items, usersQuery.data?.items]);
+
   const addMutation = useMutation({
-    mutationFn: () => addAssignment(inboundId, { userId }),
-    onSuccess: () => {
+    mutationFn: () => addAssignment(inboundId, { userId: userId! }),
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['assignments', inboundId] });
-      setUserId('');
+      setUserId(undefined);
+      notifyCoreApply(result.apply, { t, messageApi, navigate });
     },
     onError: onError,
   });
 
   const removeMutation = useMutation({
     mutationFn: (assignmentId: string) => removeAssignment(inboundId, assignmentId),
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['assignments', inboundId] });
+      notifyCoreApply(result.apply, { t, messageApi, navigate });
     },
     onError: onError,
   });
 
   const rotateMutation = useMutation({
     mutationFn: (assignmentId: string) => rotateAssignmentCredential(inboundId, assignmentId, {}),
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['assignments', inboundId] });
+      notifyCoreApply(result.apply, { t, messageApi, navigate });
     },
     onError: onError,
   });
@@ -71,12 +102,19 @@ function AssignmentsPanel({ inboundId }: { inboundId: string }) {
   return (
     <div>
       {canMutate ? (
-        <Space style={{ marginBottom: 8 }}>
-          <Input
-            placeholder={t('inbounds.userId')}
+        <Space style={{ marginBottom: 8 }} wrap>
+          <Select
+            showSearch
+            allowClear
+            placeholder={t('inbounds.selectUser')}
             value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            style={{ width: 280 }}
+            onChange={setUserId}
+            onSearch={setUserSearch}
+            filterOption={false}
+            options={userOptions}
+            loading={usersQuery.isLoading}
+            style={{ width: 320 }}
+            notFoundContent={usersQuery.isFetching ? t('app.loading') : t('app.none')}
           />
           <Button
             type="primary"
@@ -155,8 +193,10 @@ function AssignmentsPanel({ inboundId }: { inboundId: string }) {
 
 export function InboundsListPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const onError = useApiErrorHandler();
+  const { message: messageApi } = AntApp.useApp();
   const { canMutate } = useAuth();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -171,8 +211,9 @@ export function InboundsListPage() {
   const toggleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       enabled ? enableInbound(id) : disableInbound(id),
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      notifyCoreApply(result.apply, { t, messageApi, navigate });
     },
     onError: onError,
   });

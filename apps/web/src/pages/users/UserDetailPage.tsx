@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -10,6 +11,7 @@ import {
   Row,
   Select,
   Space,
+  Spin,
   Table,
   Tag,
   Typography,
@@ -48,14 +50,16 @@ export function UserDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const onError = useApiErrorHandler();
   const { canMutate } = useAuth();
   const [form] = Form.useForm();
+  const onError = useApiErrorHandler();
+  const onFormError = useApiErrorHandler(form);
   const [qrOpen, setQrOpen] = useState(false);
   const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(29, 'day').startOf('day'),
     dayjs().startOf('day'),
   ]);
+  const selectedPlanId = Form.useWatch('planId', form);
 
   const userQuery = useQuery({
     queryKey: ['user', id],
@@ -136,6 +140,18 @@ export function UserDetailPage() {
     [plansQuery.data, userQuery.data?.planId],
   );
 
+  const activePlans = useMemo(
+    () => (plansQuery.data?.items ?? []).filter((plan) => plan.status === 'ACTIVE'),
+    [plansQuery.data],
+  );
+
+  const selectedPlan = useMemo(
+    () => (plansQuery.data?.items ?? []).find((plan) => plan.id === selectedPlanId),
+    [plansQuery.data, selectedPlanId],
+  );
+
+  const selectedPlanHasInbounds = (selectedPlan?.inboundIds.length ?? 0) > 0;
+
   const saveMutation = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
       const payload = {
@@ -155,7 +171,7 @@ export function UserDetailPage() {
         navigate(`/users/${user.id}`, { replace: true });
       }
     },
-    onError: onError,
+    onError: onFormError,
   });
 
   const rotateMutation = useMutation({
@@ -208,7 +224,11 @@ export function UserDetailPage() {
   }, [user, form]);
 
   if (!isNew && userQuery.isLoading) {
-    return null;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+        <Spin size="large" />
+      </div>
+    );
   }
 
   return (
@@ -248,8 +268,47 @@ export function UserDetailPage() {
                 rules={[{ required: true, message: t('users.planRequired') }]}
                 extra={<Typography.Text type="secondary">{t('users.planHint')}</Typography.Text>}
               >
-                <Select options={planOptions} placeholder={t('users.plan')} />
+                <Select
+                  options={planOptions}
+                  placeholder={t('users.plan')}
+                  notFoundContent={
+                    activePlans.length === 0 ? (
+                      <Typography.Text type="secondary">
+                        {t('users.noActivePlans')}{' '}
+                        <Link to="/plans">{t('nav.plans')}</Link>
+                      </Typography.Text>
+                    ) : undefined
+                  }
+                />
               </Form.Item>
+
+              {isNew && activePlans.length === 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={t('users.noActivePlans')}
+                  action={
+                    <Link to="/plans">
+                      <Button size="small">{t('nav.plans')}</Button>
+                    </Link>
+                  }
+                />
+              ) : null}
+
+              {isNew && selectedPlanId && !selectedPlanHasInbounds ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={t('users.planNoInbounds')}
+                  action={
+                    <Link to="/plans">
+                      <Button size="small">{t('nav.plans')}</Button>
+                    </Link>
+                  }
+                />
+              ) : null}
 
               <Form.Item name="status" label={t('app.status')} rules={[{ required: true }]}>
                 <Select
@@ -261,7 +320,12 @@ export function UserDetailPage() {
               </Form.Item>
 
               <MutateOnly>
-                <Button type="primary" htmlType="submit" loading={saveMutation.isPending}>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={saveMutation.isPending}
+                  disabled={isNew && (!selectedPlanId || !selectedPlanHasInbounds)}
+                >
                   {t('app.save')}
                 </Button>
               </MutateOnly>

@@ -217,36 +217,27 @@ export function UsersListPage() {
         <Card size="small" style={{ marginBottom: 12 }}>
           <Space wrap>
             <span>{t('users.bulkSelected', { count: selectedRowKeys.length })}</span>
-            <Popconfirm
-              title={t('users.confirmDisable')}
-              onConfirm={() => runBulk('disable', t('users.confirmDisable'))}
+            <Button size="small" onClick={() => runBulk('disable', t('users.confirmDisable'))}>
+              {t('app.disable')}
+            </Button>
+            <Button size="small" onClick={() => runBulk('enable', t('users.confirmEnable'))}>
+              {t('app.enable')}
+            </Button>
+            <Button
+              size="small"
+              onClick={() => runBulk('reset-traffic', t('users.confirmResetTraffic'))}
             >
-              <Button size="small">{t('app.disable')}</Button>
-            </Popconfirm>
-            <Popconfirm
-              title={t('users.confirmEnable')}
-              onConfirm={() => runBulk('enable', t('users.confirmEnable'))}
-            >
-              <Button size="small">{t('app.enable')}</Button>
-            </Popconfirm>
-            <Popconfirm
-              title={t('users.confirmResetTraffic')}
-              onConfirm={() => runBulk('reset-traffic', t('users.confirmResetTraffic'))}
-            >
-              <Button size="small">{t('app.resetTraffic')}</Button>
-            </Popconfirm>
+              {t('app.resetTraffic')}
+            </Button>
             <Button size="small" onClick={() => setExtendOpen(true)}>
               {t('app.extend')}
             </Button>
             <Button size="small" onClick={() => setPlanOpen(true)}>
               {t('app.setPlan')}
             </Button>
-            <Popconfirm
-              title={t('users.confirmRotateSub')}
-              onConfirm={() => runBulk('rotate-sub', t('users.confirmRotateSub'))}
-            >
-              <Button size="small">{t('app.rotateSub')}</Button>
-            </Popconfirm>
+            <Button size="small" onClick={() => runBulk('rotate-sub', t('users.confirmRotateSub'))}>
+              {t('app.rotateSub')}
+            </Button>
           </Space>
         </Card>
       ) : null}
