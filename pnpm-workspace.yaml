@@ -2,6 +2,10 @@ packages:
   - apps/*
   - packages/*
 
+# Prisma pins @prisma/dev → @hono/node-server@1.19.11; force patched release (CVE-2026-39406).
+overrides:
+  '@hono/node-server': 1.19.13
+
 allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': false
