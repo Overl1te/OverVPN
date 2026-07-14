@@ -850,6 +850,8 @@ export function InboundEditor({
       acmeTlsPort: readOnly.acmeTlsPort,
       singBoxUdpPort: readOnly.singBoxUdpPort,
       singBoxTcpPort: readOnly.singBoxTcpPort,
+      singBoxTrojanPort: readOnly.singBoxTrojanPort,
+      singBoxSsPort: readOnly.singBoxSsPort,
       xrayListenPort: readOnly.xrayListenPort,
       tlsCertificatePath: readOnly.tlsCertificatePath,
       tlsKeyPath: readOnly.tlsKeyPath,

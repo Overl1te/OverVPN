@@ -17,6 +17,8 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     SING_BOX_PROCESS_TIMEOUT_MS: 500,
     SING_BOX_UDP_PORT: 443,
     SING_BOX_TCP_PORT: 4443,
+    SING_BOX_TROJAN_PORT: 8444,
+    SING_BOX_SS_PORT: 8445,
     XRAY_LISTEN_PORT: 9443,
     ...overrides,
   };

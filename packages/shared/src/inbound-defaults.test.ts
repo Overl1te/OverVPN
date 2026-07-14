@@ -96,11 +96,13 @@ describe('buildDefaultInboundSettings', () => {
       assert.equal(settings.tls.provider, 'letsencrypt');
     }
   });
-  it('defaults HYSTERIA2 / Reality / XHTTP to install published ports', () => {
+  it('defaults each protocol to its own install published port', () => {
     const context = {
       publicHost: 'vpn.example.org',
       singBoxUdpPort: 443,
       singBoxTcpPort: 4443,
+      singBoxTrojanPort: 8444,
+      singBoxSsPort: 8445,
       xrayListenPort: 9443,
       tlsCertificatePath: '/certs/fullchain.pem',
       tlsKeyPath: '/certs/privkey.pem',
@@ -117,6 +119,10 @@ describe('buildDefaultInboundSettings', () => {
     assert.equal(reality.publicPort, 4443);
     assert.equal(reality.handshakePort, 443);
 
+    const trojan = buildDefaultInboundSettings('TROJAN', context);
+    assert.equal(trojan.listenPort, 8444);
+    assert.equal(trojan.publicPort, 8444);
+
     const xhttp = buildDefaultInboundSettings(
       'VLESS_XHTTP_TLS',
       context,
@@ -125,7 +131,7 @@ describe('buildDefaultInboundSettings', () => {
     assert.equal(xhttp.publicPort, 9443);
 
     const ss = buildDefaultInboundSettings('SHADOWSOCKS', context);
-    assert.equal(ss.listenPort, 4443);
+    assert.equal(ss.listenPort, 8445);
   });
 });
 

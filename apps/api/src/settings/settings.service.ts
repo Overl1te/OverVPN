@@ -252,6 +252,10 @@ export class SettingsService {
         }),
         singBoxUdpPort: this.config.get('SING_BOX_UDP_PORT', { infer: true }),
         singBoxTcpPort: this.config.get('SING_BOX_TCP_PORT', { infer: true }),
+        singBoxTrojanPort: this.config.get('SING_BOX_TROJAN_PORT', {
+          infer: true,
+        }),
+        singBoxSsPort: this.config.get('SING_BOX_SS_PORT', { infer: true }),
         xrayListenPort: this.config.get('XRAY_LISTEN_PORT', { infer: true }),
         tlsCertificatePath:
           this.config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }) ?? null,

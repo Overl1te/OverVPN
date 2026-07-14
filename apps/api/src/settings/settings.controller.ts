@@ -47,6 +47,10 @@ class SystemSettingsReadOnlyDto {
   @ApiProperty()
   singBoxTcpPort!: number;
   @ApiProperty()
+  singBoxTrojanPort!: number;
+  @ApiProperty()
+  singBoxSsPort!: number;
+  @ApiProperty()
   xrayListenPort!: number;
   @ApiPropertyOptional({ nullable: true })
   tlsCertificatePath!: string | null;

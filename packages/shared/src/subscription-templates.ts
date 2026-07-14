@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from './constants.js';
+import { PRODUCT_NAME, protocolDisplayLabel } from './constants.js';
 
 export const DEFAULT_SUBSCRIPTION_TITLE_TEMPLATE = `{product} - {username}`;
 export const DEFAULT_ENDPOINT_DISPLAY_NAME_TEMPLATE = `{identity} - {tag}`;
@@ -103,7 +103,7 @@ export function buildEndpointTemplateVars(
   return {
     ...buildSubscriptionTemplateVars(context),
     tag: context.tag,
-    protocol: context.protocol,
+    protocol: protocolDisplayLabel(context.protocol),
   };
 }
 

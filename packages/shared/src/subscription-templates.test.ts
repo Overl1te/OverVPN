@@ -87,7 +87,25 @@ describe('subscription-templates', () => {
         tag: 'fra',
         protocol: 'HYSTERIA2',
       }),
-      '🇩🇪 fra · HYSTERIA2',
+      '🇩🇪 fra · Hysteria2',
+    );
+    assert.equal(
+      renderEndpointDisplayName('🇵🇱 Overl1te VPN Польша · {protocol}', {
+        username: 'alice',
+        identity: 'alice',
+        tag: 'test2',
+        protocol: 'VLESS_XHTTP_TLS',
+      }),
+      '🇵🇱 Overl1te VPN Польша · XHTTP',
+    );
+    assert.equal(
+      renderEndpointDisplayName('{protocol}', {
+        username: 'alice',
+        identity: 'alice',
+        tag: 'test3',
+        protocol: 'VLESS_REALITY',
+      }),
+      'Reality',
     );
   });
 

@@ -2086,6 +2086,8 @@ export const systemSettingsReadOnlySchema = z
     acmeTlsPort: z.number().int().min(1).max(65_535),
     singBoxUdpPort: z.number().int().min(1).max(65_535),
     singBoxTcpPort: z.number().int().min(1).max(65_535),
+    singBoxTrojanPort: z.number().int().min(1).max(65_535),
+    singBoxSsPort: z.number().int().min(1).max(65_535),
     xrayListenPort: z.number().int().min(1).max(65_535),
     tlsCertificatePath: z.string().nullable(),
     tlsKeyPath: z.string().nullable(),

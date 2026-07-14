@@ -86,6 +86,8 @@ describe('SettingsService', () => {
     expect(initial.readOnly.acmeTlsPort).toBe(8443);
     expect(initial.readOnly.singBoxUdpPort).toBe(443);
     expect(initial.readOnly.singBoxTcpPort).toBe(4443);
+    expect(initial.readOnly.singBoxTrojanPort).toBe(8444);
+    expect(initial.readOnly.singBoxSsPort).toBe(8445);
     expect(initial.readOnly.xrayListenPort).toBe(9443);
     expect(initial.readOnly.tlsCertificatePath).toBeNull();
     expect(initial.readOnly.tlsKeyPath).toBeNull();
@@ -151,6 +153,8 @@ function testConfig(): ConfigService<AppEnvironment, true> {
     SING_BOX_ACME_TLS_PORT: 8443,
     SING_BOX_UDP_PORT: 443,
     SING_BOX_TCP_PORT: 4443,
+    SING_BOX_TROJAN_PORT: 8444,
+    SING_BOX_SS_PORT: 8445,
     XRAY_LISTEN_PORT: 9443,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

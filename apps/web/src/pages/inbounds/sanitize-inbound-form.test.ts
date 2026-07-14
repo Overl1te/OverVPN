@@ -8,6 +8,8 @@ describe('sanitizeInboundForm', () => {
     acmeTlsPort: 8443,
     singBoxUdpPort: 443,
     singBoxTcpPort: 4443,
+    singBoxTrojanPort: 8444,
+    singBoxSsPort: 8445,
     xrayListenPort: 9443,
     tlsCertificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
     tlsKeyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',

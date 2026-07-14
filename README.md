@@ -147,8 +147,10 @@ overvpn uninstall              # удалить установку
 | API             | внутри Compose; наружу через веб/прокси                   |
 | PostgreSQL      | `5432` → только `127.0.0.1`                               |
 | Redis           | `6379` → только `127.0.0.1`                               |
-| VPN UDP inbound | `SING_BOX_UDP_PORT` (по умолчанию `443`)                  |
-| VPN TCP inbound | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                 |
+| VPN UDP inbound | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2      |
+| VPN TCP Reality | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                 |
+| VPN TCP Trojan  | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)              |
+| VPN TCP SS      | `SING_BOX_SS_PORT` (по умолчанию `8445`)                  |
 | VPN Xray TCP    | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx) |
 
 > [!WARNING]
@@ -166,7 +168,7 @@ overvpn uninstall              # удалить установку
 
 При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_*` — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
-Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality / Trojan / Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP). Не выбирайте другие порты без правки `.env` и publish в Compose.
+Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
 ### 2. Создать план и пользователя
 

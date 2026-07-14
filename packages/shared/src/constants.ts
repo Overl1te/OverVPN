@@ -54,6 +54,25 @@ export const PROTOCOL_ENGINE_MAP = {
   VLESS_XHTTP_TLS: 'XRAY',
 } as const satisfies Record<InboundProtocol, CoreEngine>;
 
+/**
+ * Short client-facing labels for `{protocol}` in endpoint display names.
+ * Prefer what distinguishes the entry (transport / mode), not the full enum.
+ */
+export const PROTOCOL_DISPLAY_LABELS = {
+  HYSTERIA2: 'Hysteria2',
+  VLESS_REALITY: 'Reality',
+  VLESS_XHTTP_TLS: 'XHTTP',
+  TROJAN: 'Trojan',
+  SHADOWSOCKS: 'Shadowsocks',
+} as const satisfies Record<InboundProtocol, string>;
+
+export function protocolDisplayLabel(protocol: string): string {
+  if (Object.hasOwn(PROTOCOL_DISPLAY_LABELS, protocol)) {
+    return PROTOCOL_DISPLAY_LABELS[protocol as InboundProtocol];
+  }
+  return protocol;
+}
+
 export const ASSIGNMENT_STATUSES = ['ACTIVE', 'DISABLED'] as const;
 export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
 

@@ -1474,6 +1474,8 @@ generate_env() {
   set_env_var "SWAGGER_ENABLED" "false"
   set_env_var "SING_BOX_UDP_PORT" "443"
   set_env_var "SING_BOX_TCP_PORT" "4443"
+  set_env_var "SING_BOX_TROJAN_PORT" "8444"
+  set_env_var "SING_BOX_SS_PORT" "8445"
   set_env_var "XRAY_LISTEN_PORT" "8443"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"

@@ -13,8 +13,12 @@ export type InboundDefaultsContext = {
   acmeTlsPort?: number;
   /** Published sing-box UDP port (compose SING_BOX_UDP_PORT) — Hysteria2. */
   singBoxUdpPort?: number;
-  /** Published sing-box TCP port (compose SING_BOX_TCP_PORT) — Reality / Trojan / SS. */
+  /** Published sing-box TCP port (compose SING_BOX_TCP_PORT) — VLESS Reality. */
   singBoxTcpPort?: number;
+  /** Published sing-box Trojan TCP port (compose SING_BOX_TROJAN_PORT). */
+  singBoxTrojanPort?: number;
+  /** Published sing-box Shadowsocks TCP port (compose SING_BOX_SS_PORT). */
+  singBoxSsPort?: number;
   /** Published Xray TCP listen port (compose XRAY_LISTEN_PORT). */
   xrayListenPort?: number;
   /** Container paths from install (LE sync). Prefer FILES TLS when set. */
@@ -35,15 +39,24 @@ export type InboundPublishedTransport = 'udp' | 'tcp';
 /** Install-published listen port for a protocol (Simple mode / API guard). */
 export function publishedListenPortForProtocol(
   protocol: InboundProtocol,
-  context: Pick<InboundDefaultsContext, 'singBoxUdpPort' | 'singBoxTcpPort' | 'xrayListenPort'>,
+  context: Pick<
+    InboundDefaultsContext,
+    | 'singBoxUdpPort'
+    | 'singBoxTcpPort'
+    | 'singBoxTrojanPort'
+    | 'singBoxSsPort'
+    | 'xrayListenPort'
+  >,
 ): number {
   switch (protocol) {
     case 'HYSTERIA2':
       return context.singBoxUdpPort ?? 443;
     case 'VLESS_REALITY':
-    case 'TROJAN':
-    case 'SHADOWSOCKS':
       return context.singBoxTcpPort ?? 4443;
+    case 'TROJAN':
+      return context.singBoxTrojanPort ?? 8444;
+    case 'SHADOWSOCKS':
+      return context.singBoxSsPort ?? 8445;
     case 'VLESS_XHTTP_TLS':
       return context.xrayListenPort ?? 8443;
   }

@@ -96,6 +96,8 @@ export class InboundsService {
   private readonly processTimeoutMs: number;
   private readonly singBoxUdpPort: number;
   private readonly singBoxTcpPort: number;
+  private readonly singBoxTrojanPort: number;
+  private readonly singBoxSsPort: number;
   private readonly xrayListenPort: number;
 
   constructor(
@@ -114,6 +116,10 @@ export class InboundsService {
     });
     this.singBoxUdpPort = config.get('SING_BOX_UDP_PORT', { infer: true });
     this.singBoxTcpPort = config.get('SING_BOX_TCP_PORT', { infer: true });
+    this.singBoxTrojanPort = config.get('SING_BOX_TROJAN_PORT', {
+      infer: true,
+    });
+    this.singBoxSsPort = config.get('SING_BOX_SS_PORT', { infer: true });
     this.xrayListenPort = config.get('XRAY_LISTEN_PORT', { infer: true });
   }
 
@@ -1003,6 +1009,8 @@ export class InboundsService {
     const allowedPort = publishedListenPortForProtocol(protocol, {
       singBoxUdpPort: this.singBoxUdpPort,
       singBoxTcpPort: this.singBoxTcpPort,
+      singBoxTrojanPort: this.singBoxTrojanPort,
+      singBoxSsPort: this.singBoxSsPort,
       xrayListenPort: this.xrayListenPort,
     });
     if (listenPort === allowedPort) {
@@ -1011,8 +1019,8 @@ export class InboundsService {
     const transport = protocol === 'HYSTERIA2' ? 'UDP' : 'TCP';
     throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
       reason: 'inbound_listen_port_not_published',
-      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / XRAY_LISTEN_PORT and Compose publish).`,
-      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}), либо измените SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / XRAY_LISTEN_PORT и publish в Compose.`,
+      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT and Compose publish).`,
+      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}), либо измените SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT и publish в Compose.`,
       protocol,
       listenPort,
       allowedPort,

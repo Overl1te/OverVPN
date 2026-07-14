@@ -11,18 +11,44 @@ SETTLE_SECONDS="${XRAY_RELOAD_SETTLE_SECONDS:-1}"
 mkdir -p "$(dirname "$ACK_PATH")"
 rm -f "$ACK_PATH" "$REQUEST_PATH"
 
-xray run -c "$CONFIG_PATH" &
-child_pid=$!
-printf '%s\n' "$child_pid" >"$PID_PATH"
+start_child() {
+  xray run -c "$CONFIG_PATH" &
+  child_pid=$!
+  printf '%s\n' "$child_pid" >"$PID_PATH"
+}
+
+stop_child() {
+  if [ -n "${child_pid:-}" ]; then
+    kill -TERM "$child_pid" 2>/dev/null || true
+    wait "$child_pid" 2>/dev/null || true
+  fi
+  child_pid=''
+}
+
+restart_child() {
+  stop_child
+  start_child
+  sleep "$SETTLE_SECONDS"
+  kill -0 "$child_pid" 2>/dev/null
+}
 
 terminate() {
-  kill -TERM "$child_pid" 2>/dev/null || true
-  wait "$child_pid" 2>/dev/null || true
+  stop_child
+  rm -f "$PID_PATH"
+  exit 0
 }
 trap terminate INT TERM
 
+start_child
+
 last_request_id=''
-while kill -0 "$child_pid" 2>/dev/null; do
+while true; do
+  if ! kill -0 "$child_pid" 2>/dev/null; then
+    wait "$child_pid" 2>/dev/null || true
+    rm -f "$PID_PATH"
+    exit 1
+  fi
+
   if [ -r "$REQUEST_PATH" ]; then
     request_id=''
     request_hash=''
@@ -43,16 +69,13 @@ while kill -0 "$child_pid" 2>/dev/null; do
         *)
           if [ "${#request_hash}" -ne 64 ]; then
             message='invalid-hash'
-          elif kill -HUP "$child_pid" 2>/dev/null; then
-            sleep "$SETTLE_SECONDS"
-            if kill -0 "$child_pid" 2>/dev/null; then
-              status='ok'
-              message='reloaded'
-            else
-              message='child-exited-after-sighup'
-            fi
+          elif restart_child; then
+            status='ok'
+            message='restarted'
           else
-            message='sighup-failed'
+            message='restart-failed'
+            # Best-effort recover so the container stays up for the next attempt.
+            start_child || true
           fi
           ;;
       esac
@@ -70,6 +93,3 @@ while kill -0 "$child_pid" 2>/dev/null; do
   fi
   sleep "$POLL_SECONDS"
 done
-
-rm -f "$PID_PATH"
-wait "$child_pid"

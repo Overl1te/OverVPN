@@ -311,8 +311,22 @@ export const environmentSchema = z
       .default(5_000),
     /** Published UDP port for Hysteria2 (compose → host). */
     SING_BOX_UDP_PORT: z.coerce.number().int().min(1).max(65_535).default(443),
-    /** Published TCP port for Reality / Trojan / Shadowsocks (compose → host). */
+    /** Published TCP port for VLESS Reality (compose → host). */
     SING_BOX_TCP_PORT: z.coerce.number().int().min(1).max(65_535).default(4443),
+    /** Published TCP port for Trojan (compose → host). */
+    SING_BOX_TROJAN_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(8444),
+    /** Published TCP port for Shadowsocks (compose → host). */
+    SING_BOX_SS_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(8445),
     SING_BOX_ACME_HTTP_PORT: z.coerce
       .number()
       .int()
