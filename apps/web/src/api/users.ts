@@ -86,10 +86,6 @@ export function getUserSessions(id: string): Promise<OnlineSession[]> {
   return apiRequest<OnlineSession[]>(`/admin/users/${id}/sessions`);
 }
 
-export function getUserConnectionIdentities(
-  id: string,
-): Promise<UserConnectionIdentities> {
-  return apiRequest<UserConnectionIdentities>(
-    `/admin/users/${id}/connection-identities`,
-  );
+export function getUserConnectionIdentities(id: string): Promise<UserConnectionIdentities> {
+  return apiRequest<UserConnectionIdentities>(`/admin/users/${id}/connection-identities`);
 }

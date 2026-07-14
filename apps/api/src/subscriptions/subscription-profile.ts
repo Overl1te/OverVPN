@@ -424,7 +424,7 @@ export class SubscriptionProfileBuilder {
     );
     const endpoints = provisional.map((item, index) => ({
       ...item.endpoint,
-      displayName: uniqueNames[index]!,
+      displayName: uniqueNames[index],
     }));
 
     const warnings: string[] = [];

@@ -288,15 +288,15 @@ acquire Redis lock
 
 Включаются флагом `WORKERS_ENABLED=true`. В unit/e2e/one-shot скриптах и migrate-контейнере держи **`false`**, иначе фоновые циклы мешают тестам и гоняются за lock’ами.
 
-| Сервис                          | Роль                                                  | Интервалы (env)                                         |
-| ------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| `WorkerSchedulerService`        | регистрация тиков                                     | —                                                       |
-| `TrafficCollectorService`       | снимок counters → deltas/ledger                       | `TRAFFIC_COLLECTION_INTERVAL_MS`                        |
-| `DailyUsageAggregatorService`   | агрегация в `UsageDaily`                              | `TRAFFIC_AGGREGATION_*`                                 |
-| `OnlineSessionCollectorService` | активные клиенты                                      | `ONLINE_COLLECTION_INTERVAL_MS`                         |
-| `OnlineSessionSweeperService`   | закрытие протухших сессий                             | `ONLINE_SWEEP_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS` |
+| Сервис                          | Роль                                                         | Интервалы (env)                                                                  |
+| ------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `WorkerSchedulerService`        | регистрация тиков                                            | —                                                                                |
+| `TrafficCollectorService`       | снимок counters → deltas/ledger                              | `TRAFFIC_COLLECTION_INTERVAL_MS`                                                 |
+| `DailyUsageAggregatorService`   | агрегация в `UsageDaily`                                     | `TRAFFIC_AGGREGATION_*`                                                          |
+| `OnlineSessionCollectorService` | активные клиенты                                             | `ONLINE_COLLECTION_INTERVAL_MS`                                                  |
+| `OnlineSessionSweeperService`   | закрытие протухших сессий                                    | `ONLINE_SWEEP_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS`                          |
 | `LimitEnforcerService`          | expire / quota / concurrent devices → статусы + side effects | `ENFORCEMENT_INTERVAL_MS`, `ONLINE_SESSION_TIMEOUT_MS`, `IDENTITY_LIMIT_HOLD_MS` |
-| `WorkerHealthService`           | статусы для dashboard                                 | —                                                       |
+| `WorkerHealthService`           | статусы для dashboard                                        | —                                                                                |
 
 Распределённые lock’и через Redis (`WORKER_LOCK_TTL_MS`), чтобы при случайном втором инстансе API не дублировать работу (в проде всё равно ожидается один api-контейнер).
 

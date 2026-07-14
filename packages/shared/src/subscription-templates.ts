@@ -53,11 +53,7 @@ export function formatTemplateBytes(value: bigint | null | undefined): string {
   return `${scaled.toFixed(digits)}${units[unit]}`;
 }
 
-export function formatTrafficBar(
-  usedBytes: bigint,
-  limitBytes: bigint | null,
-  width = 10,
-): string {
+export function formatTrafficBar(usedBytes: bigint, limitBytes: bigint | null, width = 10): string {
   const filledChar = '▓';
   const emptyChar = '░';
   if (limitBytes === null || limitBytes <= 0n) {
@@ -76,8 +72,7 @@ export function buildSubscriptionTemplateVars(
   const download = traffic?.downloadBytes ?? 0n;
   const used = upload + download;
   const limit = traffic?.limitBytes ?? null;
-  const remaining =
-    limit === null ? null : limit > used ? limit - used : 0n;
+  const remaining = limit === null ? null : limit > used ? limit - used : 0n;
   const now = traffic?.now ?? new Date();
   const expireAt = traffic?.expireAt ?? null;
   let expireDays = '';
@@ -96,9 +91,7 @@ export function buildSubscriptionTemplateVars(
     used: formatTemplateBytes(used),
     limit: formatTemplateBytes(limit),
     remaining: formatTemplateBytes(remaining),
-    expire: expireAt
-      ? expireAt.toISOString().slice(0, 10).split('-').reverse().join('.')
-      : '',
+    expire: expireAt ? expireAt.toISOString().slice(0, 10).split('-').reverse().join('.') : '',
     expireDays,
     trafficBar: formatTrafficBar(used, limit),
   };
@@ -142,11 +135,9 @@ export function renderSubscriptionTitle(
   context: SubscriptionBrandingContext,
 ): string {
   const vars = buildSubscriptionTemplateVars(context);
-  const fallback = renderSubscriptionTemplate(
-    DEFAULT_SUBSCRIPTION_TITLE_TEMPLATE,
-    vars,
-    { maxLength: SUBSCRIPTION_TITLE_MAX_LENGTH },
-  );
+  const fallback = renderSubscriptionTemplate(DEFAULT_SUBSCRIPTION_TITLE_TEMPLATE, vars, {
+    maxLength: SUBSCRIPTION_TITLE_MAX_LENGTH,
+  });
   const rendered = renderSubscriptionTemplate(template, vars, {
     fallback,
     maxLength: SUBSCRIPTION_TITLE_MAX_LENGTH,
@@ -159,11 +150,9 @@ export function renderEndpointDisplayName(
   context: EndpointDisplayNameContext,
 ): string {
   const vars = buildEndpointTemplateVars(context);
-  const fallback = renderSubscriptionTemplate(
-    DEFAULT_ENDPOINT_DISPLAY_NAME_TEMPLATE,
-    vars,
-    { maxLength: ENDPOINT_DISPLAY_NAME_MAX_LENGTH },
-  );
+  const fallback = renderSubscriptionTemplate(DEFAULT_ENDPOINT_DISPLAY_NAME_TEMPLATE, vars, {
+    maxLength: ENDPOINT_DISPLAY_NAME_MAX_LENGTH,
+  });
   const rendered = renderSubscriptionTemplate(template, vars, {
     fallback,
     maxLength: ENDPOINT_DISPLAY_NAME_MAX_LENGTH,
@@ -178,11 +167,9 @@ export function renderSubscriptionAnnounce(
   if (template === null || template === undefined || template.trim() === '') {
     return null;
   }
-  const rendered = renderSubscriptionTemplate(
-    template,
-    buildSubscriptionTemplateVars(context),
-    { maxLength: SUBSCRIPTION_ANNOUNCE_MAX_LENGTH },
-  );
+  const rendered = renderSubscriptionTemplate(template, buildSubscriptionTemplateVars(context), {
+    maxLength: SUBSCRIPTION_ANNOUNCE_MAX_LENGTH,
+  });
   return rendered.length > 0 ? rendered : null;
 }
 

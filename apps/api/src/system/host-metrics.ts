@@ -44,7 +44,7 @@ export function parseProcMeminfo(content: string): MemorySample | null {
     if (!match) {
       continue;
     }
-    values.set(match[1]!, BigInt(match[2]!) * 1024n);
+    values.set(match[1], BigInt(match[2]) * 1024n);
   }
   const total = values.get('MemTotal');
   if (total === undefined || total <= 0n) {
@@ -82,12 +82,16 @@ export function parseProcNetDev(content: string): NetworkSample | null {
     if (!match) {
       continue;
     }
-    const iface = match[1]!;
-    if (SKIP_NET_IFACES.has(iface) || iface.startsWith('docker') || iface.startsWith('veth')) {
+    const iface = match[1];
+    if (
+      SKIP_NET_IFACES.has(iface) ||
+      iface.startsWith('docker') ||
+      iface.startsWith('veth')
+    ) {
       continue;
     }
-    inboundBytes += BigInt(match[2]!);
-    outboundBytes += BigInt(match[3]!);
+    inboundBytes += BigInt(match[2]);
+    outboundBytes += BigInt(match[3]);
     matched = true;
   }
   return matched ? { inboundBytes, outboundBytes } : null;
@@ -185,7 +189,9 @@ export function networkRatesPerSecond(
       ? current.outboundBytes - previous.sample.outboundBytes
       : 0n;
   return {
-    inboundBytesPerSecond: BigInt(Math.round(Number(inboundDelta) / elapsedSec)),
+    inboundBytesPerSecond: BigInt(
+      Math.round(Number(inboundDelta) / elapsedSec),
+    ),
     outboundBytesPerSecond: BigInt(
       Math.round(Number(outboundDelta) / elapsedSec),
     ),

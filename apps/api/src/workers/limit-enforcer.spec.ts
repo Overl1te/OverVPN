@@ -22,11 +22,7 @@ describe('limit enforcement decisions', () => {
 
   it('expires a user at the exact expiry instant', () => {
     expect(
-      evaluateEnforcedStatus(
-        state({ expireAt: now }),
-        { devices: 0 },
-        now,
-      ),
+      evaluateEnforcedStatus(state({ expireAt: now }), { devices: 0 }, now),
     ).toEqual({ status: 'EXPIRED', statusReason: 'expired' });
   });
 
@@ -46,18 +42,10 @@ describe('limit enforcement decisions', () => {
 
   it('enforces concurrent device limit only', () => {
     expect(
-      evaluateEnforcedStatus(
-        state({ deviceLimit: 1 }),
-        { devices: 2 },
-        now,
-      ),
+      evaluateEnforcedStatus(state({ deviceLimit: 1 }), { devices: 2 }, now),
     ).toEqual({ status: 'LIMITED', statusReason: 'device' });
     expect(
-      evaluateEnforcedStatus(
-        state({ deviceLimit: 1 }),
-        { devices: 1 },
-        now,
-      ),
+      evaluateEnforcedStatus(state({ deviceLimit: 1 }), { devices: 1 }, now),
     ).toEqual({ status: 'ACTIVE', statusReason: null });
   });
 

@@ -9,9 +9,11 @@ import {
 describe('host-metrics parsers', () => {
   it('parses /proc/stat cpu jiffies', () => {
     const sample = parseProcStat(
-      ['cpu  100 20 30 400 10 0 0 0 0 0', 'cpu0 50 10 15 200 5 0 0 0 0 0', ''].join(
-        '\n',
-      ),
+      [
+        'cpu  100 20 30 400 10 0 0 0 0 0',
+        'cpu0 50 10 15 200 5 0 0 0 0 0',
+        '',
+      ].join('\n'),
     );
     expect(sample).toEqual({ idle: 410, total: 560 });
   });

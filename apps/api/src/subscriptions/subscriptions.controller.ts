@@ -436,9 +436,7 @@ function setSubscriptionHeaders(
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader(
     'Vary',
-    htmlPage
-      ? 'Accept, User-Agent, Accept-Language'
-      : 'Accept, User-Agent',
+    htmlPage ? 'Accept, User-Agent, Accept-Language' : 'Accept, User-Agent',
   );
 }
 

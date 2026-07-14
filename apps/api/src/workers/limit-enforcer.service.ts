@@ -114,8 +114,7 @@ export class LimitEnforcerService {
                 const active = identities.get(user.id);
                 const activeDevices = active?.devices.size ?? 0;
                 const overDeviceLimit =
-                  user.deviceLimit !== null &&
-                  activeDevices > user.deviceLimit;
+                  user.deviceLimit !== null && activeDevices > user.deviceLimit;
                 const enforced = evaluateEnforcedStatus(
                   {
                     ...user,

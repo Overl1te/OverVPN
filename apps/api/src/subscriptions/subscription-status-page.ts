@@ -72,10 +72,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-function formatBytes(
-  value: string | null | undefined,
-  locale: Locale,
-): string {
+function formatBytes(value: string | null | undefined, locale: Locale): string {
   if (value == null || value === '') {
     return locale === 'ru' ? 'Без лимита' : 'Unlimited';
   }
@@ -196,10 +193,7 @@ export function resolveSubscriptionPageLocale(
       return entry.tag as Locale;
     }
     const primary = entry.tag.split('-')[0];
-    if (
-      primary &&
-      (SUPPORTED_LOCALES as readonly string[]).includes(primary)
-    ) {
+    if (primary && (SUPPORTED_LOCALES as readonly string[]).includes(primary)) {
       return primary as Locale;
     }
   }

@@ -408,9 +408,7 @@ export const userConnectionIdentitiesSchema = z
     devices: z.array(userConnectionIdentitySchema),
   })
   .strict();
-export type UserConnectionIdentities = z.infer<
-  typeof userConnectionIdentitiesSchema
->;
+export type UserConnectionIdentities = z.infer<typeof userConnectionIdentitiesSchema>;
 
 export const onlineSessionListQuerySchema = paginationQuerySchema
   .extend({
@@ -594,11 +592,7 @@ export type SystemHostStats = z.infer<typeof systemHostStatsSchema>;
 
 const subscriptionTitleTemplateSchema = z.string().trim().max(200);
 const subscriptionAnnounceSchema = z.string().trim().max(500);
-const optionalHttpUrlSchema = z.union([
-  z.url().max(2048),
-  z.literal(''),
-  z.null(),
-]);
+const optionalHttpUrlSchema = z.union([z.url().max(2048), z.literal(''), z.null()]);
 
 export const planSchema = z
   .object({

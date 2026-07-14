@@ -162,8 +162,7 @@ export class UsersService {
                   ? (plan?.defaultDeviceLimit ?? null)
                   : input.deviceLimit,
               // IP limit is unused; concurrent seats use deviceLimit only.
-              ipLimit:
-                input.ipLimit === undefined ? null : input.ipLimit,
+              ipLimit: input.ipLimit === undefined ? null : input.ipLimit,
               speedLimitBps: this.resolveBigInt(
                 input.speedLimitBps,
                 plan?.defaultSpeedLimitBps,
