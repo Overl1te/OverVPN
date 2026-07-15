@@ -81,6 +81,7 @@ describe('UsersService bulk actions', () => {
       subscriptionSubExpireButtonLink: null,
       subscriptionFallbackUrlTemplate: null,
       subscriptionColorProfile: null,
+      subscriptionShowTrafficLimits: true,
       createdAt: new Date(),
       updatedAt: new Date(),
       archivedAt: null,

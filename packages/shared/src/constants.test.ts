@@ -17,13 +17,15 @@ describe('PROTOCOL_ENGINE_MAP', () => {
     }
   });
 
-  it('keeps existing protocols on sing-box and assigns xHTTP to Xray', () => {
+  it('keeps existing protocols on sing-box and assigns TLS VLESS variants to Xray', () => {
     const expected = {
       HYSTERIA2: 'SING_BOX',
       VLESS_REALITY: 'SING_BOX',
       TROJAN: 'SING_BOX',
       SHADOWSOCKS: 'SING_BOX',
       VLESS_XHTTP_TLS: 'XRAY',
+      VLESS_GRPC_TLS: 'XRAY',
+      VLESS_TCP_TLS: 'XRAY',
     } as const satisfies Record<InboundProtocol, CoreEngine>;
 
     assert.deepEqual(PROTOCOL_ENGINE_MAP, expected);

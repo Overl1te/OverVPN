@@ -5,7 +5,9 @@ import {
   ShadowsocksSubscriptionAdapter,
   SubscriptionProfileBuilder,
   TrojanSubscriptionAdapter,
+  VlessGrpcTlsSubscriptionAdapter,
   VlessRealitySubscriptionAdapter,
+  VlessTcpTlsSubscriptionAdapter,
   VlessXhttpTlsSubscriptionAdapter,
   renderClashProfile,
   renderLinkList,
@@ -20,6 +22,8 @@ function createBuilder(
     new Hysteria2SubscriptionAdapter(encryption),
     new VlessRealitySubscriptionAdapter(encryption),
     new VlessXhttpTlsSubscriptionAdapter(encryption),
+    new VlessGrpcTlsSubscriptionAdapter(encryption),
+    new VlessTcpTlsSubscriptionAdapter(encryption),
     new TrojanSubscriptionAdapter(encryption),
     new ShadowsocksSubscriptionAdapter(encryption),
   );
@@ -391,6 +395,106 @@ describe('SubscriptionProfileBuilder', () => {
           host: 'cdn.example.com',
         },
       },
+    ]);
+  });
+
+  it('builds VLESS_GRPC_TLS and VLESS_TCP_TLS share links and sing-box outbounds', () => {
+    const encryption = {
+      decrypt: jest.fn((payload: string) => {
+        if (payload === 'v1:vless-credential') {
+          return JSON.stringify({
+            version: 1,
+            uuid: '7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e',
+          });
+        }
+        throw new Error('Unknown encrypted fixture');
+      }),
+    };
+    const multiBuilder = createBuilder(
+      encryption as unknown as SecretEncryptionService,
+    );
+    const user: SubscriptionProfileUser = {
+      identity: 'Bob',
+      username: 'bob',
+      expireAt: null,
+      dataLimitBytes: null,
+      usedUploadBytes: 0n,
+      usedDownloadBytes: 0n,
+      plan: null,
+      inboundAssignments: [
+        {
+          id: 'assignment-grpc',
+          credentialEncrypted: 'v1:vless-credential',
+          inbound: {
+            id: 'inbound-grpc',
+            tag: 'Edge_GRPC',
+            protocol: 'VLESS_GRPC_TLS',
+            publicHost: 'vpn.example.com',
+            publicPort: 8446,
+            listenPort: 8446,
+            displayNameTemplate: null,
+            config: {
+              serviceName: 'GunService',
+              tls: {
+                mode: 'FILES',
+                sni: 'vpn.example.com',
+                certificatePath: '/cert.pem',
+                keyPath: '/key.pem',
+                certificatePemPresent: false,
+                privateKeyPemPresent: false,
+              },
+            },
+            secretDataEncrypted: null,
+          },
+        },
+        {
+          id: 'assignment-tcp',
+          credentialEncrypted: 'v1:vless-credential',
+          inbound: {
+            id: 'inbound-tcp',
+            tag: 'Edge_TCP',
+            protocol: 'VLESS_TCP_TLS',
+            publicHost: 'vpn.example.com',
+            publicPort: 8447,
+            listenPort: 8447,
+            displayNameTemplate: null,
+            config: {
+              flow: 'xtls-rprx-vision',
+              tls: {
+                mode: 'FILES',
+                sni: 'vpn.example.com',
+                certificatePath: '/cert.pem',
+                keyPath: '/key.pem',
+                certificatePemPresent: false,
+                privateKeyPemPresent: false,
+              },
+            },
+            secretDataEncrypted: null,
+          },
+        },
+      ],
+    };
+
+    const multiProfile = multiBuilder.build(user);
+    const links = renderLinkList(multiProfile).trim().split('\n');
+    const singBox = JSON.parse(renderSingBoxProfile(multiProfile)) as {
+      outbounds: Array<Record<string, unknown>>;
+    };
+    const clash = parseYaml(renderClashProfile(multiProfile)) as {
+      proxies: Array<Record<string, unknown>>;
+    };
+
+    expect(multiProfile.warnings).toBeUndefined();
+    expect(links).toEqual([
+      'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:8446?encryption=none&security=tls&type=grpc&serviceName=GunService&sni=vpn.example.com&fp=chrome#Bob%20-%20Edge_GRPC',
+      'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:8447?encryption=none&security=tls&type=tcp&sni=vpn.example.com&fp=chrome&flow=xtls-rprx-vision#Bob%20-%20Edge_TCP',
+    ]);
+    expect(
+      singBox.outbounds.filter((outbound) => outbound.type === 'vless'),
+    ).toHaveLength(2);
+    expect(clash.proxies.map((proxy) => proxy.network)).toEqual([
+      'grpc',
+      'tcp',
     ]);
   });
 });

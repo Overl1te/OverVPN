@@ -1,6 +1,6 @@
 <h1>Протоколы</h1>
 
-<p>Четыре типа inbound'ов через sing-box.</p>
+<p>Inbound'ы через sing-box и Xray.</p>
 
 <h2>Общие поля</h2>
 <table>
@@ -25,7 +25,7 @@
     </tr>
     <tr>
       <td><strong>port</strong></td>
-      <td>Обычно 443</td>
+      <td>Опубликованный порт установки для протокола</td>
     </tr>
   </tbody>
 </table>
@@ -35,7 +35,7 @@
 <pre><code class="language-text">hysteria2://PASSWORD@host:443/?sni=example.com&amp;obfs=salamander#LABEL</code></pre>
 
 <h2>VLESS + Reality</h2>
-<p>TCP с маскировкой под реальный TLS-сайт.</p>
+<p>TCP с маскировкой под реальный TLS-сайт (sing-box).</p>
 <pre><code class="language-text">vless://UUID@host:443?security=reality&amp;sni=...&amp;flow=xtls-rprx-vision#LABEL</code></pre>
 
 <h2>Trojan</h2>
@@ -44,6 +44,21 @@
 
 <h2>Shadowsocks 2022</h2>
 <p>Пароль клиента: <code>SERVER_PASSWORD:USER_PASSWORD</code></p>
+
+<h2>VLESS + xHTTP + TLS</h2>
+<p>Xray, TLS-сертификат (FILES). Порт: <code>XRAY_LISTEN_PORT</code>.</p>
+<pre><code class="language-text">vless://UUID@host:8443?security=tls&amp;type=xhttp&amp;path=/&amp;sni=example.com#LABEL</code></pre>
+
+<h2>VLESS + gRPC + TLS</h2>
+<p>Xray, TLS-сертификат (FILES). Порт: <code>XRAY_GRPC_PORT</code> (по умолчанию 8446).</p>
+<pre><code class="language-text">vless://UUID@host:8446?security=tls&amp;type=grpc&amp;serviceName=GunService&amp;sni=example.com#LABEL</code></pre>
+
+<h2>VLESS + TCP + TLS</h2>
+<p>
+  Xray, классический TCP+TLS с опциональным <code>xtls-rprx-vision</code>. Порт:
+  <code>XRAY_TCP_TLS_PORT</code> (по умолчанию 8447).
+</p>
+<pre><code class="language-text">vless://UUID@host:8447?security=tls&amp;type=tcp&amp;flow=xtls-rprx-vision&amp;sni=example.com#LABEL</code></pre>
 
 <h2>Выбор протокола</h2>
 <table>
@@ -63,8 +78,16 @@
       <td>VLESS Reality</td>
     </tr>
     <tr>
-      <td>Старые клиенты</td>
-      <td>Trojan</td>
+      <td>CDN / HTTP-маскировка</td>
+      <td>VLESS xHTTP TLS</td>
+    </tr>
+    <tr>
+      <td>HTTP/2 gRPC</td>
+      <td>VLESS gRPC TLS</td>
+    </tr>
+    <tr>
+      <td>Простой TLS TCP</td>
+      <td>VLESS TCP TLS / Trojan</td>
     </tr>
     <tr>
       <td>SS-клиенты</td>
@@ -75,4 +98,6 @@
 
 <h2>Firewall</h2>
 <pre><code class="language-shell">ufw allow 443/tcp  # HTTPS и TCP VPN
-ufw allow 443/udp  # UDP VPN (Hysteria2 и др.)</code></pre>
+ufw allow 443/udp  # UDP VPN (Hysteria2 и др.)
+ufw allow 8446/tcp # VLESS gRPC TLS (если используете)
+ufw allow 8447/tcp # VLESS TCP TLS (если используете)</code></pre>

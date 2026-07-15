@@ -291,6 +291,10 @@ export const environmentSchema = z
       .default('127.0.0.1:10085'),
     XRAY_API_LISTEN: z.string().trim().min(3).max(255).default('0.0.0.0:10085'),
     XRAY_LISTEN_PORT: z.coerce.number().int().min(1).max(65_535).default(8443),
+    /** Published TCP port for VLESS gRPC TLS (compose → host). */
+    XRAY_GRPC_PORT: z.coerce.number().int().min(1).max(65_535).default(8446),
+    /** Published TCP port for VLESS TCP TLS (compose → host). */
+    XRAY_TCP_TLS_PORT: z.coerce.number().int().min(1).max(65_535).default(8447),
     XRAY_PROCESS_TIMEOUT_MS: z.coerce
       .number()
       .int()

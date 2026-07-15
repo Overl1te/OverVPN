@@ -12,14 +12,18 @@ import type {
   SubscriptionEndpoint,
   SubscriptionProfileDescriptor,
   TrojanSubscriptionEndpoint,
+  VlessGrpcTlsSubscriptionEndpoint,
   VlessRealitySubscriptionEndpoint,
+  VlessTcpTlsSubscriptionEndpoint,
   VlessXhttpTlsSubscriptionEndpoint,
 } from '@overvpn/shared/schemas';
 import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
+  vlessGrpcTlsPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
+  vlessTcpTlsPublicConfigSchema,
   vlessXhttpTlsPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import { stringify as stringifyYaml } from 'yaml';
@@ -38,7 +42,9 @@ import {
   buildTrojanUri,
   normalizeTrojanPassword,
 } from '../inbounds/trojan-domain';
+import { buildVlessGrpcTlsUri } from '../inbounds/vless-grpc-tls-domain';
 import { buildVlessUri } from '../inbounds/vless-reality-domain';
+import { buildVlessTcpTlsUri } from '../inbounds/vless-tcp-tls-domain';
 import { buildVlessXhttpTlsUri } from '../inbounds/vless-xhttp-tls-domain';
 
 export interface SubscriptionInboundRecord {
@@ -267,6 +273,86 @@ export class VlessXhttpTlsSubscriptionAdapter implements SubscriptionProtocolAda
 }
 
 @Injectable()
+export class VlessGrpcTlsSubscriptionAdapter implements SubscriptionProtocolAdapter {
+  readonly protocol = 'VLESS_GRPC_TLS' as const;
+
+  constructor(private readonly encryption: SecretEncryptionService) {}
+
+  build(
+    assignment: SubscriptionAssignmentRecord,
+    user: SubscriptionProfileUser,
+    tag: string,
+    displayName: string,
+  ): VlessGrpcTlsSubscriptionEndpoint {
+    const inbound = assignment.inbound;
+    if (!inbound.publicHost) {
+      throw unavailable();
+    }
+    const config = vlessGrpcTlsPublicConfigSchema.safeParse(inbound.config);
+    if (!config.success) {
+      throw unavailable();
+    }
+    const uuid = uuidCredential(
+      this.encryption,
+      assignment.credentialEncrypted,
+    );
+    void user;
+    return {
+      protocol: 'VLESS_GRPC_TLS',
+      tag,
+      displayName,
+      server: inbound.publicHost,
+      port: inbound.publicPort ?? inbound.listenPort,
+      uuid,
+      serviceName: config.data.serviceName,
+      tls: {
+        serverName: config.data.tls.sni,
+      },
+    };
+  }
+}
+
+@Injectable()
+export class VlessTcpTlsSubscriptionAdapter implements SubscriptionProtocolAdapter {
+  readonly protocol = 'VLESS_TCP_TLS' as const;
+
+  constructor(private readonly encryption: SecretEncryptionService) {}
+
+  build(
+    assignment: SubscriptionAssignmentRecord,
+    user: SubscriptionProfileUser,
+    tag: string,
+    displayName: string,
+  ): VlessTcpTlsSubscriptionEndpoint {
+    const inbound = assignment.inbound;
+    if (!inbound.publicHost) {
+      throw unavailable();
+    }
+    const config = vlessTcpTlsPublicConfigSchema.safeParse(inbound.config);
+    if (!config.success) {
+      throw unavailable();
+    }
+    const uuid = uuidCredential(
+      this.encryption,
+      assignment.credentialEncrypted,
+    );
+    void user;
+    return {
+      protocol: 'VLESS_TCP_TLS',
+      tag,
+      displayName,
+      server: inbound.publicHost,
+      port: inbound.publicPort ?? inbound.listenPort,
+      uuid,
+      flow: config.data.flow,
+      tls: {
+        serverName: config.data.tls.sni,
+      },
+    };
+  }
+}
+
+@Injectable()
 export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
   readonly protocol = 'TROJAN' as const;
 
@@ -369,6 +455,8 @@ export class SubscriptionProfileBuilder {
     hysteria2: Hysteria2SubscriptionAdapter,
     vlessReality: VlessRealitySubscriptionAdapter,
     vlessXhttpTls: VlessXhttpTlsSubscriptionAdapter,
+    vlessGrpcTls: VlessGrpcTlsSubscriptionAdapter,
+    vlessTcpTls: VlessTcpTlsSubscriptionAdapter,
     trojan: TrojanSubscriptionAdapter,
     shadowsocks: ShadowsocksSubscriptionAdapter,
   ) {
@@ -376,6 +464,8 @@ export class SubscriptionProfileBuilder {
       [hysteria2.protocol, hysteria2],
       [vlessReality.protocol, vlessReality],
       [vlessXhttpTls.protocol, vlessXhttpTls],
+      [vlessGrpcTls.protocol, vlessGrpcTls],
+      [vlessTcpTls.protocol, vlessTcpTls],
       [trojan.protocol, trojan],
       [shadowsocks.protocol, shadowsocks],
     ]);
@@ -627,6 +717,45 @@ function renderSingBoxOutbound(
       },
     };
   }
+  if (endpoint.protocol === 'VLESS_GRPC_TLS') {
+    return {
+      type: 'vless',
+      tag: endpoint.displayName,
+      server: endpoint.server,
+      server_port: endpoint.port,
+      uuid: endpoint.uuid,
+      transport: {
+        type: 'grpc',
+        service_name: endpoint.serviceName,
+      },
+      tls: {
+        enabled: true,
+        server_name: endpoint.tls.serverName,
+        utls: {
+          enabled: true,
+          fingerprint: 'chrome',
+        },
+      },
+    };
+  }
+  if (endpoint.protocol === 'VLESS_TCP_TLS') {
+    return {
+      type: 'vless',
+      tag: endpoint.displayName,
+      server: endpoint.server,
+      server_port: endpoint.port,
+      uuid: endpoint.uuid,
+      ...(endpoint.flow ? { flow: endpoint.flow } : {}),
+      tls: {
+        enabled: true,
+        server_name: endpoint.tls.serverName,
+        utls: {
+          enabled: true,
+          fingerprint: 'chrome',
+        },
+      },
+    };
+  }
   if (endpoint.protocol === 'TROJAN') {
     return {
       type: 'trojan',
@@ -687,6 +816,26 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
         sni: endpoint.tls.serverName,
         mode: endpoint.mode,
         xhttpHost: endpoint.host,
+        label: endpoint.displayName,
+      });
+    }
+    if (endpoint.protocol === 'VLESS_GRPC_TLS') {
+      return buildVlessGrpcTlsUri({
+        uuid: endpoint.uuid,
+        host: endpoint.server,
+        port: endpoint.port,
+        serviceName: endpoint.serviceName,
+        sni: endpoint.tls.serverName,
+        label: endpoint.displayName,
+      });
+    }
+    if (endpoint.protocol === 'VLESS_TCP_TLS') {
+      return buildVlessTcpTlsUri({
+        uuid: endpoint.uuid,
+        host: endpoint.server,
+        port: endpoint.port,
+        sni: endpoint.tls.serverName,
+        flow: endpoint.flow,
         label: endpoint.displayName,
       });
     }
@@ -785,6 +934,42 @@ export function renderClashProfile(
               mode: endpoint.mode,
               ...(endpoint.host ? { host: endpoint.host } : {}),
             },
+          },
+        ];
+      }
+      if (endpoint.protocol === 'VLESS_GRPC_TLS') {
+        return [
+          {
+            name: endpoint.displayName,
+            type: 'vless',
+            server: endpoint.server,
+            port: endpoint.port,
+            uuid: endpoint.uuid,
+            network: 'grpc',
+            tls: true,
+            udp: true,
+            'client-fingerprint': 'chrome',
+            servername: endpoint.tls.serverName,
+            'grpc-opts': {
+              'grpc-service-name': endpoint.serviceName,
+            },
+          },
+        ];
+      }
+      if (endpoint.protocol === 'VLESS_TCP_TLS') {
+        return [
+          {
+            name: endpoint.displayName,
+            type: 'vless',
+            server: endpoint.server,
+            port: endpoint.port,
+            uuid: endpoint.uuid,
+            network: 'tcp',
+            tls: true,
+            udp: true,
+            ...(endpoint.flow ? { flow: endpoint.flow } : {}),
+            'client-fingerprint': 'chrome',
+            servername: endpoint.tls.serverName,
           },
         ];
       }

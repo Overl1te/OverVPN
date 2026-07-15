@@ -30,6 +30,7 @@ const info: SubscriptionInfo = {
   subExpireButtonLink: 'https://t.me/renew',
   fallbackUrl: 'https://backup.example.com/sub/tok',
   colorProfile: '{"buttonColor":"#fff"}',
+  showTrafficLimits: true,
   subscriptionUrl: 'https://vpn.example.com/api/sub/tok',
   formats: ['sing-box', 'links', 'clash'],
   formatUrls: {
@@ -52,6 +53,18 @@ describe('happ-subscription-meta', () => {
     expect(lines).toContain('#sub-expire: 1');
     expect(lines).toContain('#sub-info-color: green');
     expect(lines.some((line) => line.startsWith('#announce:'))).toBe(true);
+  });
+
+  it('omits advanced Happ meta when provider id is missing', () => {
+    const lines = formatHappSubscriptionBodyMeta({
+      ...info,
+      happProviderId: null,
+    });
+    expect(lines.some((line) => line.includes('providerid'))).toBe(false);
+    expect(lines.some((line) => line.includes('sub-info'))).toBe(false);
+    expect(lines.some((line) => line.includes('sub-expire'))).toBe(false);
+    expect(lines.some((line) => line.includes('fallback-url'))).toBe(false);
+    expect(lines.some((line) => line.includes('color-profile'))).toBe(false);
   });
 
   it('prepends meta lines to a links body', () => {

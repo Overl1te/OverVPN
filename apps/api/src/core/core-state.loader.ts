@@ -4,7 +4,9 @@ import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
+  vlessGrpcTlsPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
+  vlessTcpTlsPublicConfigSchema,
   vlessXhttpTlsPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import { z } from 'zod';
@@ -17,7 +19,9 @@ import type {
   Hysteria2InboundSecrets,
   ShadowsocksInboundSecrets,
   TrojanInboundSecrets,
+  VlessGrpcTlsInboundSecrets,
   VlessRealityInboundSecrets,
+  VlessTcpTlsInboundSecrets,
   VlessXhttpTlsInboundSecrets,
 } from './core-provider';
 import { coreStateId } from './core-ids';
@@ -203,6 +207,30 @@ export class CoreStateLoader {
         });
         continue;
       }
+      if (inbound.protocol === 'VLESS_GRPC_TLS') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'VLESS_GRPC_TLS',
+          config: vlessGrpcTlsPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptVlessGrpcTlsSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+        });
+        continue;
+      }
+      if (inbound.protocol === 'VLESS_TCP_TLS') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'VLESS_TCP_TLS',
+          config: vlessTcpTlsPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptVlessTcpTlsSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+        });
+        continue;
+      }
       if (inbound.protocol === 'TROJAN') {
         desiredInbounds.push({
           ...base,
@@ -308,6 +336,20 @@ export class CoreStateLoader {
     }
   }
 
+  private decryptVlessGrpcTlsSecrets(
+    inboundId: string,
+    encrypted: string | null,
+  ): VlessGrpcTlsInboundSecrets {
+    return this.decryptVlessXhttpTlsSecrets(inboundId, encrypted);
+  }
+
+  private decryptVlessTcpTlsSecrets(
+    inboundId: string,
+    encrypted: string | null,
+  ): VlessTcpTlsInboundSecrets {
+    return this.decryptVlessXhttpTlsSecrets(inboundId, encrypted);
+  }
+
   private decryptShadowsocksSecrets(
     inboundId: string,
     encrypted: string | null,
@@ -336,7 +378,12 @@ export class CoreStateLoader {
     }
     try {
       const parsed = JSON.parse(this.encryption.decrypt(encrypted)) as unknown;
-      if (protocol === 'VLESS_REALITY' || protocol === 'VLESS_XHTTP_TLS') {
+      if (
+        protocol === 'VLESS_REALITY' ||
+        protocol === 'VLESS_XHTTP_TLS' ||
+        protocol === 'VLESS_GRPC_TLS' ||
+        protocol === 'VLESS_TCP_TLS'
+      ) {
         return vlessCredentialSchema.parse(parsed);
       }
       return passwordCredentialSchema.parse(parsed);

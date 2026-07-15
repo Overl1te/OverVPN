@@ -2,11 +2,21 @@
 
 <p>Справочник команд CLI (<code>/usr/local/bin/overvpn</code>).</p>
 
+<h2>Интерактивное меню</h2>
+<p>
+  Без аргументов в TTY (или <code>overvpn menu</code>) открывается консольное меню: статус, info,
+  логи, restart, update, edit <code>.env</code>, nginx, uninstall. <code>-h</code> /
+  <code>--help</code> по-прежнему печатает текстовую справку.
+</p>
+<pre><code class="language-shell">overvpn  # открыть меню управления
+overvpn menu  # то же явно
+overvpn --help  # текстовая справка</code></pre>
+
 <h2>Синтаксис</h2>
 <pre><code class="language-shell">overvpn &lt;команда&gt; [опции]  # общий формат вызова</code></pre>
 
 <h2>Жизненный цикл</h2>
-<pre><code class="language-shell">overvpn install [опции]  # установка Docker-стека, Nginx и TLS
+<pre><code class="language-shell">overvpn install [опции]  # установка Docker-стека, Nginx и TLS (консольный мастер)
 overvpn up | down | restart  # запуск, остановка, перезапуск контейнеров
 overvpn status  # статус сервисов Compose
 overvpn logs [service]  # логи: api, web, core, postgres, redis…
@@ -15,7 +25,7 @@ overvpn uninstall  # полное удаление OverVPN с сервера</co
 
 <h2>Информация</h2>
 <pre><code class="language-shell">overvpn info  # URL панели, подписок и bootstrap-учётка
-overvpn edit  # редактировать .install.conf и .env
+overvpn edit  # редактировать .env
 overvpn bootstrap  # создать или сбросить владельца
 overvpn nginx  # перегенерировать конфиг Nginx</code></pre>
 

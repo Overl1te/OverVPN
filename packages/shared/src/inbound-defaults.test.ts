@@ -104,6 +104,8 @@ describe('buildDefaultInboundSettings', () => {
       singBoxTrojanPort: 8444,
       singBoxSsPort: 8445,
       xrayListenPort: 9443,
+      xrayGrpcPort: 9446,
+      xrayTcpTlsPort: 9447,
       tlsCertificatePath: '/certs/fullchain.pem',
       tlsKeyPath: '/certs/privkey.pem',
     };
@@ -129,6 +131,14 @@ describe('buildDefaultInboundSettings', () => {
     ) as VlessXhttpTlsInboundSettings;
     assert.equal(xhttp.listenPort, 9443);
     assert.equal(xhttp.publicPort, 9443);
+
+    const grpc = buildDefaultInboundSettings('VLESS_GRPC_TLS', context);
+    assert.equal(grpc.listenPort, 9446);
+    assert.equal(grpc.publicPort, 9446);
+
+    const tcpTls = buildDefaultInboundSettings('VLESS_TCP_TLS', context);
+    assert.equal(tcpTls.listenPort, 9447);
+    assert.equal(tcpTls.publicPort, 9447);
 
     const ss = buildDefaultInboundSettings('SHADOWSOCKS', context);
     assert.equal(ss.listenPort, 8445);
@@ -211,6 +221,35 @@ describe('applyVpnTlsPathsFallback', () => {
 
     assert.equal(patched.settings.tls.certificatePath, '/var/lib/sing-box-certs/vpn-fullchain.pem');
     assert.equal(patched.settings.tls.keyPath, '/var/lib/sing-box-certs/vpn-privkey.pem');
+  });
+
+  it('fills missing VLESS_GRPC_TLS certificate paths from install defaults', () => {
+    const patched = applyVpnTlsPathsFallback(
+      {
+        tag: 'grpc',
+        protocol: 'VLESS_GRPC_TLS',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 8446,
+          publicHost: 'vpn.example.org',
+          enabled: true,
+          serviceName: 'GunService',
+          tls: {
+            mode: 'FILES',
+            sni: 'vpn.example.org',
+          },
+        },
+      },
+      '/certs/fullchain.pem',
+      '/certs/privkey.pem',
+    ) as {
+      settings: {
+        tls: { certificatePath: string; keyPath: string };
+      };
+    };
+
+    assert.equal(patched.settings.tls.certificatePath, '/certs/fullchain.pem');
+    assert.equal(patched.settings.tls.keyPath, '/certs/privkey.pem');
   });
 
   it('does not override inline PEM', () => {

@@ -49,48 +49,47 @@
 <pre><code class="language-shell">sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build  # сборка образов на сервере</code></pre>
 
 <h2>Мастер установки</h2>
-<p>Сначала задаются <strong>все</strong> вопросы, затем установка идёт без пауз.</p>
+<p>
+  Интерактивный мастер — серия <strong>консольных экранов</strong> (очистка терминала, баннер, рамка
+  с пунктами). Сначала задаются <strong>все</strong> ответы, затем установка идёт без пауз.
+</p>
 <table>
   <thead>
     <tr>
-      <th>Шаг</th>
-      <th>Вопрос</th>
+      <th>Экран</th>
+      <th>Содержание</th>
       <th>По умолчанию</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>1</td>
-      <td>Базовый домен</td>
-      <td>Пусто → <code>http://IP:8000</code></td>
+      <td>Language</td>
+      <td>English / Русский</td>
+      <td>English</td>
     </tr>
     <tr>
-      <td>2</td>
-      <td>Хост панели</td>
-      <td><code>panel.example.com</code></td>
+      <td>Mode</td>
+      <td>С доменом (Nginx + TLS) или только IP</td>
+      <td>Домен; IP → <code>http://IP:8000</code></td>
     </tr>
     <tr>
-      <td>3</td>
-      <td>Подписки</td>
-      <td><code>sub.example.com</code></td>
+      <td>Hosts</td>
+      <td>Базовый домен, панель, подписки, VPN-хост, email</td>
+      <td><code>panel.</code> / <code>sub.</code> / <code>vpn.</code> + <code>admin@</code></td>
     </tr>
     <tr>
-      <td>4</td>
-      <td>VPN-хост</td>
-      <td><code>vpn.example.com</code></td>
-    </tr>
-    <tr>
-      <td>5</td>
-      <td>Email</td>
-      <td>Let's Encrypt</td>
-    </tr>
-    <tr>
-      <td>6</td>
       <td>DNS</td>
-      <td>Подтверждение A-записей или <code>s</code></td>
+      <td>Список A-записей; проверить или пропустить</td>
+      <td>Проверить (<code>Y</code>); <code>s</code> — skip</td>
+    </tr>
+    <tr>
+      <td>Confirm</td>
+      <td>Итог и старт установки</td>
+      <td><code>Y</code></td>
     </tr>
   </tbody>
 </table>
+<p>После установки выводится экран с URL панели и учётными данными владельца.</p>
 
 <h2>Флаги установщика</h2>
 <table>

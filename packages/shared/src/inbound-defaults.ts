@@ -3,7 +3,9 @@ import type {
   Hysteria2InboundSettings,
   ShadowsocksInboundSettings,
   TrojanInboundSettings,
+  VlessGrpcTlsInboundSettings,
   VlessRealityInboundSettings,
+  VlessTcpTlsInboundSettings,
   VlessXhttpTlsInboundSettings,
 } from './schemas.js';
 
@@ -19,8 +21,12 @@ export type InboundDefaultsContext = {
   singBoxTrojanPort?: number;
   /** Published sing-box Shadowsocks TCP port (compose SING_BOX_SS_PORT). */
   singBoxSsPort?: number;
-  /** Published Xray TCP listen port (compose XRAY_LISTEN_PORT). */
+  /** Published Xray TCP listen port (compose XRAY_LISTEN_PORT) — VLESS xHTTP TLS. */
   xrayListenPort?: number;
+  /** Published Xray gRPC TLS port (compose XRAY_GRPC_PORT). */
+  xrayGrpcPort?: number;
+  /** Published Xray TCP TLS port (compose XRAY_TCP_TLS_PORT). */
+  xrayTcpTlsPort?: number;
   /** Container paths from install (LE sync). Prefer FILES TLS when set. */
   tlsCertificatePath?: string | null;
   tlsKeyPath?: string | null;
@@ -36,12 +42,24 @@ export type InboundListenOverrides = {
 
 export type InboundPublishedTransport = 'udp' | 'tcp';
 
+const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>([
+  'VLESS_XHTTP_TLS',
+  'VLESS_GRPC_TLS',
+  'VLESS_TCP_TLS',
+]);
+
 /** Install-published listen port for a protocol (Simple mode / API guard). */
 export function publishedListenPortForProtocol(
   protocol: InboundProtocol,
   context: Pick<
     InboundDefaultsContext,
-    'singBoxUdpPort' | 'singBoxTcpPort' | 'singBoxTrojanPort' | 'singBoxSsPort' | 'xrayListenPort'
+    | 'singBoxUdpPort'
+    | 'singBoxTcpPort'
+    | 'singBoxTrojanPort'
+    | 'singBoxSsPort'
+    | 'xrayListenPort'
+    | 'xrayGrpcPort'
+    | 'xrayTcpTlsPort'
   >,
 ): number {
   switch (protocol) {
@@ -55,6 +73,10 @@ export function publishedListenPortForProtocol(
       return context.singBoxSsPort ?? 8445;
     case 'VLESS_XHTTP_TLS':
       return context.xrayListenPort ?? 8443;
+    case 'VLESS_GRPC_TLS':
+      return context.xrayGrpcPort ?? 8446;
+    case 'VLESS_TCP_TLS':
+      return context.xrayTcpTlsPort ?? 8447;
   }
 }
 
@@ -139,6 +161,18 @@ function buildDefaultTls(
   return buildAcmeTls(publicHost, context);
 }
 
+function requireXrayFilesTlsPaths(
+  protocol: InboundProtocol,
+  context: InboundDefaultsContext,
+): { certificatePath: string; keyPath: string } {
+  const certificatePath = context.tlsCertificatePath?.trim();
+  const keyPath = context.tlsKeyPath?.trim();
+  if (!certificatePath || !keyPath) {
+    throw new Error(`${protocol} defaults require configured VPN TLS certificate and key paths`);
+  }
+  return { certificatePath, keyPath };
+}
+
 function listenFields(
   protocol: InboundProtocol,
   context: InboundDefaultsContext,
@@ -163,6 +197,8 @@ export function buildDefaultInboundSettings(
   | Hysteria2InboundSettings
   | VlessRealityInboundSettings
   | VlessXhttpTlsInboundSettings
+  | VlessGrpcTlsInboundSettings
+  | VlessTcpTlsInboundSettings
   | TrojanInboundSettings
   | ShadowsocksInboundSettings {
   const publicHost = overrides?.publicHost ?? context.publicHost;
@@ -216,12 +252,8 @@ export function buildDefaultInboundSettings(
         ...common,
         method: '2022-blake3-aes-256-gcm',
       };
-    case 'VLESS_XHTTP_TLS':
-      if (!context.tlsCertificatePath?.trim() || !context.tlsKeyPath?.trim()) {
-        throw new Error(
-          'VLESS_XHTTP_TLS defaults require configured VPN TLS certificate and key paths',
-        );
-      }
+    case 'VLESS_XHTTP_TLS': {
+      const paths = requireXrayFilesTlsPaths(protocol, context);
       return {
         ...common,
         path: '/',
@@ -230,10 +262,37 @@ export function buildDefaultInboundSettings(
         tls: {
           mode: 'FILES',
           sni: publicHost,
-          certificatePath: context.tlsCertificatePath.trim(),
-          keyPath: context.tlsKeyPath.trim(),
+          certificatePath: paths.certificatePath,
+          keyPath: paths.keyPath,
         },
       };
+    }
+    case 'VLESS_GRPC_TLS': {
+      const paths = requireXrayFilesTlsPaths(protocol, context);
+      return {
+        ...common,
+        serviceName: 'GunService',
+        tls: {
+          mode: 'FILES',
+          sni: publicHost,
+          certificatePath: paths.certificatePath,
+          keyPath: paths.keyPath,
+        },
+      };
+    }
+    case 'VLESS_TCP_TLS': {
+      const paths = requireXrayFilesTlsPaths(protocol, context);
+      return {
+        ...common,
+        flow: 'xtls-rprx-vision',
+        tls: {
+          mode: 'FILES',
+          sni: publicHost,
+          certificatePath: paths.certificatePath,
+          keyPath: paths.keyPath,
+        },
+      };
+    }
   }
 }
 
@@ -294,7 +353,7 @@ export function applyVpnPublicHostFallback(
 }
 
 /**
- * Fills missing VLESS_XHTTP_TLS FILES cert paths from install env defaults.
+ * Fills missing Xray FILES TLS cert paths from install env defaults.
  * Does not override explicit paths or inline PEM.
  */
 export function applyVpnTlsPathsFallback(
@@ -308,7 +367,10 @@ export function applyVpnTlsPathsFallback(
     return body;
   }
   const record = body as Record<string, unknown>;
-  if (record.protocol !== 'VLESS_XHTTP_TLS') {
+  if (
+    typeof record.protocol !== 'string' ||
+    !XRAY_FILES_TLS_PROTOCOLS.has(record.protocol as InboundProtocol)
+  ) {
     return body;
   }
   const settings = record.settings;

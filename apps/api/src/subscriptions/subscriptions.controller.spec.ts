@@ -42,6 +42,7 @@ describe('SubscriptionsController', () => {
     subExpireButtonLink: null,
     fallbackUrl: null,
     colorProfile: null,
+    showTrafficLimits: true,
     subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
     formats: ['sing-box', 'links', 'clash'],
     formatUrls: {

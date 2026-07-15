@@ -29,32 +29,32 @@ export function formatHappSubscriptionBodyMeta(
   }
   if (info.happProviderId) {
     lines.push(`#providerid ${info.happProviderId}`);
-  }
-  if (info.subInfoText) {
-    lines.push(`#sub-info-text: ${encodeHappBase64Value(info.subInfoText)}`);
-  }
-  if (info.subInfoColor) {
-    lines.push(`#sub-info-color: ${info.subInfoColor}`);
-  }
-  if (info.subInfoButtonText) {
-    lines.push(
-      `#sub-info-button-text: ${encodeHappBase64Value(info.subInfoButtonText)}`,
-    );
-  }
-  if (info.subInfoButtonLink) {
-    lines.push(`#sub-info-button-link: ${info.subInfoButtonLink}`);
-  }
-  if (info.subExpireEnabled) {
-    lines.push('#sub-expire: 1');
-  }
-  if (info.subExpireButtonLink) {
-    lines.push(`#sub-expire-button-link: ${info.subExpireButtonLink}`);
-  }
-  if (info.fallbackUrl) {
-    lines.push(`#fallback-url: ${info.fallbackUrl}`);
-  }
-  if (info.colorProfile) {
-    lines.push(`#color-profile: ${encodeHappBase64Value(info.colorProfile)}`);
+    if (info.subInfoText) {
+      lines.push(`#sub-info-text: ${encodeHappBase64Value(info.subInfoText)}`);
+    }
+    if (info.subInfoColor) {
+      lines.push(`#sub-info-color: ${info.subInfoColor}`);
+    }
+    if (info.subInfoButtonText) {
+      lines.push(
+        `#sub-info-button-text: ${encodeHappBase64Value(info.subInfoButtonText)}`,
+      );
+    }
+    if (info.subInfoButtonLink) {
+      lines.push(`#sub-info-button-link: ${info.subInfoButtonLink}`);
+    }
+    if (info.subExpireEnabled) {
+      lines.push('#sub-expire: 1');
+    }
+    if (info.subExpireButtonLink) {
+      lines.push(`#sub-expire-button-link: ${info.subExpireButtonLink}`);
+    }
+    if (info.fallbackUrl) {
+      lines.push(`#fallback-url: ${info.fallbackUrl}`);
+    }
+    if (info.colorProfile) {
+      lines.push(`#color-profile: ${encodeHappBase64Value(info.colorProfile)}`);
+    }
   }
   return lines;
 }

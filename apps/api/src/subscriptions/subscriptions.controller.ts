@@ -105,6 +105,11 @@ class SubscriptionInfoDto implements SubscriptionInfo {
   fallbackUrl!: string | null;
   @ApiPropertyOptional({ nullable: true })
   colorProfile!: string | null;
+  @ApiProperty({
+    description:
+      'When true, subscription-userinfo includes total= (0 for unlimited).',
+  })
+  showTrafficLimits!: boolean;
   @ApiProperty({ format: 'uri' })
   subscriptionUrl!: string;
   @ApiProperty({ enum: SUBSCRIPTION_FORMATS, isArray: true })
@@ -116,7 +121,7 @@ class SubscriptionInfoDto implements SubscriptionInfo {
 const profileResponseHeaders = {
   'subscription-userinfo': {
     description:
-      'Decimal usage counters; total and expire are omitted for unlimited/non-expiring subscriptions.',
+      'Decimal usage counters. total= is included when the plan enables show-traffic-limits (0 means unlimited). expire is omitted for non-expiring subscriptions.',
     schema: { type: 'string' },
   },
   'profile-update-interval': {
@@ -492,39 +497,39 @@ function setSubscriptionHeaders(
   }
   if (info.happProviderId) {
     response.setHeader('providerid', info.happProviderId);
-  }
-  if (info.subInfoText) {
-    response.setHeader(
-      'sub-info-text',
-      encodeHappBase64Value(info.subInfoText),
-    );
-  }
-  if (info.subInfoColor) {
-    response.setHeader('sub-info-color', info.subInfoColor);
-  }
-  if (info.subInfoButtonText) {
-    response.setHeader(
-      'sub-info-button-text',
-      encodeHappBase64Value(info.subInfoButtonText),
-    );
-  }
-  if (info.subInfoButtonLink) {
-    response.setHeader('sub-info-button-link', info.subInfoButtonLink);
-  }
-  if (info.subExpireEnabled) {
-    response.setHeader('sub-expire', '1');
-  }
-  if (info.subExpireButtonLink) {
-    response.setHeader('sub-expire-button-link', info.subExpireButtonLink);
-  }
-  if (info.fallbackUrl) {
-    response.setHeader('fallback-url', info.fallbackUrl);
-  }
-  if (info.colorProfile) {
-    response.setHeader(
-      'color-profile',
-      encodeHappBase64Value(info.colorProfile),
-    );
+    if (info.subInfoText) {
+      response.setHeader(
+        'sub-info-text',
+        encodeHappBase64Value(info.subInfoText),
+      );
+    }
+    if (info.subInfoColor) {
+      response.setHeader('sub-info-color', info.subInfoColor);
+    }
+    if (info.subInfoButtonText) {
+      response.setHeader(
+        'sub-info-button-text',
+        encodeHappBase64Value(info.subInfoButtonText),
+      );
+    }
+    if (info.subInfoButtonLink) {
+      response.setHeader('sub-info-button-link', info.subInfoButtonLink);
+    }
+    if (info.subExpireEnabled) {
+      response.setHeader('sub-expire', '1');
+    }
+    if (info.subExpireButtonLink) {
+      response.setHeader('sub-expire-button-link', info.subExpireButtonLink);
+    }
+    if (info.fallbackUrl) {
+      response.setHeader('fallback-url', info.fallbackUrl);
+    }
+    if (info.colorProfile) {
+      response.setHeader(
+        'color-profile',
+        encodeHappBase64Value(info.colorProfile),
+      );
+    }
   }
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   response.setHeader('Pragma', 'no-cache');

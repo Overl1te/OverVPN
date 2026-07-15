@@ -3,7 +3,9 @@ import type {
   Hysteria2InboundPublicConfig,
   ShadowsocksInboundPublicConfig,
   TrojanInboundPublicConfig,
+  VlessGrpcTlsPublicConfig,
   VlessRealityInboundPublicConfig,
+  VlessTcpTlsPublicConfig,
   VlessXhttpTlsPublicConfig,
 } from '@overvpn/shared/schemas';
 
@@ -37,6 +39,9 @@ export interface VlessXhttpTlsInboundSecrets {
   certificatePem?: string;
   privateKeyPem?: string;
 }
+
+export type VlessGrpcTlsInboundSecrets = VlessXhttpTlsInboundSecrets;
+export type VlessTcpTlsInboundSecrets = VlessXhttpTlsInboundSecrets;
 
 export interface TrojanInboundSecrets {
   version: 1;
@@ -108,6 +113,18 @@ export interface DesiredVlessXhttpTlsInbound extends DesiredInboundBase {
   secrets: VlessXhttpTlsInboundSecrets;
 }
 
+export interface DesiredVlessGrpcTlsInbound extends DesiredInboundBase {
+  protocol: 'VLESS_GRPC_TLS';
+  config: VlessGrpcTlsPublicConfig;
+  secrets: VlessGrpcTlsInboundSecrets;
+}
+
+export interface DesiredVlessTcpTlsInbound extends DesiredInboundBase {
+  protocol: 'VLESS_TCP_TLS';
+  config: VlessTcpTlsPublicConfig;
+  secrets: VlessTcpTlsInboundSecrets;
+}
+
 export interface DesiredTrojanInbound extends DesiredInboundBase {
   protocol: 'TROJAN';
   config: TrojanInboundPublicConfig;
@@ -124,6 +141,8 @@ export type DesiredInbound =
   | DesiredHysteria2Inbound
   | DesiredVlessRealityInbound
   | DesiredVlessXhttpTlsInbound
+  | DesiredVlessGrpcTlsInbound
+  | DesiredVlessTcpTlsInbound
   | DesiredTrojanInbound
   | DesiredShadowsocksInbound;
 

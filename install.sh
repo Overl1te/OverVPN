@@ -35,6 +35,152 @@ GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
 GHCR_WEB_IMAGE="ghcr.io/overl1te/overvpn-web"
 CLI_LANG="${OVERVPN_CLI_LANG:-en}"
 
+# TUI drawing (MTProxyMax-style console screens)
+readonly BOX_TL='╔' BOX_TR='╗' BOX_BL='╚' BOX_BR='╝'
+readonly BOX_H='═' BOX_V='║' BOX_LT='╠' BOX_RT='╣'
+readonly TUI_NC=$'\e[0m' TUI_BOLD=$'\e[1m' TUI_DIM=$'\e[2m'
+readonly TUI_CYAN=$'\e[96m' TUI_GREEN=$'\e[92m' TUI_YELLOW=$'\e[93m'
+readonly TUI_RED=$'\e[91m' TUI_BLUE=$'\e[94m' TUI_BRIGHT_CYAN=$'\e[1;96m'
+
+tui_term_width() {
+  local cols
+  cols="$(tput cols 2>/dev/null || true)"
+  if [[ -z "$cols" || ! "$cols" =~ ^[0-9]+$ ]]; then
+    cols="${COLUMNS:-72}"
+  fi
+  if [[ "$cols" -gt 80 ]]; then
+    cols=80
+  elif [[ "$cols" -lt 48 ]]; then
+    cols=48
+  fi
+  printf '%s' "$cols"
+}
+
+_tui_strlen() {
+  local clean="$1"
+  local esc=$'\033'
+  clean="${clean//$'\\033'/$esc}"
+  while [[ "$clean" == *"${esc}["* ]]; do
+    local before="${clean%%${esc}\[*}"
+    local rest="${clean#*${esc}\[}"
+    local after="${rest#*m}"
+    [[ "$rest" == "$after" ]] && break
+    clean="${before}${after}"
+  done
+  printf '%s' "${#clean}"
+}
+
+_tui_repeat() {
+  local char="$1" count="$2" str
+  [[ "${count:-0}" -le 0 ]] 2>/dev/null && return 0
+  printf -v str '%*s' "$count" ''
+  printf '%s' "${str// /$char}"
+}
+
+clear_screen() {
+  clear 2>/dev/null || printf '\033[2J\033[H'
+}
+
+draw_box_top() {
+  local width="${1:-$(tui_term_width)}"
+  local inner=$((width - 2))
+  [[ "$inner" -lt 0 ]] && inner=0
+  printf '%s%s%s%s%s\n' "$TUI_CYAN" "$BOX_TL" "$(_tui_repeat "$BOX_H" "$inner")" "$BOX_TR" "$TUI_NC"
+}
+
+draw_box_bottom() {
+  local width="${1:-$(tui_term_width)}"
+  local inner=$((width - 2))
+  [[ "$inner" -lt 0 ]] && inner=0
+  printf '%s%s%s%s%s\n' "$TUI_CYAN" "$BOX_BL" "$(_tui_repeat "$BOX_H" "$inner")" "$BOX_BR" "$TUI_NC"
+}
+
+draw_box_sep() {
+  local width="${1:-$(tui_term_width)}"
+  local inner=$((width - 2))
+  [[ "$inner" -lt 0 ]] && inner=0
+  printf '%s%s%s%s%s\n' "$TUI_CYAN" "$BOX_LT" "$(_tui_repeat "$BOX_H" "$inner")" "$BOX_RT" "$TUI_NC"
+}
+
+draw_box_line() {
+  local text="$1" width="${2:-$(tui_term_width)}"
+  local inner=$((width - 2))
+  local text_len padding
+  text_len="$(_tui_strlen "$text")"
+  padding=$((inner - text_len - 1))
+  [[ "$padding" -lt 0 ]] && padding=0
+  printf '%s%s%s %s%s%s%s\n' "$TUI_CYAN" "$BOX_V" "$TUI_NC" "$text" "$(_tui_repeat ' ' "$padding")" "$TUI_CYAN" "$BOX_V$TUI_NC"
+}
+
+draw_box_empty() {
+  draw_box_line "" "${1:-$(tui_term_width)}"
+}
+
+draw_box_center() {
+  local text="$1" width="${2:-$(tui_term_width)}"
+  local inner=$((width - 2))
+  local text_len left_pad right_pad
+  text_len="$(_tui_strlen "$text")"
+  left_pad=$(( (inner - text_len) / 2 ))
+  right_pad=$((inner - text_len - left_pad))
+  [[ "$left_pad" -lt 0 ]] && left_pad=0
+  [[ "$right_pad" -lt 0 ]] && right_pad=0
+  printf '%s%s%s%s%s%s%s%s\n' \
+    "$TUI_CYAN" "$BOX_V" "$TUI_NC" \
+    "$(_tui_repeat ' ' "$left_pad")" "$text" "$(_tui_repeat ' ' "$right_pad")" \
+    "$TUI_CYAN" "$BOX_V$TUI_NC"
+}
+
+show_banner() {
+  local subtitle="${1:-}"
+  printf '%s%s\n' "$TUI_BRIGHT_CYAN" "$TUI_BOLD"
+  cat <<'EOF'
+   ___                 __     ______  _   _
+  / _ \__   _____ _ __ \ \   / /  _ \| \ | |
+ | | | \ \ / / _ \ '__| \ \ / /| |_) |  \| |
+ | |_| |\ V /  __/ |     \ V / |  __/| |\  |
+  \___/  \_/ \___|_|      \_/  |_|   |_| \_|
+EOF
+  printf '%s' "$TUI_NC"
+  if [[ -n "$subtitle" ]]; then
+    printf '  %s%s%s\n\n' "$TUI_DIM" "$subtitle" "$TUI_NC"
+  else
+    printf '\n\n'
+  fi
+}
+
+ui_prompt() {
+  local label=$1
+  local default=${2:-}
+  local reply
+  if [[ -n "$default" ]]; then
+    read -r -p "$(printf '%s%s%s [%s]: ' "$TUI_CYAN" "$label" "$TUI_NC" "$default")" reply
+    printf '%s' "${reply:-$default}"
+  else
+    read -r -p "$(printf '%s%s%s: ' "$TUI_CYAN" "$label" "$TUI_NC")" reply
+    printf '%s' "$reply"
+  fi
+}
+
+ui_choice() {
+  local label=${1:-Choice}
+  local default=${2:-}
+  local reply
+  if [[ -n "$default" ]]; then
+    read -r -p "$(printf ' %s>%s %s [%s]: ' "$TUI_BRIGHT_CYAN" "$TUI_NC" "$label" "$default")" reply
+    printf '%s' "${reply:-$default}"
+  else
+    read -r -p "$(printf ' %s>%s %s: ' "$TUI_BRIGHT_CYAN" "$TUI_NC" "$label")" reply
+    printf '%s' "$reply"
+  fi
+}
+
+ui_press_enter() {
+  local msg
+  msg="$(cli_t ui_press_enter)"
+  read -r -p "$(printf ' %s%s%s' "$TUI_DIM" "$msg" "$TUI_NC")" _
+}
+
 colorized_echo() {
   local color=$1
   shift
@@ -106,46 +252,79 @@ cli_t() {
   if [[ "$CLI_LANG" == ru ]]; then
     case "$key" in
       must_be_root) printf '%s' "Эту команду нужно запускать от root (sudo)." ;;
-      wizard_title) printf '%s' " OverVPN — мастер установки" ;;
+      wizard_title) printf '%s' "Мастер установки" ;;
+      wizard_subtitle) printf '%s' "Однонодовая панель · установка" ;;
+      menu_subtitle) printf '%s' "Однонодовая панель · управление" ;;
       server_ip) printf 'IP сервера: %s' "$1" ;;
-      answer_all) printf '%s' "Ответьте на все вопросы сейчас — дальше установка пойдёт без участия." ;;
-      leave_empty_ip) printf 'Оставьте домен пустым для http://%s:%s (без TLS).' "$1" "$2" ;;
+      answer_all) printf '%s' "Ответьте на все вопросы — дальше установка без участия." ;;
+      leave_empty_ip) printf 'Режим IP: http://%s:%s (без TLS).' "$1" "$2" ;;
       non_interactive_no_domain) printf '%s' "Неинтерактивный режим: установка без домена." ;;
-      prompt_base_domain) printf '%s' "1) Базовый домен (например example.com): " ;;
-      mode_ip_only) printf '%s' "Режим: только IP (без TLS). Запускаем установку…" ;;
-      prompt_panel_host) printf '2) Хост панели [panel.%s]: ' "$1" ;;
-      prompt_sub_host) printf '3) Хост подписок или хост/путь [sub.%s]: ' "$1" ;;
-      prompt_vpn_host) printf '4) Публичный VPN-хост [vpn.%s]: ' "$1" ;;
-      prompt_email) printf '5) Email для Let'\''s Encrypt [admin@%s]: ' "$1" ;;
-      summary_title) printf '%s' "Итого:" ;;
-      summary_site) printf '  Сайт:         https://%s' "$1" ;;
-      summary_panel) printf '  Панель:       https://%s' "$1" ;;
-      summary_sub) printf '  Подписки:     https://%s/api/sub/{TOKEN}' "$1" ;;
-      summary_sub_path) printf '  Подписки:     https://%s%s/{TOKEN}' "$1" "$2" ;;
-      summary_vpn) printf '  VPN-хост:     %s' "$1" ;;
-      summary_email) printf '  Email:        %s' "$1" ;;
-      dns_title) printf '%s' " Эти DNS A-записи должны указывать на сервер" ;;
+      prompt_base_domain) printf '%s' "Базовый домен (например example.com)" ;;
+      mode_ip_only) printf '%s' "Режим: только IP (без TLS)." ;;
+      prompt_panel_host) printf 'Хост панели' ;;
+      prompt_sub_host) printf 'Хост подписок или хост/путь' ;;
+      prompt_vpn_host) printf 'Публичный VPN-хост' ;;
+      prompt_email) printf 'Email для Let'\''s Encrypt' ;;
+      summary_title) printf '%s' "Итого" ;;
+      summary_site) printf 'Сайт:         https://%s' "$1" ;;
+      summary_panel) printf 'Панель:       https://%s' "$1" ;;
+      summary_sub) printf 'Подписки:     https://%s/api/sub/{TOKEN}' "$1" ;;
+      summary_sub_path) printf 'Подписки:     https://%s%s/{TOKEN}' "$1" "$2" ;;
+      summary_vpn) printf 'VPN-хост:     %s' "$1" ;;
+      summary_email) printf 'Email:        %s' "$1" ;;
+      summary_mode_ip) printf 'Режим:        IP-only (порт %s)' "$1" ;;
+      dns_title) printf '%s' "DNS A-записи" ;;
       dns_hint) printf 'У регистратора DNS → A-записи → %s' "$1" ;;
-      dns_point) printf '  %s  →  %s' "$1" "$2" ;;
-      dns_cloudflare) printf '%s' "Cloudflare: серая тучка (только DNS), пока не выпущены сертификаты." ;;
-      dns_firewall) printf '%s' "Также откройте UDP/443 (и TCP 80/443) в файрволе." ;;
-      dns_prompt_hint) printf '%s' "Если записи УЖЕ созданы — жмите Enter (Y). Установщик просто проверит, что они указывают сюда. Пропуск (s) почти всегда ломает выпуск TLS." ;;
-      prompt_dns_ready) printf '%s' "6) Проверить DNS сейчас? [Y=да, проверить / s=пропустить]: " ;;
-      dns_skip) printf '%s' "Проверка DNS пропущена. Если записи не указывают на этот сервер — сертификаты не выпусятся, установка оборвётся." ;;
-      dns_wait_ok) printf '%s' "ОК — проверим DNS (если уже готово, это быстро) и продолжим." ;;
-      prompt_start_now) printf '%s' "7) Начать установку сейчас? [Y/n]: " ;;
+      dns_point) printf '%s  →  %s' "$1" "$2" ;;
+      dns_cloudflare) printf '%s' "Cloudflare: серая тучка (только DNS), пока нет сертификатов." ;;
+      dns_firewall) printf '%s' "Откройте UDP/443 и TCP 80/443 в файрволе." ;;
+      dns_prompt_hint) printf '%s' "Если записи уже созданы — Enter (Y). Пропуск (s) часто ломает TLS." ;;
+      prompt_dns_ready) printf '%s' "Проверить DNS сейчас? [Y/s]" ;;
+      dns_skip) printf '%s' "Проверка DNS пропущена. Без верных A-записей сертификаты не выпустятся." ;;
+      dns_wait_ok) printf '%s' "ОК — проверим DNS и продолжим." ;;
+      prompt_start_now) printf '%s' "Начать установку? [Y/n]" ;;
       aborted) printf '%s' "Отменено." ;;
-      no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай ☕" ;;
+      no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай." ;;
       ensuring_utf8_locale) printf '%s' "Устанавливаем поддержку UTF-8 для кириллицы в терминале…" ;;
-      install_success_title) printf '%s' "║      OverVPN успешно установлен              ║" ;;
+      install_success_title) printf '%s' "Установка завершена" ;;
       install_success_site) printf 'Сайт:         https://%s' "$1" ;;
       install_success_panel) printf 'Панель:       %s' "$1" ;;
       install_success_login) printf 'Логин:        %s' "$1" ;;
       install_success_password) printf 'Пароль:       %s' "$1" ;;
-      install_success_subs) printf 'Подписки:     %s/api/sub/{TOKEN}  (корень хоста подписок — заглушка)' "$1" ;;
-      install_success_vpn) printf 'VPN-хост:     %s  (publicHost для новых входящих)' "$1" ;;
+      install_success_subs) printf 'Подписки:     %s/api/sub/{TOKEN}' "$1" ;;
+      install_success_vpn) printf 'VPN-хост:     %s' "$1" ;;
       install_success_credentials) printf 'Учётные данные: %s' "$1" ;;
-      install_success_manage) printf 'Управление: %s status | logs | check-update | update | restart' "$1" ;;
+      install_success_manage) printf 'Меню: %s   ·   CLI: %s status | logs | update' "$1" "$1" ;;
+      ui_press_enter) printf '%s' "Enter — продолжить…" ;;
+      ui_choice_label) printf '%s' "Выбор" ;;
+      lang_screen_title) printf '%s' "Язык / Language" ;;
+      lang_opt_en) printf '%s' "English" ;;
+      lang_opt_ru) printf '%s' "Русский" ;;
+      mode_screen_title) printf '%s' "Режим установки" ;;
+      mode_opt_domain) printf '%s' "С доменом (Nginx + Let'\''s Encrypt TLS)" ;;
+      mode_opt_ip) printf 'Только IP — http://%s:%s (без TLS)' "$1" "$2" ;;
+      hosts_screen_title) printf '%s' "Домены и почта" ;;
+      hosts_base_hint) printf '%s' "Базовый домен для лендинга и TLS" ;;
+      confirm_screen_title) printf '%s' "Подтверждение" ;;
+      confirm_opt_yes) printf '%s' "Начать установку" ;;
+      confirm_opt_no) printf '%s' "Отмена" ;;
+      dns_opt_check) printf '%s' "Проверить DNS и продолжить" ;;
+      dns_opt_skip) printf '%s' "Пропустить проверку DNS" ;;
+      menu_title) printf '%s' "Главное меню" ;;
+      menu_status) printf '%s' "Статус контейнеров" ;;
+      menu_info) printf '%s' "Инфо / URL / логин" ;;
+      menu_logs) printf '%s' "Логи" ;;
+      menu_restart) printf '%s' "Перезапуск" ;;
+      menu_update) printf '%s' "Обновление / проверка" ;;
+      menu_edit) printf '%s' "Редактировать .env" ;;
+      menu_nginx) printf '%s' "Обновить Nginx / сертификаты" ;;
+      menu_uninstall) printf '%s' "Удалить OverVPN" ;;
+      menu_exit) printf '%s' "Выход" ;;
+      menu_update_check) printf '%s' "Только проверить обновления" ;;
+      menu_update_apply) printf '%s' "Обновить сейчас" ;;
+      menu_update_back) printf '%s' "Назад" ;;
+      menu_not_installed_hint) printf '%s' "OverVPN ещё не установлен. Запустите: overvpn install" ;;
+      menu_logs_hint) printf '%s' "Логи (Ctrl+C — назад). Сервис пусто = все:" ;;
       unsupported_os) printf '%s' "Неподдерживаемая ОС: /etc/os-release не найден." ;;
       os_warning) printf 'Внимание: проверено на Ubuntu/Debian. Обнаружено: %s.' "$1" ;;
       installing_packages) printf '%s' "Устанавливаем необходимые пакеты…" ;;
@@ -256,46 +435,79 @@ cli_t() {
   else
     case "$key" in
       must_be_root) printf '%s' "This command must be run as root (use sudo)." ;;
-      wizard_title) printf '%s' " OverVPN — setup wizard" ;;
+      wizard_title) printf '%s' "Setup wizard" ;;
+      wizard_subtitle) printf '%s' "Single-node panel · install" ;;
+      menu_subtitle) printf '%s' "Single-node panel · manage" ;;
       server_ip) printf 'Server IP: %s' "$1" ;;
       answer_all) printf '%s' "Answer everything now — after that install runs unattended." ;;
-      leave_empty_ip) printf 'Leave base domain empty to use http://%s:%s (no TLS).' "$1" "$2" ;;
+      leave_empty_ip) printf 'IP mode: http://%s:%s (no TLS).' "$1" "$2" ;;
       non_interactive_no_domain) printf '%s' "Non-interactive mode: installing without domain." ;;
-      prompt_base_domain) printf '%s' "1) Base domain (e.g. example.com): " ;;
-      mode_ip_only) printf '%s' "Mode: IP-only (no TLS). Starting install…" ;;
-      prompt_panel_host) printf '2) Panel host [panel.%s]: ' "$1" ;;
-      prompt_sub_host) printf '3) Subscription host or host/path [sub.%s]: ' "$1" ;;
-      prompt_vpn_host) printf '4) VPN public host [vpn.%s]: ' "$1" ;;
-      prompt_email) printf '5) Let'\''s Encrypt email [admin@%s]: ' "$1" ;;
-      summary_title) printf '%s' "Summary:" ;;
-      summary_site) printf '  Site:         https://%s' "$1" ;;
-      summary_panel) printf '  Panel:        https://%s' "$1" ;;
-      summary_sub) printf '  Subscription: https://%s/api/sub/{TOKEN}' "$1" ;;
-      summary_sub_path) printf '  Subscription: https://%s%s/{TOKEN}' "$1" "$2" ;;
-      summary_vpn) printf '  VPN host:     %s' "$1" ;;
-      summary_email) printf '  Email:        %s' "$1" ;;
-      dns_title) printf '%s' " These DNS A records must point at this server" ;;
+      prompt_base_domain) printf '%s' "Base domain (e.g. example.com)" ;;
+      mode_ip_only) printf '%s' "Mode: IP-only (no TLS)." ;;
+      prompt_panel_host) printf 'Panel host' ;;
+      prompt_sub_host) printf 'Subscription host or host/path' ;;
+      prompt_vpn_host) printf 'VPN public host' ;;
+      prompt_email) printf 'Let'\''s Encrypt email' ;;
+      summary_title) printf '%s' "Summary" ;;
+      summary_site) printf 'Site:         https://%s' "$1" ;;
+      summary_panel) printf 'Panel:        https://%s' "$1" ;;
+      summary_sub) printf 'Subscription: https://%s/api/sub/{TOKEN}' "$1" ;;
+      summary_sub_path) printf 'Subscription: https://%s%s/{TOKEN}' "$1" "$2" ;;
+      summary_vpn) printf 'VPN host:     %s' "$1" ;;
+      summary_email) printf 'Email:        %s' "$1" ;;
+      summary_mode_ip) printf 'Mode:         IP-only (port %s)' "$1" ;;
+      dns_title) printf '%s' "DNS A records" ;;
       dns_hint) printf 'At your DNS provider → A records → %s' "$1" ;;
-      dns_point) printf '  %s  →  %s' "$1" "$2" ;;
+      dns_point) printf '%s  →  %s' "$1" "$2" ;;
       dns_cloudflare) printf '%s' "Cloudflare: grey cloud (DNS only) until certs are issued." ;;
-      dns_firewall) printf '%s' "Also open UDP/443 (and 80/443 TCP) on the firewall." ;;
-      dns_prompt_hint) printf '%s' "If records are ALREADY created — press Enter (Y). The installer only verifies they point here. Skipping (s) usually breaks TLS issuance." ;;
-      prompt_dns_ready) printf '%s' "6) Check DNS now? [Y=yes, verify / s=skip]: " ;;
-      dns_skip) printf '%s' "DNS check skipped. If records do not point here yet, certificate issuance will fail and install will abort." ;;
-      dns_wait_ok) printf '%s' "OK — will verify DNS (fast if already ready), then continue." ;;
-      prompt_start_now) printf '%s' "7) Start installation now? [Y/n]: " ;;
+      dns_firewall) printf '%s' "Also open UDP/443 and TCP 80/443 on the firewall." ;;
+      dns_prompt_hint) printf '%s' "If records are already created — press Enter (Y). Skipping (s) usually breaks TLS." ;;
+      prompt_dns_ready) printf '%s' "Check DNS now? [Y/s]" ;;
+      dns_skip) printf '%s' "DNS check skipped. If records do not point here yet, certificate issuance will fail." ;;
+      dns_wait_ok) printf '%s' "OK — will verify DNS, then continue." ;;
+      prompt_start_now) printf '%s' "Start installation? [Y/n]" ;;
       aborted) printf '%s' "Aborted." ;;
-      no_more_prompts) printf '%s' "No more prompts. You can go drink tea ☕" ;;
+      no_more_prompts) printf '%s' "No more prompts. You can go drink tea." ;;
       ensuring_utf8_locale) printf '%s' "Ensuring UTF-8 support for Cyrillic in the terminal..." ;;
-      install_success_title) printf '%s' "║         OverVPN installed successfully       ║" ;;
+      install_success_title) printf '%s' "Install complete" ;;
       install_success_site) printf 'Site:         https://%s' "$1" ;;
       install_success_panel) printf 'Panel:        %s' "$1" ;;
       install_success_login) printf 'Login:        %s' "$1" ;;
       install_success_password) printf 'Password:     %s' "$1" ;;
-      install_success_subs) printf 'Subscriptions:%s/api/sub/{TOKEN}  (root / on sub host is only a stub)' "$1" ;;
-      install_success_vpn) printf 'VPN host:     %s  (default publicHost for new inbounds)' "$1" ;;
+      install_success_subs) printf 'Subscriptions: %s/api/sub/{TOKEN}' "$1" ;;
+      install_success_vpn) printf 'VPN host:     %s' "$1" ;;
       install_success_credentials) printf 'Credentials: %s' "$1" ;;
-      install_success_manage) printf 'Manage with: %s status | logs | check-update | update | restart' "$1" ;;
+      install_success_manage) printf 'Menu: %s   ·   CLI: %s status | logs | update' "$1" "$1" ;;
+      ui_press_enter) printf '%s' "Press Enter to continue…" ;;
+      ui_choice_label) printf '%s' "Choice" ;;
+      lang_screen_title) printf '%s' "Language / Язык" ;;
+      lang_opt_en) printf '%s' "English" ;;
+      lang_opt_ru) printf '%s' "Русский" ;;
+      mode_screen_title) printf '%s' "Install mode" ;;
+      mode_opt_domain) printf '%s' "With domain (Nginx + Let'\''s Encrypt TLS)" ;;
+      mode_opt_ip) printf 'IP-only — http://%s:%s (no TLS)' "$1" "$2" ;;
+      hosts_screen_title) printf '%s' "Domains and email" ;;
+      hosts_base_hint) printf '%s' "Base domain for landing page and TLS" ;;
+      confirm_screen_title) printf '%s' "Confirm" ;;
+      confirm_opt_yes) printf '%s' "Start installation" ;;
+      confirm_opt_no) printf '%s' "Cancel" ;;
+      dns_opt_check) printf '%s' "Verify DNS and continue" ;;
+      dns_opt_skip) printf '%s' "Skip DNS verification" ;;
+      menu_title) printf '%s' "Main menu" ;;
+      menu_status) printf '%s' "Container status" ;;
+      menu_info) printf '%s' "Info / URL / login" ;;
+      menu_logs) printf '%s' "Logs" ;;
+      menu_restart) printf '%s' "Restart" ;;
+      menu_update) printf '%s' "Update / check" ;;
+      menu_edit) printf '%s' "Edit .env" ;;
+      menu_nginx) printf '%s' "Refresh Nginx / certificates" ;;
+      menu_uninstall) printf '%s' "Uninstall OverVPN" ;;
+      menu_exit) printf '%s' "Exit" ;;
+      menu_update_check) printf '%s' "Check for updates only" ;;
+      menu_update_apply) printf '%s' "Update now" ;;
+      menu_update_back) printf '%s' "Back" ;;
+      menu_not_installed_hint) printf '%s' "OverVPN is not installed yet. Run: overvpn install" ;;
+      menu_logs_hint) printf '%s' "Logs (Ctrl+C to return). Empty service = all:" ;;
       unsupported_os) printf '%s' "Unsupported OS: /etc/os-release not found." ;;
       os_warning) printf 'Warning: tested on Ubuntu/Debian. Detected: %s.' "$1" ;;
       installing_packages) printf '%s' "Installing required packages..." ;;
@@ -410,20 +622,260 @@ prompt_wizard_language() {
   if [[ ! -t 0 ]]; then
     return
   fi
-  local choice
+  local w choice
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t lang_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t lang_opt_en)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t lang_opt_ru)" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    choice="$(ui_choice "$(cli_t ui_choice_label)" "1")"
+    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    case "$choice" in
+      2|ru|russian|русский|р)
+        CLI_LANG=ru
+        apply_cli_lang
+        return
+        ;;
+      1|en|english|"")
+        CLI_LANG=en
+        return
+        ;;
+    esac
+  done
+}
+
+prompt_install_mode() {
+  local ip=$1
+  local w choice
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t mode_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t server_ip "$ip")" "$w"
+    draw_box_line " $(cli_t answer_all)" "$w"
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t mode_opt_domain)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    choice="$(ui_choice "$(cli_t ui_choice_label)" "1")"
+    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    case "$choice" in
+      1|d|domain) CFG_MODE="domain"; return ;;
+      2|i|ip) CFG_MODE="ip"; return ;;
+    esac
+  done
+}
+
+prompt_install_hosts() {
+  local base=$1
+  local w panel sub vpn email
+  w="$(tui_term_width)"
+  clear_screen
+  show_banner "$(cli_t wizard_subtitle)"
+  draw_box_top "$w"
+  draw_box_center "${TUI_BOLD}$(cli_t hosts_screen_title)${TUI_NC}" "$w"
+  draw_box_sep "$w"
+  draw_box_line " $(cli_t summary_site "$base")" "$w"
+  draw_box_empty "$w"
+  draw_box_bottom "$w"
   echo
-  colorized_echo cyan "0) Language / Язык [1=English, 2=Русский] [1]: "
-  read -r -p "> " choice
-  choice="$(printf '%s' "${choice:-1}" | tr -d '[:space:]')"
-  case "$choice" in
-    2|ru|russian|русский|р|Русский)
-      CLI_LANG=ru
-      apply_cli_lang
-      ;;
-    *)
-      CLI_LANG=en
-      ;;
-  esac
+
+  panel="$(ui_prompt "$(cli_t prompt_panel_host)" "panel.${base}")"
+  panel="$(printf '%s' "$panel" | tr -d '[:space:]')"
+  parse_endpoint "$panel" false
+  CFG_PANEL_HOST="$PARSE_HOST"
+
+  sub="$(ui_prompt "$(cli_t prompt_sub_host)" "sub.${base}")"
+  sub="$(printf '%s' "$sub" | tr -d '[:space:]')"
+  parse_endpoint "$sub" true
+  CFG_SUB_HOST="$PARSE_HOST"
+  CFG_SUB_PATH="$PARSE_PATH"
+
+  vpn="$(ui_prompt "$(cli_t prompt_vpn_host)" "vpn.${base}")"
+  vpn="$(printf '%s' "$vpn" | tr -d '[:space:]')"
+  parse_endpoint "$vpn" false
+  CFG_VPN_HOST="$PARSE_HOST"
+
+  email="$(ui_prompt "$(cli_t prompt_email)" "admin@${base}")"
+  CFG_EMAIL="$(printf '%s' "$email" | tr -d '[:space:]')"
+}
+
+prompt_install_dns_screen() {
+  local ip=$1
+  shift
+  local hosts=("$@")
+  local w choice host
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t dns_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t dns_hint "$ip")" "$w"
+    draw_box_empty "$w"
+    for host in "${hosts[@]}"; do
+      draw_box_line " $(cli_t dns_point "$host" "$ip")" "$w"
+    done
+    draw_box_empty "$w"
+    draw_box_line " $(cli_t dns_cloudflare)" "$w"
+    draw_box_line " $(cli_t dns_firewall)" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t dns_prompt_hint)" "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[Y]${TUI_NC} $(cli_t dns_opt_check)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[s]${TUI_NC} $(cli_t dns_opt_skip)" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    choice="$(ui_choice "$(cli_t prompt_dns_ready)" "Y")"
+    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case "$choice" in
+      s|skip)
+        CFG_SKIP_DNS="true"
+        colorized_echo yellow "$(cli_t dns_skip)"
+        sleep 1
+        return
+        ;;
+      y|yes|"")
+        CFG_SKIP_DNS="false"
+        colorized_echo green "$(cli_t dns_wait_ok)"
+        sleep 1
+        return
+        ;;
+    esac
+  done
+}
+
+prompt_install_confirm() {
+  local ip=$1
+  local w choice
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t confirm_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t server_ip "$ip")" "$w"
+    if [[ "$CFG_MODE" == "domain" ]]; then
+      draw_box_line " $(cli_t summary_site "$CFG_BASE_DOMAIN")" "$w"
+      draw_box_line " $(cli_t summary_panel "$CFG_PANEL_HOST")" "$w"
+      if [[ -n "$CFG_SUB_PATH" ]]; then
+        draw_box_line " $(cli_t summary_sub_path "$CFG_SUB_HOST" "$CFG_SUB_PATH")" "$w"
+      else
+        draw_box_line " $(cli_t summary_sub "$CFG_SUB_HOST")" "$w"
+      fi
+      draw_box_line " $(cli_t summary_vpn "$CFG_VPN_HOST")" "$w"
+      draw_box_line " $(cli_t summary_email "$CFG_EMAIL")" "$w"
+      if [[ "$CFG_SKIP_DNS" == "true" ]]; then
+        draw_box_line " DNS:          skip" "$w"
+      else
+        draw_box_line " DNS:          verify" "$w"
+      fi
+    else
+      draw_box_line " $(cli_t summary_mode_ip "$DEFAULT_WEB_PORT")" "$w"
+      draw_box_line " $(cli_t leave_empty_ip "$ip" "$DEFAULT_WEB_PORT")" "$w"
+    fi
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_GREEN}[Y]${TUI_NC} $(cli_t confirm_opt_yes)" "$w"
+    draw_box_line " ${TUI_RED}[n]${TUI_NC} $(cli_t confirm_opt_no)" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    choice="$(ui_choice "$(cli_t prompt_start_now)" "Y")"
+    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case "$choice" in
+      y|yes|"")
+        clear_screen
+        show_banner "$(cli_t wizard_subtitle)"
+        colorized_echo green "$(cli_t no_more_prompts)"
+        echo
+        return
+        ;;
+      n|no)
+        colorized_echo red "$(cli_t aborted)"
+        exit 1
+        ;;
+    esac
+  done
+}
+
+prompt_install_endpoints() {
+  local ip
+  ip="$(public_ip)"
+  CFG_BASE_DOMAIN=""
+  CFG_PANEL_HOST=""
+  CFG_SUB_HOST=""
+  CFG_SUB_PATH=""
+  CFG_VPN_HOST=""
+  CFG_EMAIL=""
+  CFG_MODE="ip"
+  CFG_SKIP_DNS="false"
+
+  prompt_wizard_language
+
+  if [[ ! -t 0 ]]; then
+    colorized_echo yellow "$(cli_t non_interactive_no_domain)"
+    return
+  fi
+
+  prompt_install_mode "$ip"
+
+  if [[ "$CFG_MODE" == "ip" ]]; then
+    colorized_echo green "$(cli_t mode_ip_only)"
+    prompt_install_confirm "$ip"
+    return
+  fi
+
+  local w base
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t hosts_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t hosts_base_hint)" "$w"
+    draw_box_line " $(cli_t server_ip "$ip")" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    echo
+    base="$(ui_prompt "$(cli_t prompt_base_domain)")"
+    base="$(printf '%s' "$base" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    if [[ -z "$base" ]]; then
+      colorized_echo yellow "$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")"
+      sleep 1
+      CFG_MODE="ip"
+      prompt_install_confirm "$ip"
+      return
+    fi
+    if [[ "$base" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]; then
+      break
+    fi
+    colorized_echo red "$(cli_t invalid_hostname "$base")"
+    sleep 1
+  done
+
+  CFG_BASE_DOMAIN="$base"
+  CFG_MODE="domain"
+  prompt_install_hosts "$base"
+
+  local -a dns_hosts=()
+  mapfile -t dns_hosts < <(unique_hosts "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
+  prompt_install_dns_screen "$ip" "${dns_hosts[@]}"
+  prompt_install_confirm "$ip"
 }
 
 check_root() {
@@ -748,108 +1200,6 @@ parse_endpoint() {
   PARSE_PATH="$path"
 }
 
-prompt_install_endpoints() {
-  local ip
-  ip="$(public_ip)"
-  CFG_BASE_DOMAIN=""
-  CFG_PANEL_HOST=""
-  CFG_SUB_HOST=""
-  CFG_SUB_PATH=""
-  CFG_VPN_HOST=""
-  CFG_EMAIL=""
-  CFG_MODE="ip"
-  CFG_SKIP_DNS="false"
-
-  prompt_wizard_language
-
-  echo
-  colorized_echo cyan "════════════════════════════════════════"
-  colorized_echo cyan "$(cli_t wizard_title)"
-  colorized_echo cyan "════════════════════════════════════════"
-  colorized_echo cyan "$(cli_t server_ip "$ip")"
-  colorized_echo yellow "$(cli_t answer_all)"
-  echo
-  colorized_echo yellow "$(cli_t leave_empty_ip "$ip" "$DEFAULT_WEB_PORT")"
-  echo
-
-  if [[ ! -t 0 ]]; then
-    colorized_echo yellow "$(cli_t non_interactive_no_domain)"
-    return
-  fi
-
-  local base panel sub vpn email dns_ready
-  read -r -p "$(cli_t prompt_base_domain)" base
-  base="$(printf '%s' "$base" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-  if [[ -z "$base" ]]; then
-    echo
-    colorized_echo green "$(cli_t mode_ip_only)"
-    echo
-    return
-  fi
-  validate_hostname "$base"
-  CFG_BASE_DOMAIN="$base"
-  CFG_MODE="domain"
-
-  read -r -p "$(cli_t prompt_panel_host "$base")" panel
-  panel="$(printf '%s' "${panel:-panel.${base}}" | tr -d '[:space:]')"
-  parse_endpoint "$panel" false
-  CFG_PANEL_HOST="$PARSE_HOST"
-
-  read -r -p "$(cli_t prompt_sub_host "$base")" sub
-  sub="$(printf '%s' "${sub:-sub.${base}}" | tr -d '[:space:]')"
-  parse_endpoint "$sub" true
-  CFG_SUB_HOST="$PARSE_HOST"
-  CFG_SUB_PATH="$PARSE_PATH"
-
-  read -r -p "$(cli_t prompt_vpn_host "$base")" vpn
-  vpn="$(printf '%s' "${vpn:-vpn.${base}}" | tr -d '[:space:]')"
-  parse_endpoint "$vpn" false
-  CFG_VPN_HOST="$PARSE_HOST"
-
-  read -r -p "$(cli_t prompt_email "$base")" email
-  CFG_EMAIL="$(printf '%s' "${email:-admin@${base}}" | tr -d '[:space:]')"
-
-  local -a dns_hosts=()
-  mapfile -t dns_hosts < <(unique_hosts "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
-
-  echo
-  colorized_echo green "$(cli_t summary_title)"
-  colorized_echo cyan "$(cli_t summary_site "$CFG_BASE_DOMAIN")"
-  colorized_echo cyan "$(cli_t summary_panel "$CFG_PANEL_HOST")"
-  if [[ -n "$CFG_SUB_PATH" ]]; then
-    colorized_echo cyan "$(cli_t summary_sub_path "$CFG_SUB_HOST" "$CFG_SUB_PATH")"
-  else
-    colorized_echo cyan "$(cli_t summary_sub "$CFG_SUB_HOST")"
-  fi
-  colorized_echo cyan "$(cli_t summary_vpn "$CFG_VPN_HOST")"
-  colorized_echo cyan "$(cli_t summary_email "$CFG_EMAIL")"
-  echo
-
-  show_dns_instructions "$ip" "${dns_hosts[@]}"
-
-  colorized_echo yellow "$(cli_t dns_prompt_hint)"
-  read -r -p "$(cli_t prompt_dns_ready)" dns_ready
-  dns_ready="$(printf '%s' "${dns_ready:-y}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$dns_ready" == "s" || "$dns_ready" == "skip" ]]; then
-    CFG_SKIP_DNS="true"
-    colorized_echo yellow "$(cli_t dns_skip)"
-  else
-    CFG_SKIP_DNS="false"
-    colorized_echo green "$(cli_t dns_wait_ok)"
-  fi
-
-  echo
-  read -r -p "$(cli_t prompt_start_now)" start_now
-  start_now="$(printf '%s' "${start_now:-y}" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$start_now" != "y" && "$start_now" != "yes" ]]; then
-    colorized_echo red "$(cli_t aborted)"
-    exit 1
-  fi
-
-  echo
-  colorized_echo green "$(cli_t no_more_prompts)"
-  echo
-}
 
 unique_hosts() {
   local -A seen=()
@@ -1544,6 +1894,8 @@ generate_env() {
   set_env_var "SING_BOX_TROJAN_PORT" "8444"
   set_env_var "SING_BOX_SS_PORT" "8445"
   set_env_var "XRAY_LISTEN_PORT" "8443"
+  set_env_var "XRAY_GRPC_PORT" "8446"
+  set_env_var "XRAY_TCP_TLS_PORT" "8447"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
 
@@ -1565,6 +1917,8 @@ generate_env() {
       set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
       set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
       set_env_var "XRAY_LISTEN_PORT" "9443"
+      set_env_var "XRAY_GRPC_PORT" "9446"
+      set_env_var "XRAY_TCP_TLS_PORT" "9447"
       set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
       set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
     fi
@@ -1623,35 +1977,46 @@ wait_for_health() {
 
 print_success() {
   local web_port=$1
-  local ip user pass panel_url sub_url vpn_host base_domain
+  local user pass panel_url sub_url vpn_host base_domain
+  local w
 
-  ip="$(get_env_var PANEL_IP "$CREDENTIALS_FILE" 2>/dev/null || public_ip)"
   user="$(get_env_var BOOTSTRAP_ADMIN_USER "$CREDENTIALS_FILE")"
   pass="$(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$CREDENTIALS_FILE")"
   panel_url="$(get_env_var PANEL_URL "$CREDENTIALS_FILE")"
   sub_url="$(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")"
   vpn_host="$(get_env_var VPN_PUBLIC_HOST "$CREDENTIALS_FILE")"
   base_domain="$(get_env_var BASE_DOMAIN "$CREDENTIALS_FILE" 2>/dev/null || true)"
+  w="$(tui_term_width)"
 
-  echo
-  colorized_echo green "╔══════════════════════════════════════════════╗"
-  colorized_echo green "$(cli_t install_success_title)"
-  colorized_echo green "╚══════════════════════════════════════════════╝"
-  echo
+  if [[ -t 1 ]]; then
+    clear_screen
+    show_banner "$(cli_t menu_subtitle)"
+  else
+    echo
+  fi
+
+  draw_box_top "$w"
+  draw_box_center "${TUI_GREEN}${TUI_BOLD}$(cli_t install_success_title)${TUI_NC}" "$w"
+  draw_box_sep "$w"
+  draw_box_empty "$w"
   if [[ -n "$base_domain" ]]; then
-    colorized_echo cyan "$(cli_t install_success_site "$base_domain")"
+    draw_box_line " $(cli_t install_success_site "$base_domain")" "$w"
   fi
-  colorized_echo cyan "$(cli_t install_success_panel "$panel_url")"
-  colorized_echo cyan "$(cli_t install_success_login "$user")"
-  colorized_echo cyan "$(cli_t install_success_password "$pass")"
-  colorized_echo cyan "$(cli_t install_success_subs "$sub_url")"
+  draw_box_line " $(cli_t install_success_panel "$panel_url")" "$w"
+  draw_box_line " $(cli_t install_success_login "$user")" "$w"
+  draw_box_line " $(cli_t install_success_password "$pass")" "$w"
+  draw_box_line " $(cli_t install_success_subs "$sub_url")" "$w"
   if [[ -n "$vpn_host" ]]; then
-    colorized_echo cyan "$(cli_t install_success_vpn "$vpn_host")"
+    draw_box_line " $(cli_t install_success_vpn "$vpn_host")" "$w"
   fi
+  draw_box_empty "$w"
+  draw_box_sep "$w"
+  draw_box_line " $(cli_t install_success_credentials "$CREDENTIALS_FILE")" "$w"
+  draw_box_line " $(cli_t install_success_manage "$APP_NAME")" "$w"
+  draw_box_empty "$w"
+  draw_box_bottom "$w"
   echo
-  colorized_echo yellow "$(cli_t install_success_credentials "$CREDENTIALS_FILE")"
-  colorized_echo yellow "$(cli_t install_success_manage "$APP_NAME")"
-  echo
+  : "${web_port}"
 }
 
 usage() {
@@ -1659,6 +2024,8 @@ usage() {
 OverVPN management script
 
 Usage:
+  ${APP_NAME}                      Interactive console menu (TTY)
+  ${APP_NAME} menu                 Same as bare command
   ${APP_NAME} install [options]
   ${APP_NAME} up | down | restart | status | logs [service] | update | check-update | uninstall
   ${APP_NAME} info | edit | bootstrap | nginx | config | install-script
@@ -1671,13 +2038,9 @@ Config (domains, nginx, certificates):
   ${APP_NAME} config certs
   ${APP_NAME} config apply
 
-Install asks interactively:
-  1) base domain (public landing page + TLS)
-  2) panel host (subdomain; no path — SPA)
-  3) subscription host or host/path
-  4) VPN public host
-  5) Let's Encrypt email
-Then prints DNS A-records to create and waits before issuing certificates.
+Install wizard (console screens):
+  language → install mode → domains/email → DNS → confirm
+  Then runs unattended (packages, Docker, images, Nginx/TLS).
 
 Options:
   --base-domain <host>     Skip base-domain prompt
@@ -1693,8 +2056,6 @@ Options:
   --no-nginx               Skip Nginx/TLS
   --no-ufw                 Do not touch UFW
   -h, --help               Show help
-
-Wizard asks all questions first (domains + DNS), then runs unattended.
 
 Default install downloads only deploy files (no full git clone).
 Use --build to clone the repository and build images locally.
@@ -2187,6 +2548,125 @@ cmd_install_script() {
   install_cli "${BASH_SOURCE[0]}"
 }
 
+menu_run_action() {
+  echo
+  set +e
+  "$@"
+  set -e
+  echo
+  ui_press_enter
+}
+
+show_update_submenu() {
+  local w choice
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t menu_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t menu_update)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t menu_update_check)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t menu_update_apply)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[0]${TUI_NC} $(cli_t menu_update_back)" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    choice="$(ui_choice "$(cli_t ui_choice_label)" "0")"
+    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    case "$choice" in
+      1)
+        echo
+        set +e
+        cmd_check_update
+        set -e
+        echo
+        ui_press_enter
+        ;;
+      2)
+        menu_run_action cmd_update
+        ;;
+      0|b|back|"") return ;;
+    esac
+  done
+}
+
+show_main_menu() {
+  check_root
+  local w choice svc
+  w="$(tui_term_width)"
+
+  if ! is_installed; then
+    clear_screen
+    show_banner "$(cli_t menu_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t menu_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t menu_not_installed_hint)" "$w"
+    draw_box_bottom "$w"
+    echo
+    return 1
+  fi
+
+  while true; do
+    w="$(tui_term_width)"
+    clear_screen
+    show_banner "$(cli_t menu_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t menu_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t menu_status)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t menu_info)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[3]${TUI_NC} $(cli_t menu_logs)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[4]${TUI_NC} $(cli_t menu_restart)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[5]${TUI_NC} $(cli_t menu_update)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[6]${TUI_NC} $(cli_t menu_edit)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[7]${TUI_NC} $(cli_t menu_nginx)" "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_RED}[8]${TUI_NC} $(cli_t menu_uninstall)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[0]${TUI_NC} $(cli_t menu_exit)" "$w"
+    draw_box_empty "$w"
+    draw_box_sep "$w"
+    draw_box_center "${TUI_DIM}${APP_NAME} · $(cli_t menu_subtitle)${TUI_NC}" "$w"
+    draw_box_bottom "$w"
+
+    choice="$(ui_choice "$(cli_t ui_choice_label)" "0")"
+    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    case "$choice" in
+      1) menu_run_action cmd_status ;;
+      2) menu_run_action cmd_info ;;
+      3)
+        echo
+        colorized_echo cyan "$(cli_t menu_logs_hint)"
+        svc="$(ui_prompt "service" "")"
+        echo
+        set +e
+        if [[ -n "$svc" ]]; then
+          cmd_logs "$svc"
+        else
+          cmd_logs
+        fi
+        set -e
+        echo
+        ui_press_enter
+        ;;
+      4) menu_run_action cmd_restart ;;
+      5) show_update_submenu ;;
+      6) menu_run_action cmd_edit ;;
+      7) menu_run_action cmd_nginx ;;
+      8)
+        cmd_uninstall
+        exit 0
+        ;;
+      0|q|quit|exit|"")
+        echo
+        exit 0
+        ;;
+    esac
+  done
+}
+
 main() {
   load_cli_lang
   apply_cli_lang
@@ -2216,7 +2696,15 @@ main() {
     nginx|refresh-nginx) cmd_nginx ;;
     config) cmd_config "$@" ;;
     install-script) cmd_install_script ;;
-    ""|-h|--help|help) usage ;;
+    menu) show_main_menu ;;
+    -h|--help|help) usage ;;
+    "")
+      if [[ -t 0 && -t 1 ]]; then
+        show_main_menu
+      else
+        usage
+      fi
+      ;;
     *)
       colorized_echo red "$(cli_t unknown_command "$cmd")"
       usage

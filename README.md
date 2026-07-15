@@ -87,33 +87,34 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 
 ### Что спросит мастер
 
-Сначала все вопросы — потом установка без пауз (можно отойти):
+Мастер — **консольные экраны** (clear + баннер + рамка), как у типичных серверных TUI-установщиков. Сначала все ответы, потом установка без пауз:
 
-1. **Базовый домен** — публичная заглушка + TLS; пусто → режим `http://IP:8000`
-2. **Панель** — по умолчанию `panel.example.com`
-3. **Подписки** — хост или `хост/путь`, по умолчанию `sub.example.com`
-4. **VPN-хост** — по умолчанию `vpn.example.com` (endpoint клиентов, не панель)
-5. **Email** для Let’s Encrypt
-6. Подтверждение DNS A-записей (или `s` — пропустить проверку)
+1. **Язык** — English / Русский
+2. **Режим** — с доменом (Nginx + TLS) или только IP (`http://IP:8000`)
+3. **Домены** — базовый, панель, подписки, VPN-хост, email Let’s Encrypt
+4. **DNS** — список A-записей; проверить сейчас или пропустить (`s`)
+5. **Подтверждение** — summary и старт
 
-Дальше скрипт ждёт DNS (до ~15 мин), ставит Docker, образы, Nginx и сертификаты.
+Дальше скрипт ждёт DNS (до ~15 мин), ставит Docker, образы, Nginx и сертификаты. В конце — экран с URL и логином владельца.
 
 ### После установки
 
 ```bash
-overvpn info      # URL панели, подписки, логин владельца
-overvpn status    # состояние контейнеров
+overvpn            # интерактивное меню управления
+overvpn info       # URL панели, подписки, логин владельца
+overvpn status     # состояние контейнеров
 ```
 
-Откройте URL панели и войдите логином/паролем из `overvpn info`.
+Откройте URL панели и войдите логином/паролем из меню **Info** или `overvpn info`.
 
 ---
 
 ## Управление
 
-CLI ставится вместе с панелью:
+CLI ставится вместе с панелью. Без аргументов (в TTY) открывается **консольное меню**; те же действия доступны командами:
 
 ```bash
+overvpn                        # меню: status / info / logs / update / …
 overvpn status                 # Docker Compose status
 overvpn logs                   # все сервисы
 overvpn logs api               # только API
@@ -133,17 +134,19 @@ overvpn uninstall              # удалить установку
 
 ### Порты
 
-| Компонент       | По умолчанию                                              |
-| --------------- | --------------------------------------------------------- |
-| Веб-панель      | `8000` (без домена) / `443` через Nginx                   |
-| API             | внутри Compose; наружу через веб/прокси                   |
-| PostgreSQL      | `5432` → только `127.0.0.1`                               |
-| Redis           | `6379` → только `127.0.0.1`                               |
-| VPN UDP inbound | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2      |
-| VPN TCP Reality | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                 |
-| VPN TCP Trojan  | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)              |
-| VPN TCP SS      | `SING_BOX_SS_PORT` (по умолчанию `8445`)                  |
-| VPN Xray TCP    | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx) |
+| Компонент        | По умолчанию                                               |
+| ---------------- | ---------------------------------------------------------- |
+| Веб-панель       | `8000` (без домена) / `443` через Nginx                    |
+| API              | внутри Compose; наружу через веб/прокси                    |
+| PostgreSQL       | `5432` → только `127.0.0.1`                                |
+| Redis            | `6379` → только `127.0.0.1`                                |
+| VPN UDP inbound  | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2       |
+| VPN TCP Reality  | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                  |
+| VPN TCP Trojan   | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)               |
+| VPN TCP SS       | `SING_BOX_SS_PORT` (по умолчанию `8445`)                   |
+| VPN Xray xHTTP   | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx)  |
+| VPN Xray gRPC    | `XRAY_GRPC_PORT` (по умолчанию `8446` / `9446` с Nginx)    |
+| VPN Xray TCP TLS | `XRAY_TCP_TLS_PORT` (по умолчанию `8447` / `9447` с Nginx) |
 
 > [!WARNING]
 > Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
@@ -160,7 +163,7 @@ overvpn uninstall              # удалить установку
 
 При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_`* — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
-Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP). Не выбирайте другие порты без правки `.env` и publish в Compose.
+Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP), `XRAY_GRPC_PORT` (gRPC), `XRAY_TCP_TLS_PORT` (TCP TLS). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
 ### 2. Создать план и пользователя
 
@@ -263,7 +266,7 @@ curl "$SUB_URL/info"
 
 Кастомизация брендинга:
 
-- **План** — шаблон названия, announce, support/Telegram, info page, Happ Provider ID, info-блок с кнопкой, renew при истечении, fallback URL и color-profile (`{username}`, `{used}`, `{limit}`, `{expire}`, `{token}`, `{subscriptionUrl}`, …).
+- **План** — шаблон названия, announce, support/Telegram, info page, показ лимитов трафика (`total=` / ∞), Happ Provider ID, info-блок с кнопкой, renew при истечении, fallback URL и color-profile (`{username}`, `{used}`, `{limit}`, `{expire}`, `{token}`, `{subscriptionUrl}`, …). Расширенные Happ-поля редактируются и отдаются только при указанном Provider ID.
 - **Точка входа** — шаблон имени подключения для всех форматов (`{identity}`, `{tag}`, `{protocol}`, …). Эмодзи допускаются. Пустые поля = прежние дефолты (`OverVPN - {username}`, `{identity} - {tag}`).
 
 **Ротация токена** (старый URL сразу мёртв, VPN-пароли не меняются):

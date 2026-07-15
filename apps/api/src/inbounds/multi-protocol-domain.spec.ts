@@ -7,7 +7,9 @@ import {
   composeShadowsocksClientPassword,
 } from './shadowsocks-domain';
 import { buildTrojanUri } from './trojan-domain';
+import { buildVlessGrpcTlsUri } from './vless-grpc-tls-domain';
 import { buildVlessUri } from './vless-reality-domain';
+import { buildVlessTcpTlsUri } from './vless-tcp-tls-domain';
 
 describe('VLESS Reality domain', () => {
   it('rejects invalid short ids and key pairs', () => {
@@ -47,6 +49,40 @@ describe('VLESS Reality domain', () => {
 
     expect(uri).toBe(
       'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:443?encryption=none&security=reality&sni=www.cloudflare.com&fp=chrome&pbk=public-key-value&sid=0123456789abcdef&type=tcp&flow=xtls-rprx-vision#Alice%20%2F%20Edge',
+    );
+  });
+});
+
+describe('VLESS gRPC TLS domain', () => {
+  it('encodes vless:// gRPC TLS share links', () => {
+    const uri = buildVlessGrpcTlsUri({
+      uuid: '7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e',
+      host: 'vpn.example.com',
+      port: 8446,
+      serviceName: 'GunService',
+      sni: 'vpn.example.com',
+      label: 'Alice / gRPC',
+    });
+
+    expect(uri).toBe(
+      'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:8446?encryption=none&security=tls&type=grpc&serviceName=GunService&sni=vpn.example.com&fp=chrome#Alice%20%2F%20gRPC',
+    );
+  });
+});
+
+describe('VLESS TCP TLS domain', () => {
+  it('encodes vless:// TCP TLS share links with flow', () => {
+    const uri = buildVlessTcpTlsUri({
+      uuid: '7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e',
+      host: 'vpn.example.com',
+      port: 8447,
+      sni: 'vpn.example.com',
+      flow: 'xtls-rprx-vision',
+      label: 'Alice / TCP',
+    });
+
+    expect(uri).toBe(
+      'vless://7d8c3f2a-1b4e-4a9c-8d3e-2f1a4b5c6d7e@vpn.example.com:8447?encryption=none&security=tls&type=tcp&sni=vpn.example.com&fp=chrome&flow=xtls-rprx-vision#Alice%20%2F%20TCP',
     );
   });
 });

@@ -43,7 +43,8 @@ const SING_BOX_PROTOCOLS: InboundProtocol[] = [
   'TROJAN',
   'SHADOWSOCKS',
 ];
-const XRAY_PROTOCOLS: InboundProtocol[] = ['VLESS_XHTTP_TLS'];
+const XRAY_PROTOCOLS: InboundProtocol[] = ['VLESS_XHTTP_TLS', 'VLESS_GRPC_TLS', 'VLESS_TCP_TLS'];
+const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>(XRAY_PROTOCOLS);
 
 const VLESS_FLOWS = ['', 'xtls-rprx-vision'] as const;
 const VLESS_XHTTP_MODES = ['auto', 'packet-up', 'stream-up', 'stream-one'] as const;
@@ -330,6 +331,62 @@ export function sanitizeInboundForm(
         path: '/',
         host: host || defaultsContext.publicHost || null,
         mode: 'auto',
+        tls: {
+          mode: 'FILES',
+          sni: host || defaultsContext.publicHost,
+          certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
+          keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
+        },
+      };
+    }
+    const settings = overlayPresetKeys(
+      preset as Record<string, unknown>,
+      dirty,
+    ) as typeof preset & { tls: ReturnType<typeof resolveXhttpTls> };
+    settings.tls = resolveXhttpTls(dirty, host, defaultsContext);
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
+  }
+
+  if (values.protocol === 'VLESS_GRPC_TLS') {
+    let preset: ReturnType<typeof buildDefaultInboundSettings>;
+    try {
+      preset = buildDefaultInboundSettings('VLESS_GRPC_TLS', context, overrides);
+    } catch {
+      preset = {
+        listenHost: overrides.listenHost ?? '0.0.0.0',
+        listenPort: overrides.listenPort ?? defaultsContext.xrayGrpcPort ?? 8446,
+        publicHost: host || defaultsContext.publicHost,
+        publicPort: overrides.publicPort,
+        enabled: overrides.enabled ?? true,
+        serviceName: 'GunService',
+        tls: {
+          mode: 'FILES',
+          sni: host || defaultsContext.publicHost,
+          certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
+          keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
+        },
+      };
+    }
+    const settings = overlayPresetKeys(
+      preset as Record<string, unknown>,
+      dirty,
+    ) as typeof preset & { tls: ReturnType<typeof resolveXhttpTls> };
+    settings.tls = resolveXhttpTls(dirty, host, defaultsContext);
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
+  }
+
+  if (values.protocol === 'VLESS_TCP_TLS') {
+    let preset: ReturnType<typeof buildDefaultInboundSettings>;
+    try {
+      preset = buildDefaultInboundSettings('VLESS_TCP_TLS', context, overrides);
+    } catch {
+      preset = {
+        listenHost: overrides.listenHost ?? '0.0.0.0',
+        listenPort: overrides.listenPort ?? defaultsContext.xrayTcpTlsPort ?? 8447,
+        publicHost: host || defaultsContext.publicHost,
+        publicPort: overrides.publicPort,
+        enabled: overrides.enabled ?? true,
+        flow: 'xtls-rprx-vision',
         tls: {
           mode: 'FILES',
           sni: host || defaultsContext.publicHost,
@@ -735,6 +792,51 @@ function VlessXhttpTlsFields({ detailed }: { detailed: boolean }) {
       >
         <Select options={VLESS_XHTTP_MODES.map((value) => ({ value, label: value }))} />
       </Form.Item>
+      <XrayFilesTlsFields detailed={detailed} />
+    </>
+  );
+}
+
+function VlessGrpcTlsFields({ detailed }: { detailed: boolean }) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <Form.Item
+        name={['settings', 'serviceName']}
+        label={t('inbounds.grpcServiceName')}
+        rules={[{ required: true }]}
+      >
+        <Input autoComplete="off" placeholder="GunService" />
+      </Form.Item>
+      <XrayFilesTlsFields detailed={detailed} />
+    </>
+  );
+}
+
+function VlessTcpTlsFields({ detailed }: { detailed: boolean }) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <Form.Item name={['settings', 'flow']} label={t('inbounds.realityFlow')}>
+        <Select
+          options={VLESS_FLOWS.map((value) => ({
+            value,
+            label: value || t('inbounds.flowNone'),
+          }))}
+        />
+      </Form.Item>
+      <XrayFilesTlsFields detailed={detailed} />
+    </>
+  );
+}
+
+function XrayFilesTlsFields({ detailed }: { detailed: boolean }) {
+  const { t } = useTranslation();
+
+  return (
+    <>
       <Form.Item name={['settings', 'tls', 'mode']} hidden>
         <Input />
       </Form.Item>
@@ -802,6 +904,10 @@ function ProtocolFields({
       return <VlessRealityFields detailed={detailed} />;
     case 'VLESS_XHTTP_TLS':
       return <VlessXhttpTlsFields detailed={detailed} />;
+    case 'VLESS_GRPC_TLS':
+      return <VlessGrpcTlsFields detailed={detailed} />;
+    case 'VLESS_TCP_TLS':
+      return <VlessTcpTlsFields detailed={detailed} />;
     case 'SHADOWSOCKS':
       return <ShadowsocksFields />;
     default:
@@ -853,6 +959,8 @@ export function InboundEditor({
       singBoxTrojanPort: readOnly.singBoxTrojanPort,
       singBoxSsPort: readOnly.singBoxSsPort,
       xrayListenPort: readOnly.xrayListenPort,
+      xrayGrpcPort: readOnly.xrayGrpcPort,
+      xrayTcpTlsPort: readOnly.xrayTcpTlsPort,
       tlsCertificatePath: readOnly.tlsCertificatePath,
       tlsKeyPath: readOnly.tlsKeyPath,
     };
@@ -874,7 +982,7 @@ export function InboundEditor({
         throw new Error('Inbound defaults are not ready');
       }
       if (
-        values.protocol === 'VLESS_XHTTP_TLS' &&
+        XRAY_FILES_TLS_PROTOCOLS.has(values.protocol) &&
         !defaultsContext.tlsCertificatePath?.trim() &&
         !defaultsContext.tlsKeyPath?.trim()
       ) {
@@ -906,7 +1014,7 @@ export function InboundEditor({
             },
           ]);
           void messageApi.error(t('inbounds.xrayTlsPathsMissing'));
-          throw new Error('VLESS_XHTTP_TLS TLS certificate paths are not configured');
+          throw new Error(`${values.protocol} TLS certificate paths are not configured`);
         }
       }
       if (!values.settings.publicHost?.trim()) {
@@ -1020,26 +1128,49 @@ export function InboundEditor({
     try {
       nextSettings = buildDefaultInboundSettings(value, defaultsContext, overrides);
     } catch {
-      if (value !== 'VLESS_XHTTP_TLS') {
+      if (!XRAY_FILES_TLS_PROTOCOLS.has(value)) {
         return;
       }
       const port = publishedListenPortForProtocol(value, defaultsContext);
-      nextSettings = {
-        listenHost: current.settings?.listenHost ?? '0.0.0.0',
-        listenPort: port,
-        publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
-        publicPort: port,
-        enabled: current.settings?.enabled ?? true,
-        path: '/',
-        host: defaultsContext.publicHost || null,
-        mode: 'auto',
-        tls: {
-          mode: 'FILES',
-          sni: defaultsContext.publicHost,
-          certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
-          keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
-        },
+      const tls = {
+        mode: 'FILES' as const,
+        sni: defaultsContext.publicHost,
+        certificatePath: defaultsContext.tlsCertificatePath?.trim() || undefined,
+        keyPath: defaultsContext.tlsKeyPath?.trim() || undefined,
       };
+      if (value === 'VLESS_GRPC_TLS') {
+        nextSettings = {
+          listenHost: current.settings?.listenHost ?? '0.0.0.0',
+          listenPort: port,
+          publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
+          publicPort: port,
+          enabled: current.settings?.enabled ?? true,
+          serviceName: 'GunService',
+          tls,
+        };
+      } else if (value === 'VLESS_TCP_TLS') {
+        nextSettings = {
+          listenHost: current.settings?.listenHost ?? '0.0.0.0',
+          listenPort: port,
+          publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
+          publicPort: port,
+          enabled: current.settings?.enabled ?? true,
+          flow: 'xtls-rprx-vision',
+          tls,
+        };
+      } else {
+        nextSettings = {
+          listenHost: current.settings?.listenHost ?? '0.0.0.0',
+          listenPort: port,
+          publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
+          publicPort: port,
+          enabled: current.settings?.enabled ?? true,
+          path: '/',
+          host: defaultsContext.publicHost || null,
+          mode: 'auto',
+          tls,
+        };
+      }
     }
     replaceFormSettings(form, value, nextSettings);
     setProtocolResetKey((key) => key + 1);
@@ -1166,7 +1297,9 @@ export function InboundEditor({
               <Tag>{t(`enums.coreEngine.${PROTOCOL_ENGINE_MAP[protocol]}`)}</Tag>
             </Form.Item>
           ) : null}
-          {protocol === 'VLESS_XHTTP_TLS' && !defaultsContext?.tlsCertificatePath?.trim() ? (
+          {protocol &&
+          XRAY_FILES_TLS_PROTOCOLS.has(protocol) &&
+          !defaultsContext?.tlsCertificatePath?.trim() ? (
             <Alert
               type="warning"
               showIcon
@@ -1281,6 +1414,8 @@ export function InboundEditor({
           {detailed ||
           protocol === 'VLESS_REALITY' ||
           protocol === 'VLESS_XHTTP_TLS' ||
+          protocol === 'VLESS_GRPC_TLS' ||
+          protocol === 'VLESS_TCP_TLS' ||
           protocol === 'SHADOWSOCKS' ? (
             <>
               <Typography.Title level={5}>{t('inbounds.sectionProtocol')}</Typography.Title>

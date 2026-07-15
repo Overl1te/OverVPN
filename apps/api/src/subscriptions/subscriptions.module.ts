@@ -5,7 +5,9 @@ import {
   ShadowsocksSubscriptionAdapter,
   SubscriptionProfileBuilder,
   TrojanSubscriptionAdapter,
+  VlessGrpcTlsSubscriptionAdapter,
   VlessRealitySubscriptionAdapter,
+  VlessTcpTlsSubscriptionAdapter,
   VlessXhttpTlsSubscriptionAdapter,
 } from './subscription-profile';
 import {
@@ -23,6 +25,8 @@ import { SubscriptionsService } from './subscriptions.service';
     Hysteria2SubscriptionAdapter,
     VlessRealitySubscriptionAdapter,
     VlessXhttpTlsSubscriptionAdapter,
+    VlessGrpcTlsSubscriptionAdapter,
+    VlessTcpTlsSubscriptionAdapter,
     TrojanSubscriptionAdapter,
     ShadowsocksSubscriptionAdapter,
     SubscriptionProfileBuilder,

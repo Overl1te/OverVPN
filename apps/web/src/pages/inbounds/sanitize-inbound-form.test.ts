@@ -11,6 +11,8 @@ describe('sanitizeInboundForm', () => {
     singBoxTrojanPort: 8444,
     singBoxSsPort: 8445,
     xrayListenPort: 9443,
+    xrayGrpcPort: 9446,
+    xrayTcpTlsPort: 9447,
     tlsCertificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
     tlsKeyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
   };

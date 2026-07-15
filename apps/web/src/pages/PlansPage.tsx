@@ -42,6 +42,7 @@ type PlanFormValues = {
   subscriptionAnnounce?: string | null;
   subscriptionSupportUrl?: string | null;
   subscriptionWebPageUrl?: string | null;
+  subscriptionShowTrafficLimits?: boolean;
   happProviderId?: string | null;
   subscriptionSubInfoText?: string | null;
   subscriptionSubInfoColor?: 'red' | 'blue' | 'green' | null;
@@ -98,6 +99,8 @@ export function PlansPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form] = Form.useForm<PlanFormValues>();
+  const happProviderId = Form.useWatch('happProviderId', form);
+  const happAdvancedEnabled = Boolean(happProviderId?.trim());
   const onError = useApiErrorHandler();
   const onFormError = useApiErrorHandler(form);
 
@@ -136,6 +139,7 @@ export function PlansPage() {
         subscriptionAnnounce: values.subscriptionAnnounce || null,
         subscriptionSupportUrl: values.subscriptionSupportUrl || null,
         subscriptionWebPageUrl: values.subscriptionWebPageUrl || null,
+        subscriptionShowTrafficLimits: values.subscriptionShowTrafficLimits ?? true,
         happProviderId: values.happProviderId || null,
         subscriptionSubInfoText: values.subscriptionSubInfoText || null,
         subscriptionSubInfoColor: values.subscriptionSubInfoColor || null,
@@ -186,6 +190,7 @@ export function PlansPage() {
                 form.setFieldsValue({
                   defaultResetStrategy: 'NO_RESET',
                   inboundIds: [],
+                  subscriptionShowTrafficLimits: true,
                   subscriptionSubExpireEnabled: false,
                 });
                 setModalOpen(true);
@@ -251,6 +256,7 @@ export function PlansPage() {
                       subscriptionAnnounce: row.subscriptionAnnounce,
                       subscriptionSupportUrl: row.subscriptionSupportUrl,
                       subscriptionWebPageUrl: row.subscriptionWebPageUrl,
+                      subscriptionShowTrafficLimits: row.subscriptionShowTrafficLimits,
                       happProviderId: row.happProviderId,
                       subscriptionSubInfoText: row.subscriptionSubInfoText,
                       subscriptionSubInfoColor: row.subscriptionSubInfoColor,
@@ -383,12 +389,6 @@ export function PlansPage() {
                 label: t('plans.subscriptionBranding'),
                 children: (
                   <>
-                    <Alert
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                      message={t('plans.happProviderHint')}
-                    />
                     <Form.Item
                       name="subscriptionTitleTemplate"
                       label={t('plans.subscriptionTitleTemplate')}
@@ -418,18 +418,38 @@ export function PlansPage() {
                       <Input placeholder="https://example.com/info" maxLength={2048} />
                     </Form.Item>
                     <Form.Item
+                      name="subscriptionShowTrafficLimits"
+                      valuePropName="checked"
+                      extra={t('plans.subscriptionShowTrafficLimitsHint')}
+                    >
+                      <Checkbox>{t('plans.subscriptionShowTrafficLimits')}</Checkbox>
+                    </Form.Item>
+                    <Form.Item
                       name="happProviderId"
                       label={t('plans.happProviderId')}
                       extra={t('plans.happProviderIdHint')}
                     >
                       <Input maxLength={128} />
                     </Form.Item>
+                    {!happAdvancedEnabled ? (
+                      <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                        message={t('plans.happProviderRequired')}
+                      />
+                    ) : null}
                     <Form.Item
                       name="subscriptionSubInfoText"
                       label={t('plans.subscriptionSubInfoText')}
                       extra={t('plans.subscriptionSubInfoTextHint')}
                     >
-                      <Input.TextArea rows={2} maxLength={500} showCount />
+                      <Input.TextArea
+                        rows={2}
+                        maxLength={500}
+                        showCount
+                        disabled={!happAdvancedEnabled}
+                      />
                     </Form.Item>
                     <Form.Item
                       name="subscriptionSubInfoColor"
@@ -437,6 +457,7 @@ export function PlansPage() {
                     >
                       <Select
                         allowClear
+                        disabled={!happAdvancedEnabled}
                         options={[
                           { value: 'blue', label: t('plans.subInfoColor.blue') },
                           { value: 'green', label: t('plans.subInfoColor.green') },
@@ -449,28 +470,38 @@ export function PlansPage() {
                       label={t('plans.subscriptionSubInfoButtonText')}
                       extra={t('plans.subscriptionSubInfoButtonTextHint')}
                     >
-                      <Input maxLength={25} showCount />
+                      <Input maxLength={25} showCount disabled={!happAdvancedEnabled} />
                     </Form.Item>
                     <Form.Item
                       name="subscriptionSubInfoButtonLink"
                       label={t('plans.subscriptionSubInfoButtonLink')}
                       extra={t('plans.subscriptionSubInfoButtonLinkHint')}
                     >
-                      <Input placeholder="https://t.me/your_bot" maxLength={2048} />
+                      <Input
+                        placeholder="https://t.me/your_bot"
+                        maxLength={2048}
+                        disabled={!happAdvancedEnabled}
+                      />
                     </Form.Item>
                     <Form.Item
                       name="subscriptionSubExpireEnabled"
                       valuePropName="checked"
                       extra={t('plans.subscriptionSubExpireEnabledHint')}
                     >
-                      <Checkbox>{t('plans.subscriptionSubExpireEnabled')}</Checkbox>
+                      <Checkbox disabled={!happAdvancedEnabled}>
+                        {t('plans.subscriptionSubExpireEnabled')}
+                      </Checkbox>
                     </Form.Item>
                     <Form.Item
                       name="subscriptionSubExpireButtonLink"
                       label={t('plans.subscriptionSubExpireButtonLink')}
                       extra={t('plans.subscriptionSubExpireButtonLinkHint')}
                     >
-                      <Input placeholder="https://t.me/your_bot" maxLength={2048} />
+                      <Input
+                        placeholder="https://t.me/your_bot"
+                        maxLength={2048}
+                        disabled={!happAdvancedEnabled}
+                      />
                     </Form.Item>
                     <Form.Item
                       name="subscriptionFallbackUrlTemplate"
@@ -480,6 +511,7 @@ export function PlansPage() {
                       <Input
                         placeholder="https://backup.example.com/api/sub/{token}"
                         maxLength={2048}
+                        disabled={!happAdvancedEnabled}
                       />
                     </Form.Item>
                     <Form.Item
@@ -487,7 +519,12 @@ export function PlansPage() {
                       label={t('plans.subscriptionColorProfile')}
                       extra={t('plans.subscriptionColorProfileHint')}
                     >
-                      <Input.TextArea rows={4} maxLength={65536} showCount />
+                      <Input.TextArea
+                        rows={4}
+                        maxLength={65536}
+                        showCount
+                        disabled={!happAdvancedEnabled}
+                      />
                     </Form.Item>
                   </>
                 ),

@@ -20,6 +20,8 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     SING_BOX_TROJAN_PORT: 8444,
     SING_BOX_SS_PORT: 8445,
     XRAY_LISTEN_PORT: 9443,
+    XRAY_GRPC_PORT: 9446,
+    XRAY_TCP_TLS_PORT: 9447,
     ...overrides,
   };
   return {

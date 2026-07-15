@@ -135,6 +135,8 @@ export class PlansService {
             subscriptionFallbackUrlTemplate:
               input.subscriptionFallbackUrlTemplate ?? null,
             subscriptionColorProfile: input.subscriptionColorProfile ?? null,
+            subscriptionShowTrafficLimits:
+              input.subscriptionShowTrafficLimits ?? true,
             planInbounds: {
               create: input.inboundIds.map((inboundId, priority) => ({
                 inboundId,
@@ -230,6 +232,7 @@ export class PlansService {
             subscriptionFallbackUrlTemplate:
               input.subscriptionFallbackUrlTemplate,
             subscriptionColorProfile: input.subscriptionColorProfile,
+            subscriptionShowTrafficLimits: input.subscriptionShowTrafficLimits,
           },
         });
         if (input.inboundIds) {
@@ -452,6 +455,7 @@ export class PlansService {
       subscriptionSubExpireButtonLink: plan.subscriptionSubExpireButtonLink,
       subscriptionFallbackUrlTemplate: plan.subscriptionFallbackUrlTemplate,
       subscriptionColorProfile: plan.subscriptionColorProfile,
+      subscriptionShowTrafficLimits: plan.subscriptionShowTrafficLimits,
       inboundIds: plan.planInbounds.map((item) => item.inboundId),
       userCount: plan._count.users,
       createdAt: plan.createdAt.toISOString(),

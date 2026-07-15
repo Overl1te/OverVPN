@@ -40,6 +40,7 @@ const subscriptionPlanSelect = {
   subscriptionSubExpireButtonLink: true,
   subscriptionFallbackUrlTemplate: true,
   subscriptionColorProfile: true,
+  subscriptionShowTrafficLimits: true,
 } as const;
 
 const subscriptionInfoSelect = {
@@ -131,6 +132,7 @@ export interface SubscriptionInfoSource {
     subscriptionSubExpireButtonLink: string | null;
     subscriptionFallbackUrlTemplate: string | null;
     subscriptionColorProfile: string | null;
+    subscriptionShowTrafficLimits: boolean;
   } | null;
 }
 
@@ -285,6 +287,7 @@ export function buildSubscriptionInfo(
       brandingContext,
     ),
     colorProfile: source.plan?.subscriptionColorProfile ?? null,
+    showTrafficLimits: source.plan?.subscriptionShowTrafficLimits ?? true,
     subscriptionUrl,
     formats: [...SUBSCRIPTION_FORMATS],
     formatUrls: {
@@ -305,10 +308,13 @@ function parseSubInfoColor(
 }
 
 export function formatSubscriptionUserinfo(info: SubscriptionInfo): string {
+  const includeTotal = info.showTrafficLimits;
   return [
     `upload=${info.uploadBytes}`,
     `download=${info.downloadBytes}`,
-    ...(info.limitBytes === null ? [] : [`total=${info.limitBytes}`]),
+    ...(includeTotal
+      ? [`total=${info.limitBytes === null ? '0' : info.limitBytes}`]
+      : []),
     ...(info.expireAt === null
       ? []
       : [`expire=${Math.floor(new Date(info.expireAt).getTime() / 1_000)}`]),

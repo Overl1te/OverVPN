@@ -649,6 +649,7 @@ export const planSchema = z
     subscriptionSubExpireButtonLink: z.string().nullable(),
     subscriptionFallbackUrlTemplate: z.string().nullable(),
     subscriptionColorProfile: z.string().nullable(),
+    subscriptionShowTrafficLimits: z.boolean(),
     inboundIds: z.array(idSchema),
     userCount: z.number().int().nonnegative(),
     createdAt: isoDateTimeSchema,
@@ -680,6 +681,7 @@ const planFields = {
   subscriptionSubExpireButtonLink: optionalDeeplinkSchema.optional(),
   subscriptionFallbackUrlTemplate: z.string().trim().max(2048).nullable().optional(),
   subscriptionColorProfile: z.string().trim().max(65_536).nullable().optional(),
+  subscriptionShowTrafficLimits: z.boolean().optional(),
   inboundIds: z.array(idSchema).max(128).optional(),
 };
 
@@ -1175,6 +1177,34 @@ export const vlessXhttpTlsInboundSettingsSchema = z
   .strict();
 export type VlessXhttpTlsInboundSettings = z.infer<typeof vlessXhttpTlsInboundSettingsSchema>;
 
+const vlessGrpcServiceNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(255)
+  .refine(
+    (value) => !/[\u0000-\u001f\u007f\s]/.test(value),
+    'gRPC service name must not contain whitespace or control characters',
+  );
+
+export const vlessGrpcTlsInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    serviceName: vlessGrpcServiceNameSchema.default('GunService'),
+    tls: vlessXhttpTlsFilesInputSchema,
+  })
+  .strict();
+export type VlessGrpcTlsInboundSettings = z.infer<typeof vlessGrpcTlsInboundSettingsSchema>;
+
+export const vlessTcpTlsInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    flow: vlessFlowSchema.default('xtls-rprx-vision'),
+    tls: vlessXhttpTlsFilesInputSchema,
+  })
+  .strict();
+export type VlessTcpTlsInboundSettings = z.infer<typeof vlessTcpTlsInboundSettingsSchema>;
+
 export const trojanFallbackInputSchema = z
   .object({
     server: singBoxHostSchema,
@@ -1316,6 +1346,22 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
   z
     .object({
       tag: singBoxTagSchema,
+      protocol: z.literal('VLESS_GRPC_TLS'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: vlessGrpcTlsInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
+      protocol: z.literal('VLESS_TCP_TLS'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: vlessTcpTlsInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
       protocol: z.literal('TROJAN'),
       displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: trojanInboundSettingsSchema,
@@ -1342,6 +1388,8 @@ export const updateInboundSchema = z
         hysteria2InboundSettingsSchema,
         vlessRealityInboundSettingsSchema,
         vlessXhttpTlsInboundSettingsSchema,
+        vlessGrpcTlsInboundSettingsSchema,
+        vlessTcpTlsInboundSettingsSchema,
         trojanInboundSettingsSchema,
         shadowsocksInboundSettingsSchema,
       ])
@@ -1490,6 +1538,33 @@ export const vlessXhttpTlsPublicConfigSchema = z
   .strict();
 export type VlessXhttpTlsPublicConfig = z.infer<typeof vlessXhttpTlsPublicConfigSchema>;
 
+const vlessFilesTlsPublicSchema = z
+  .object({
+    mode: z.literal('FILES'),
+    sni: singBoxHostSchema,
+    certificatePath: z.string().nullable(),
+    keyPath: z.string().nullable(),
+    certificatePemPresent: z.boolean(),
+    privateKeyPemPresent: z.boolean(),
+  })
+  .strict();
+
+export const vlessGrpcTlsPublicConfigSchema = z
+  .object({
+    serviceName: vlessGrpcServiceNameSchema,
+    tls: vlessFilesTlsPublicSchema,
+  })
+  .strict();
+export type VlessGrpcTlsPublicConfig = z.infer<typeof vlessGrpcTlsPublicConfigSchema>;
+
+export const vlessTcpTlsPublicConfigSchema = z
+  .object({
+    flow: vlessFlowSchema,
+    tls: vlessFilesTlsPublicSchema,
+  })
+  .strict();
+export type VlessTcpTlsPublicConfig = z.infer<typeof vlessTcpTlsPublicConfigSchema>;
+
 export const trojanInboundPublicConfigSchema = z
   .object({
     tls: hysteria2TlsPublicSchema,
@@ -1552,6 +1627,20 @@ export const inboundResultSchema = z.discriminatedUnion('protocol', [
       ...inboundResultCommonFields,
       protocol: z.literal('VLESS_XHTTP_TLS'),
       settings: vlessXhttpTlsPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('VLESS_GRPC_TLS'),
+      settings: vlessGrpcTlsPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('VLESS_TCP_TLS'),
+      settings: vlessTcpTlsPublicConfigSchema.extend(inboundListenPublicFields),
     })
     .strict(),
   z
@@ -1680,6 +1769,28 @@ export const vlessXhttpTlsLinkSchema = z
   .strict();
 export type VlessXhttpTlsLinkResult = z.infer<typeof vlessXhttpTlsLinkSchema>;
 
+export const vlessGrpcTlsLinkSchema = z
+  .object({
+    assignmentId: idSchema,
+    credentialVersion: z.number().int().positive(),
+    protocol: z.literal('VLESS_GRPC_TLS'),
+    uri: z.string().startsWith('vless://'),
+    generatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type VlessGrpcTlsLinkResult = z.infer<typeof vlessGrpcTlsLinkSchema>;
+
+export const vlessTcpTlsLinkSchema = z
+  .object({
+    assignmentId: idSchema,
+    credentialVersion: z.number().int().positive(),
+    protocol: z.literal('VLESS_TCP_TLS'),
+    uri: z.string().startsWith('vless://'),
+    generatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type VlessTcpTlsLinkResult = z.infer<typeof vlessTcpTlsLinkSchema>;
+
 export const trojanLinkSchema = z
   .object({
     assignmentId: idSchema,
@@ -1706,6 +1817,8 @@ export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   hysteria2LinkSchema,
   vlessRealityLinkSchema,
   vlessXhttpTlsLinkSchema,
+  vlessGrpcTlsLinkSchema,
+  vlessTcpTlsLinkSchema,
   trojanLinkSchema,
   shadowsocksLinkSchema,
 ]);
@@ -1746,6 +1859,7 @@ export const subscriptionInfoSchema = z
     subExpireButtonLink: z.string().max(2048).nullable(),
     fallbackUrl: z.string().max(2048).nullable(),
     colorProfile: z.string().max(65_536).nullable(),
+    showTrafficLimits: z.boolean(),
     subscriptionUrl: z.url(),
     formats: z.array(subscriptionFormatSchema).length(SUBSCRIPTION_FORMATS.length),
     formatUrls: z
@@ -1836,6 +1950,44 @@ export type VlessXhttpTlsSubscriptionEndpoint = z.infer<
   typeof vlessXhttpTlsSubscriptionEndpointSchema
 >;
 
+export const vlessGrpcTlsSubscriptionEndpointSchema = z
+  .object({
+    protocol: z.literal('VLESS_GRPC_TLS'),
+    tag: z.string().min(1).max(128),
+    displayName: z.string().min(1).max(256),
+    server: z.string().min(1).max(255),
+    port: z.number().int().min(1).max(65_535),
+    uuid: idSchema,
+    serviceName: z.string().min(1).max(255),
+    tls: z
+      .object({
+        serverName: z.string().min(1).max(255),
+      })
+      .strict(),
+  })
+  .strict();
+export type VlessGrpcTlsSubscriptionEndpoint = z.infer<
+  typeof vlessGrpcTlsSubscriptionEndpointSchema
+>;
+
+export const vlessTcpTlsSubscriptionEndpointSchema = z
+  .object({
+    protocol: z.literal('VLESS_TCP_TLS'),
+    tag: z.string().min(1).max(128),
+    displayName: z.string().min(1).max(256),
+    server: z.string().min(1).max(255),
+    port: z.number().int().min(1).max(65_535),
+    uuid: idSchema,
+    flow: vlessFlowSchema,
+    tls: z
+      .object({
+        serverName: z.string().min(1).max(255),
+      })
+      .strict(),
+  })
+  .strict();
+export type VlessTcpTlsSubscriptionEndpoint = z.infer<typeof vlessTcpTlsSubscriptionEndpointSchema>;
+
 export const trojanSubscriptionEndpointSchema = z
   .object({
     protocol: z.literal('TROJAN'),
@@ -1872,6 +2024,8 @@ export const subscriptionEndpointSchema = z.discriminatedUnion('protocol', [
   hysteria2SubscriptionEndpointSchema,
   vlessRealitySubscriptionEndpointSchema,
   vlessXhttpTlsSubscriptionEndpointSchema,
+  vlessGrpcTlsSubscriptionEndpointSchema,
+  vlessTcpTlsSubscriptionEndpointSchema,
   trojanSubscriptionEndpointSchema,
   shadowsocksSubscriptionEndpointSchema,
 ]);
@@ -2146,6 +2300,8 @@ export const systemSettingsReadOnlySchema = z
     singBoxTrojanPort: z.number().int().min(1).max(65_535),
     singBoxSsPort: z.number().int().min(1).max(65_535),
     xrayListenPort: z.number().int().min(1).max(65_535),
+    xrayGrpcPort: z.number().int().min(1).max(65_535),
+    xrayTcpTlsPort: z.number().int().min(1).max(65_535),
     tlsCertificatePath: z.string().nullable(),
     tlsKeyPath: z.string().nullable(),
     telegramEnvConfigured: z.boolean(),

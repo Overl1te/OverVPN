@@ -43,6 +43,8 @@ export const INBOUND_PROTOCOLS = [
   'TROJAN',
   'SHADOWSOCKS',
   'VLESS_XHTTP_TLS',
+  'VLESS_GRPC_TLS',
+  'VLESS_TCP_TLS',
 ] as const;
 export type InboundProtocol = (typeof INBOUND_PROTOCOLS)[number];
 
@@ -52,6 +54,8 @@ export const PROTOCOL_ENGINE_MAP = {
   TROJAN: 'SING_BOX',
   SHADOWSOCKS: 'SING_BOX',
   VLESS_XHTTP_TLS: 'XRAY',
+  VLESS_GRPC_TLS: 'XRAY',
+  VLESS_TCP_TLS: 'XRAY',
 } as const satisfies Record<InboundProtocol, CoreEngine>;
 
 /**
@@ -62,6 +66,8 @@ export const PROTOCOL_DISPLAY_LABELS = {
   HYSTERIA2: 'Hysteria2',
   VLESS_REALITY: 'Reality',
   VLESS_XHTTP_TLS: 'XHTTP',
+  VLESS_GRPC_TLS: 'gRPC',
+  VLESS_TCP_TLS: 'TCP TLS',
   TROJAN: 'Trojan',
   SHADOWSOCKS: 'Shadowsocks',
 } as const satisfies Record<InboundProtocol, string>;

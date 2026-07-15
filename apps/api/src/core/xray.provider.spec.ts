@@ -114,6 +114,19 @@ describe('XrayProvider', () => {
     expect(first.hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it('renders VLESS gRPC TLS and TCP TLS inbounds', () => {
+    const process = successfulProcess();
+    const provider = createProvider(process, new FakeReloadAdapter());
+    const rendered = provider.renderConfig(desiredMultiProtocolState());
+
+    expect(rendered.canonical).toContain('"network": "grpc"');
+    expect(rendered.canonical).toContain('"serviceName": "GunService"');
+    expect(rendered.canonical).toContain('"network": "tcp"');
+    expect(rendered.canonical).toContain('"flow": "xtls-rprx-vision"');
+    expect(rendered.canonical).toContain('"port": 8446');
+    expect(rendered.canonical).toContain('"port": 8447');
+  });
+
   it('invokes the configured binary with exact run -test arguments', async () => {
     const process = successfulProcess();
     const provider = createProvider(process, new FakeReloadAdapter());
@@ -259,6 +272,63 @@ function desiredState(): CoreDesiredState {
             },
           },
         ],
+      },
+    ],
+  };
+}
+
+function desiredMultiProtocolState(): CoreDesiredState {
+  const base = desiredState();
+  const assignment = base.inbounds[0].assignments[0];
+  const tlsSecrets = {
+    version: 1 as const,
+    certificatePem:
+      '-----BEGIN CERTIFICATE-----\nMIIBcert\n-----END CERTIFICATE-----\n',
+    privateKeyPem:
+      '-----BEGIN PRIVATE KEY-----\nMIIBkey\n-----END PRIVATE KEY-----\n',
+  };
+  const tlsConfig = {
+    mode: 'FILES' as const,
+    sni: 'vpn.example.com',
+    certificatePath: null,
+    keyPath: null,
+    certificatePemPresent: true,
+    privateKeyPemPresent: true,
+  };
+  return {
+    ...base,
+    inbounds: [
+      {
+        id: 'a43f67c0-f935-44d1-a9c1-b00dbd5d3f01',
+        protocol: 'VLESS_GRPC_TLS',
+        tag: 'vless-grpc-main',
+        listenHost: '0.0.0.0',
+        listenPort: 8446,
+        publicHost: 'vpn.example.com',
+        publicPort: 8446,
+        revision: 1,
+        config: {
+          serviceName: 'GunService',
+          tls: tlsConfig,
+        },
+        secrets: tlsSecrets,
+        assignments: [assignment],
+      },
+      {
+        id: 'b43f67c0-f935-44d1-a9c1-b00dbd5d3f02',
+        protocol: 'VLESS_TCP_TLS',
+        tag: 'vless-tcp-main',
+        listenHost: '0.0.0.0',
+        listenPort: 8447,
+        publicHost: 'vpn.example.com',
+        publicPort: 8447,
+        revision: 1,
+        config: {
+          flow: 'xtls-rprx-vision',
+          tls: tlsConfig,
+        },
+        secrets: tlsSecrets,
+        assignments: [assignment],
       },
     ],
   };

@@ -95,6 +95,8 @@ describe('SettingsService', () => {
     expect(initial.readOnly.singBoxTrojanPort).toBe(8444);
     expect(initial.readOnly.singBoxSsPort).toBe(8445);
     expect(initial.readOnly.xrayListenPort).toBe(9443);
+    expect(initial.readOnly.xrayGrpcPort).toBe(9446);
+    expect(initial.readOnly.xrayTcpTlsPort).toBe(9447);
     expect(initial.readOnly.tlsCertificatePath).toBeNull();
     expect(initial.readOnly.tlsKeyPath).toBeNull();
     expect(initial).not.toHaveProperty('telegramBotToken');
@@ -162,6 +164,8 @@ function testConfig(): ConfigService<AppEnvironment, true> {
     SING_BOX_TROJAN_PORT: 8444,
     SING_BOX_SS_PORT: 8445,
     XRAY_LISTEN_PORT: 9443,
+    XRAY_GRPC_PORT: 9446,
+    XRAY_TCP_TLS_PORT: 9447,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   };

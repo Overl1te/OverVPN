@@ -16,10 +16,11 @@ curl "$SUB_URL/info"  # метаданные подписки</code></pre>
 
 <h2>Брендинг подписки</h2>
 <p>
-  Название подписки, announce, ссылки (Telegram / info), Happ Provider ID, info-блок
-  (<code>sub-info-*</code>), уведомление об истечении (<code>sub-expire*</code>), fallback URL и
-  тема (<code>color-profile</code>) настраиваются в <strong>плане</strong>. Имя подключения — шаблон
-  на <strong>точке входа</strong>. Пустые поля оставляют дефолты (<code>OverVPN - {username}</code>,
+  Название подписки, announce, ссылки (Telegram / info), показ лимитов трафика, Happ Provider ID,
+  info-блок (<code>sub-info-*</code>), уведомление об истечении (<code>sub-expire*</code>), fallback
+  URL и тема (<code>color-profile</code>) настраиваются в <strong>плане</strong>. Расширенные
+  Happ-поля активны только при указанном Provider ID. Имя подключения — шаблон на
+  <strong>точке входа</strong>. Пустые поля оставляют дефолты (<code>OverVPN - {username}</code>,
   <code>{identity} - {tag}</code>).
 </p>
 <p>

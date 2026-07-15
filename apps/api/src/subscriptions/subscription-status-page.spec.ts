@@ -29,6 +29,7 @@ const info: SubscriptionInfo = {
   subExpireButtonLink: null,
   fallbackUrl: null,
   colorProfile: null,
+  showTrafficLimits: true,
   subscriptionUrl: 'https://sub.example.com/api/sub/token',
   formats: ['sing-box', 'links', 'clash'],
   formatUrls: {

@@ -43,6 +43,8 @@ enum InboundProtocol {
   TROJAN
   SHADOWSOCKS
   VLESS_XHTTP_TLS
+  VLESS_GRPC_TLS
+  VLESS_TCP_TLS
 }
 
 enum ResetStrategy {
@@ -249,6 +251,7 @@ model Plan {
   subscriptionSubExpireButtonLink    String?       @db.VarChar(2048)
   subscriptionFallbackUrlTemplate    String?       @db.VarChar(2048)
   subscriptionColorProfile           String?       @db.Text
+  subscriptionShowTrafficLimits      Boolean       @default(true)
   createdAt                          DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt                  DateTime      @updatedAt @db.Timestamptz(3)
   archivedAt                 DateTime?     @db.Timestamptz(3)

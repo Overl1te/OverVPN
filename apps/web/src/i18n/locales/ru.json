@@ -286,14 +286,18 @@
       "VLESS_REALITY": "VLESS Reality",
       "TROJAN": "Trojan",
       "SHADOWSOCKS": "Shadowsocks",
-      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
+      "VLESS_GRPC_TLS": "VLESS gRPC TLS",
+      "VLESS_TCP_TLS": "VLESS TCP TLS"
     },
     "inboundProtocol": {
       "HYSTERIA2": "Hysteria2",
       "VLESS_REALITY": "VLESS Reality",
       "TROJAN": "Trojan",
       "SHADOWSOCKS": "Shadowsocks",
-      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
+      "VLESS_GRPC_TLS": "VLESS gRPC TLS",
+      "VLESS_TCP_TLS": "VLESS TCP TLS"
     },
     "coreEngine": {
       "SING_BOX": "sing-box",
@@ -352,7 +356,7 @@
     "edit": "Изменить точку входа",
     "tag": "Тег",
     "displayNameTemplate": "Имя подключения",
-    "displayNameTemplateHint": "Как клиент покажет сервер. Переменные: {identity}, {username}, {tag}, {protocol}, {product}, {plan}. {protocol} — коротко: Hysteria2, Reality, XHTTP…. Пусто = {identity} - {tag}.",
+    "displayNameTemplateHint": "Как клиент покажет сервер. Переменные: {identity}, {username}, {tag}, {protocol}, {product}, {plan}. {protocol} — коротко: Hysteria2, Reality, XHTTP, gRPC…. Пусто = {identity} - {tag}.",
     "protocol": "Протокол",
     "listen": "Прослушивание",
     "public": "Публичный адрес",
@@ -427,6 +431,7 @@
     "xhttpHost": "Host xHTTP",
     "xhttpHostOptional": "Необязательный заголовок Host",
     "xhttpMode": "Режим xHTTP",
+    "grpcServiceName": "Имя gRPC-сервиса",
     "certificatePem": "Сертификат PEM",
     "privateKeyPem": "Приватный ключ PEM"
   },
@@ -455,10 +460,12 @@
     "subscriptionSupportUrlHint": "Заголовок support-url (например https://t.me/...).",
     "subscriptionWebPageUrl": "Ссылка «i»",
     "subscriptionWebPageUrlHint": "Заголовок profile-web-page-url (иконка информации).",
+    "subscriptionShowTrafficLimits": "Показывать лимиты трафика",
+    "subscriptionShowTrafficLimitsHint": "Добавлять total= в subscription-userinfo (полоска трафика в клиентах). Безлимит — total=0 (∞). Не зависит от того, задана ли квота пользователю.",
     "subscriptionBranding": "Подписка / Happ",
-    "happProviderHint": "Расширенные функции Happ (кнопка в блоке info, продление, тема) требуют Provider ID с happ-proxy.com. Значения всё равно сохраняются и отдаются без него.",
+    "happProviderRequired": "Укажите Happ Provider ID, чтобы редактировать расширенные поля (info-блок, продление, fallback, тема).",
     "happProviderId": "Happ Provider ID",
-    "happProviderIdHint": "С https://happ-proxy.com — открывает расширенный UI подписки в Happ.",
+    "happProviderIdHint": "С https://happ-proxy.com — нужен для расширенного UI подписки в Happ.",
     "subscriptionSubInfoText": "Текст info-блока Happ",
     "subscriptionSubInfoTextHint": "Цветная полоска (sub-info-text). Те же переменные, что у названия. После рендера — до 200 символов.",
     "subscriptionSubInfoColor": "Цвет info-блока",

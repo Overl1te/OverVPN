@@ -54,7 +54,9 @@ import {
   parseHysteria2PublicConfig,
   parseShadowsocksPublicConfig,
   parseTrojanPublicConfig,
+  parseVlessGrpcTlsPublicConfig,
   parseVlessRealityPublicConfig,
+  parseVlessTcpTlsPublicConfig,
   parseVlessXhttpTlsPublicConfig,
   storageFromInbound,
   type InboundSecretBundle,
@@ -71,7 +73,9 @@ import {
   createTrojanCredential,
   normalizeTrojanPassword,
 } from './trojan-domain';
+import { buildVlessGrpcTlsUri } from './vless-grpc-tls-domain';
 import { buildVlessUri, createVlessCredential } from './vless-reality-domain';
+import { buildVlessTcpTlsUri } from './vless-tcp-tls-domain';
 import { buildVlessXhttpTlsUri } from './vless-xhttp-tls-domain';
 
 type InboundWithCount = Inbound & {
@@ -99,6 +103,8 @@ export class InboundsService {
   private readonly singBoxTrojanPort: number;
   private readonly singBoxSsPort: number;
   private readonly xrayListenPort: number;
+  private readonly xrayGrpcPort: number;
+  private readonly xrayTcpTlsPort: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -121,6 +127,8 @@ export class InboundsService {
     });
     this.singBoxSsPort = config.get('SING_BOX_SS_PORT', { infer: true });
     this.xrayListenPort = config.get('XRAY_LISTEN_PORT', { infer: true });
+    this.xrayGrpcPort = config.get('XRAY_GRPC_PORT', { infer: true });
+    this.xrayTcpTlsPort = config.get('XRAY_TCP_TLS_PORT', { infer: true });
   }
 
   async list(query: InboundListQuery): Promise<{
@@ -893,6 +901,28 @@ export class InboundsService {
           label,
         });
         protocol = 'VLESS_XHTTP_TLS';
+      } else if (inbound.protocol === 'VLESS_GRPC_TLS') {
+        const publicConfig = parseVlessGrpcTlsPublicConfig(inbound.config);
+        uri = buildVlessGrpcTlsUri({
+          uuid: (credential as VlessCredential).uuid,
+          host,
+          port,
+          serviceName: publicConfig.serviceName,
+          sni: publicConfig.tls.sni,
+          label,
+        });
+        protocol = 'VLESS_GRPC_TLS';
+      } else if (inbound.protocol === 'VLESS_TCP_TLS') {
+        const publicConfig = parseVlessTcpTlsPublicConfig(inbound.config);
+        uri = buildVlessTcpTlsUri({
+          uuid: (credential as VlessCredential).uuid,
+          host,
+          port,
+          sni: publicConfig.tls.sni,
+          flow: publicConfig.flow,
+          label,
+        });
+        protocol = 'VLESS_TCP_TLS';
       } else if (inbound.protocol === 'TROJAN') {
         const publicConfig = parseTrojanPublicConfig(inbound.config);
         uri = buildTrojanUri({
@@ -1012,6 +1042,8 @@ export class InboundsService {
       singBoxTrojanPort: this.singBoxTrojanPort,
       singBoxSsPort: this.singBoxSsPort,
       xrayListenPort: this.xrayListenPort,
+      xrayGrpcPort: this.xrayGrpcPort,
+      xrayTcpTlsPort: this.xrayTcpTlsPort,
     });
     if (listenPort === allowedPort) {
       return;
@@ -1019,8 +1051,8 @@ export class InboundsService {
     const transport = protocol === 'HYSTERIA2' ? 'UDP' : 'TCP';
     throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
       reason: 'inbound_listen_port_not_published',
-      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT and Compose publish).`,
-      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}), либо измените SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT и publish в Compose.`,
+      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT / XRAY_GRPC_PORT / XRAY_TCP_TLS_PORT and Compose publish).`,
+      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}), либо измените SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT / XRAY_GRPC_PORT / XRAY_TCP_TLS_PORT и publish в Compose.`,
       protocol,
       listenPort,
       allowedPort,
@@ -1087,7 +1119,9 @@ export class InboundsService {
   ): AssignmentCredential {
     if (
       inbound.protocol === 'VLESS_REALITY' ||
-      inbound.protocol === 'VLESS_XHTTP_TLS'
+      inbound.protocol === 'VLESS_XHTTP_TLS' ||
+      inbound.protocol === 'VLESS_GRPC_TLS' ||
+      inbound.protocol === 'VLESS_TCP_TLS'
     ) {
       return createVlessCredential(input.uuid);
     }
@@ -1150,7 +1184,12 @@ export class InboundsService {
       if (parsed.version !== 1) {
         throw new Error('Invalid credential payload');
       }
-      if (protocol === 'VLESS_REALITY' || protocol === 'VLESS_XHTTP_TLS') {
+      if (
+        protocol === 'VLESS_REALITY' ||
+        protocol === 'VLESS_XHTTP_TLS' ||
+        protocol === 'VLESS_GRPC_TLS' ||
+        protocol === 'VLESS_TCP_TLS'
+      ) {
         if (
           !('uuid' in parsed) ||
           typeof parsed.uuid !== 'string' ||
@@ -1294,6 +1333,26 @@ export class InboundsService {
         },
       };
     }
+    if (inbound.protocol === 'VLESS_GRPC_TLS') {
+      return {
+        ...common,
+        protocol: 'VLESS_GRPC_TLS',
+        settings: {
+          ...this.parseVlessGrpcTlsPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
+    if (inbound.protocol === 'VLESS_TCP_TLS') {
+      return {
+        ...common,
+        protocol: 'VLESS_TCP_TLS',
+        settings: {
+          ...this.parseVlessTcpTlsPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
     if (inbound.protocol === 'TROJAN') {
       return {
         ...common,
@@ -1358,6 +1417,28 @@ export class InboundsService {
     }
   }
 
+  private parseVlessGrpcTlsPublicConfig(inbound: Inbound) {
+    try {
+      return parseVlessGrpcTlsPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
+  private parseVlessTcpTlsPublicConfig(inbound: Inbound) {
+    try {
+      return parseVlessTcpTlsPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
   private parseShadowsocksPublicConfig(inbound: Inbound) {
     try {
       return parseShadowsocksPublicConfig(inbound.config);
@@ -1378,6 +1459,12 @@ export class InboundsService {
     }
     if (inbound.protocol === 'VLESS_XHTTP_TLS') {
       return this.parseVlessXhttpTlsPublicConfig(inbound);
+    }
+    if (inbound.protocol === 'VLESS_GRPC_TLS') {
+      return this.parseVlessGrpcTlsPublicConfig(inbound);
+    }
+    if (inbound.protocol === 'VLESS_TCP_TLS') {
+      return this.parseVlessTcpTlsPublicConfig(inbound);
     }
     if (inbound.protocol === 'TROJAN') {
       return this.parseTrojanPublicConfig(inbound);

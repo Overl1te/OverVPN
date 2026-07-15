@@ -286,14 +286,18 @@
       "VLESS_REALITY": "VLESS Reality",
       "TROJAN": "Trojan",
       "SHADOWSOCKS": "Shadowsocks",
-      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
+      "VLESS_GRPC_TLS": "VLESS gRPC TLS",
+      "VLESS_TCP_TLS": "VLESS TCP TLS"
     },
     "inboundProtocol": {
       "HYSTERIA2": "Hysteria2",
       "VLESS_REALITY": "VLESS Reality",
       "TROJAN": "Trojan",
       "SHADOWSOCKS": "Shadowsocks",
-      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS"
+      "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
+      "VLESS_GRPC_TLS": "VLESS gRPC TLS",
+      "VLESS_TCP_TLS": "VLESS TCP TLS"
     },
     "coreEngine": {
       "SING_BOX": "sing-box",
@@ -352,7 +356,7 @@
     "edit": "Edit inbound",
     "tag": "Tag",
     "displayNameTemplate": "Connection display name",
-    "displayNameTemplateHint": "Client-visible name. Variables: {identity}, {username}, {tag}, {protocol}, {product}, {plan}. {protocol} is short: Hysteria2, Reality, XHTTP…. Empty = {identity} - {tag}.",
+    "displayNameTemplateHint": "Client-visible name. Variables: {identity}, {username}, {tag}, {protocol}, {product}, {plan}. {protocol} is short: Hysteria2, Reality, XHTTP, gRPC…. Empty = {identity} - {tag}.",
     "protocol": "Protocol",
     "listen": "Listen",
     "public": "Public",
@@ -427,6 +431,7 @@
     "xhttpHost": "xHTTP host",
     "xhttpHostOptional": "Optional Host header",
     "xhttpMode": "xHTTP mode",
+    "grpcServiceName": "gRPC service name",
     "certificatePem": "Certificate PEM",
     "privateKeyPem": "Private key PEM"
   },
@@ -455,10 +460,12 @@
     "subscriptionSupportUrlHint": "Client support-url (for example https://t.me/...).",
     "subscriptionWebPageUrl": "Info page URL",
     "subscriptionWebPageUrlHint": "Client profile-web-page-url (info icon).",
+    "subscriptionShowTrafficLimits": "Show traffic limits",
+    "subscriptionShowTrafficLimitsHint": "Include total= in subscription-userinfo (traffic bar in clients). Unlimited plans send total=0 (∞). Independent of whether the user has a data quota.",
     "subscriptionBranding": "Subscription / Happ branding",
-    "happProviderHint": "Happ advanced features (info button, expire renew, theme) require a Provider ID from happ-proxy.com. Values are still saved and sent without it.",
+    "happProviderRequired": "Enter a Happ Provider ID to edit advanced fields (info block, renew, fallback, theme).",
     "happProviderId": "Happ Provider ID",
-    "happProviderIdHint": "From https://happ-proxy.com — unlocks advanced Happ subscription UI.",
+    "happProviderIdHint": "From https://happ-proxy.com — required for advanced Happ subscription UI.",
     "subscriptionSubInfoText": "Happ info text",
     "subscriptionSubInfoTextHint": "Blue/colored info strip (sub-info-text). Same template variables as title. Max 200 chars after render.",
     "subscriptionSubInfoColor": "Happ info color",

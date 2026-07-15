@@ -307,6 +307,8 @@ export class SettingsService {
         }),
         singBoxSsPort: this.config.get('SING_BOX_SS_PORT', { infer: true }),
         xrayListenPort: this.config.get('XRAY_LISTEN_PORT', { infer: true }),
+        xrayGrpcPort: this.config.get('XRAY_GRPC_PORT', { infer: true }),
+        xrayTcpTlsPort: this.config.get('XRAY_TCP_TLS_PORT', { infer: true }),
         tlsCertificatePath:
           this.config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }) ?? null,
         tlsKeyPath:

@@ -58,6 +58,7 @@ describe('subscription information', () => {
       subExpireButtonLink: null,
       fallbackUrl: null,
       colorProfile: null,
+      showTrafficLimits: true,
       subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
       formats: ['sing-box', 'links', 'clash'],
       formatUrls: {
@@ -71,7 +72,7 @@ describe('subscription information', () => {
     );
   });
 
-  it('omits total and expire components for unlimited non-expiring users', () => {
+  it('includes total=0 for unlimited users when showTrafficLimits is enabled', () => {
     const info = buildSubscriptionInfo(
       {
         identity: 'unlimited-id',
@@ -98,8 +99,49 @@ describe('subscription information', () => {
       limitBytes: null,
       remainingBytes: null,
       updateIntervalHours: 12,
+      showTrafficLimits: true,
     });
-    expect(formatSubscriptionUserinfo(info)).toBe('upload=12; download=34');
+    expect(formatSubscriptionUserinfo(info)).toBe(
+      'upload=12; download=34; total=0',
+    );
+  });
+
+  it('omits total when showTrafficLimits is disabled even with a quota', () => {
+    const info = buildSubscriptionInfo(
+      {
+        identity: 'alice-id',
+        username: 'alice',
+        status: 'ACTIVE',
+        statusReason: null,
+        expireAt: null,
+        dataLimitBytes: 1000n,
+        usedUploadBytes: 10n,
+        usedDownloadBytes: 20n,
+        plan: {
+          name: 'Pro',
+          subscriptionTitleTemplate: null,
+          subscriptionAnnounce: null,
+          subscriptionSupportUrl: null,
+          subscriptionWebPageUrl: null,
+          happProviderId: null,
+          subscriptionSubInfoText: null,
+          subscriptionSubInfoColor: null,
+          subscriptionSubInfoButtonText: null,
+          subscriptionSubInfoButtonLink: null,
+          subscriptionSubExpireEnabled: false,
+          subscriptionSubExpireButtonLink: null,
+          subscriptionFallbackUrlTemplate: null,
+          subscriptionColorProfile: null,
+          subscriptionShowTrafficLimits: false,
+        },
+      },
+      TOKEN,
+      'https://vpn.example.com',
+      6,
+      new Date('2026-01-01T00:00:00.000Z'),
+    );
+
+    expect(formatSubscriptionUserinfo(info)).toBe('upload=10; download=20');
   });
 });
 

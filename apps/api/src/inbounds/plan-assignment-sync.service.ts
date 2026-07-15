@@ -131,7 +131,9 @@ export class PlanAssignmentSyncService {
   private createCredential(inbound: Inbound): AssignmentCredential {
     if (
       inbound.protocol === 'VLESS_REALITY' ||
-      inbound.protocol === 'VLESS_XHTTP_TLS'
+      inbound.protocol === 'VLESS_XHTTP_TLS' ||
+      inbound.protocol === 'VLESS_GRPC_TLS' ||
+      inbound.protocol === 'VLESS_TCP_TLS'
     ) {
       return createVlessCredential();
     }

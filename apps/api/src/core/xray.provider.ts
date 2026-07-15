@@ -19,6 +19,8 @@ import {
   type CoreHealthResult,
   type CoreProviderApplyResult,
   type DesiredInbound,
+  type DesiredVlessGrpcTlsInbound,
+  type DesiredVlessTcpTlsInbound,
   type DesiredVlessXhttpTlsInbound,
   EngineProvider,
   type JsonObject,
@@ -29,6 +31,7 @@ import {
   type TrafficCounter,
   type TrafficSnapshotResult,
   type VlessCredential,
+  type VlessXhttpTlsInboundSecrets,
 } from './core-provider';
 import {
   localizeCoreHealthError,
@@ -382,12 +385,39 @@ export class XrayProvider extends EngineProvider {
     inbound: DesiredInbound,
     secretValues: Set<string>,
   ): JsonObject {
-    if (inbound.protocol !== 'VLESS_XHTTP_TLS') {
-      throw new Error(
-        `XrayProvider cannot render ${inbound.protocol} inbound ${inbound.id}`,
-      );
+    if (inbound.protocol === 'VLESS_XHTTP_TLS') {
+      return this.renderVlessXhttpTlsInbound(inbound, secretValues);
     }
-    return this.renderVlessXhttpTlsInbound(inbound, secretValues);
+    if (inbound.protocol === 'VLESS_GRPC_TLS') {
+      return this.renderVlessGrpcTlsInbound(inbound, secretValues);
+    }
+    if (inbound.protocol === 'VLESS_TCP_TLS') {
+      return this.renderVlessTcpTlsInbound(inbound, secretValues);
+    }
+    throw new Error(
+      `XrayProvider cannot render ${inbound.protocol} inbound ${inbound.id}`,
+    );
+  }
+
+  private renderVlessClients(
+    inbound: DesiredInbound,
+    secretValues: Set<string>,
+    flow?: string,
+  ): JsonObject[] {
+    return inbound.assignments
+      .sort((left, right) => compareStrings(left.userId, right.userId))
+      .map((assignment) => {
+        const uuid = uuidFrom(assignment.credential);
+        secretValues.add(uuid);
+        const client: JsonObject = {
+          id: uuid,
+          email: assignment.userId,
+        };
+        if (flow) {
+          client.flow = flow;
+        }
+        return client;
+      });
   }
 
   private renderVlessXhttpTlsInbound(
@@ -395,16 +425,7 @@ export class XrayProvider extends EngineProvider {
     secretValues: Set<string>,
   ): JsonObject {
     const config = inbound.config;
-    const clients = inbound.assignments
-      .sort((left, right) => compareStrings(left.userId, right.userId))
-      .map((assignment) => {
-        const uuid = uuidFrom(assignment.credential);
-        secretValues.add(uuid);
-        return {
-          id: uuid,
-          email: assignment.userId,
-        };
-      });
+    const clients = this.renderVlessClients(inbound, secretValues);
 
     const xhttpSettings: JsonObject = {
       path: config.path,
@@ -417,7 +438,14 @@ export class XrayProvider extends EngineProvider {
     const tlsSettings: JsonObject = {
       serverName: config.tls.sni,
       alpn: ['h2', 'http/1.1'],
-      certificates: [this.renderTlsCertificate(inbound, secretValues)],
+      certificates: [
+        this.renderTlsCertificate(
+          inbound.tag,
+          config.tls,
+          inbound.secrets,
+          secretValues,
+        ),
+      ],
     };
 
     return {
@@ -438,11 +466,94 @@ export class XrayProvider extends EngineProvider {
     };
   }
 
-  private renderTlsCertificate(
-    inbound: DesiredVlessXhttpTlsInbound,
+  private renderVlessGrpcTlsInbound(
+    inbound: DesiredVlessGrpcTlsInbound,
     secretValues: Set<string>,
   ): JsonObject {
-    const tls = inbound.config.tls;
+    const config = inbound.config;
+    const clients = this.renderVlessClients(inbound, secretValues);
+    const tlsSettings: JsonObject = {
+      serverName: config.tls.sni,
+      alpn: ['h2'],
+      certificates: [
+        this.renderTlsCertificate(
+          inbound.tag,
+          config.tls,
+          inbound.secrets,
+          secretValues,
+        ),
+      ],
+    };
+
+    return {
+      listen: inbound.listenHost,
+      port: inbound.listenPort,
+      protocol: 'vless',
+      tag: inbound.tag,
+      settings: {
+        clients,
+        decryption: 'none',
+      },
+      streamSettings: {
+        network: 'grpc',
+        security: 'tls',
+        grpcSettings: {
+          serviceName: config.serviceName,
+        },
+        tlsSettings,
+      },
+    };
+  }
+
+  private renderVlessTcpTlsInbound(
+    inbound: DesiredVlessTcpTlsInbound,
+    secretValues: Set<string>,
+  ): JsonObject {
+    const config = inbound.config;
+    const clients = this.renderVlessClients(
+      inbound,
+      secretValues,
+      config.flow || undefined,
+    );
+    const tlsSettings: JsonObject = {
+      serverName: config.tls.sni,
+      alpn: ['h2', 'http/1.1'],
+      certificates: [
+        this.renderTlsCertificate(
+          inbound.tag,
+          config.tls,
+          inbound.secrets,
+          secretValues,
+        ),
+      ],
+    };
+
+    return {
+      listen: inbound.listenHost,
+      port: inbound.listenPort,
+      protocol: 'vless',
+      tag: inbound.tag,
+      settings: {
+        clients,
+        decryption: 'none',
+      },
+      streamSettings: {
+        network: 'tcp',
+        security: 'tls',
+        tlsSettings,
+      },
+    };
+  }
+
+  private renderTlsCertificate(
+    tag: string,
+    tls: {
+      certificatePath: string | null;
+      keyPath: string | null;
+    },
+    secrets: VlessXhttpTlsInboundSecrets,
+    secretValues: Set<string>,
+  ): JsonObject {
     if (tls.certificatePath && tls.keyPath) {
       return {
         certificateFile: tls.certificatePath,
@@ -450,12 +561,12 @@ export class XrayProvider extends EngineProvider {
       };
     }
     const certificatePem = requiredSecret(
-      inbound.secrets.certificatePem,
-      `${inbound.tag} TLS certificate PEM`,
+      secrets.certificatePem,
+      `${tag} TLS certificate PEM`,
     );
     const privateKeyPem = requiredSecret(
-      inbound.secrets.privateKeyPem,
-      `${inbound.tag} TLS private key PEM`,
+      secrets.privateKeyPem,
+      `${tag} TLS private key PEM`,
     );
     secretValues.add(certificatePem);
     secretValues.add(privateKeyPem);

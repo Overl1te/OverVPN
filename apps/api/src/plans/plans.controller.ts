@@ -89,6 +89,8 @@ class CreatePlanDto {
   subscriptionFallbackUrlTemplate?: string | null;
   @ApiPropertyOptional({ nullable: true })
   subscriptionColorProfile?: string | null;
+  @ApiPropertyOptional()
+  subscriptionShowTrafficLimits?: boolean;
 }
 
 class UpdatePlanDto extends PartialType(CreatePlanDto) {}
@@ -140,6 +142,8 @@ class PlanDto implements PlanResult {
   subscriptionFallbackUrlTemplate!: string | null;
   @ApiPropertyOptional({ nullable: true })
   subscriptionColorProfile!: string | null;
+  @ApiProperty()
+  subscriptionShowTrafficLimits!: boolean;
   @ApiProperty({ type: [String], format: 'uuid' })
   inboundIds!: string[];
   @ApiProperty()

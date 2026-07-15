@@ -6,8 +6,12 @@ import type {
   ShadowsocksInboundSettings,
   TrojanInboundPublicConfig,
   TrojanInboundSettings,
+  VlessGrpcTlsInboundSettings,
+  VlessGrpcTlsPublicConfig,
   VlessRealityInboundPublicConfig,
   VlessRealityInboundSettings,
+  VlessTcpTlsInboundSettings,
+  VlessTcpTlsPublicConfig,
   VlessXhttpTlsInboundSettings,
   VlessXhttpTlsPublicConfig,
 } from '@overvpn/shared/schemas';
@@ -15,7 +19,9 @@ import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
+  vlessGrpcTlsPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
+  vlessTcpTlsPublicConfigSchema,
   vlessXhttpTlsPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import type { ProcessAdapter } from '../core/core-adapters';
@@ -36,10 +42,18 @@ import {
 } from './shadowsocks-domain';
 import { buildTrojanStorage, type TrojanStorage } from './trojan-domain';
 import {
+  buildVlessGrpcTlsStorage,
+  type VlessGrpcTlsStorage,
+} from './vless-grpc-tls-domain';
+import {
   buildVlessRealityStorage,
   generateRealityKeypair,
   type VlessRealityStorage,
 } from './vless-reality-domain';
+import {
+  buildVlessTcpTlsStorage,
+  type VlessTcpTlsStorage,
+} from './vless-tcp-tls-domain';
 import {
   buildVlessXhttpTlsStorage,
   type VlessXhttpTlsStorage,
@@ -49,6 +63,8 @@ export type InboundStorage =
   | { protocol: 'HYSTERIA2'; storage: Hysteria2Storage }
   | { protocol: 'VLESS_REALITY'; storage: VlessRealityStorage }
   | { protocol: 'VLESS_XHTTP_TLS'; storage: VlessXhttpTlsStorage }
+  | { protocol: 'VLESS_GRPC_TLS'; storage: VlessGrpcTlsStorage }
+  | { protocol: 'VLESS_TCP_TLS'; storage: VlessTcpTlsStorage }
   | { protocol: 'TROJAN'; storage: TrojanStorage }
   | { protocol: 'SHADOWSOCKS'; storage: ShadowsocksStorage };
 
@@ -56,6 +72,8 @@ export type InboundPublicConfig =
   | Hysteria2InboundPublicConfig
   | VlessRealityInboundPublicConfig
   | VlessXhttpTlsPublicConfig
+  | VlessGrpcTlsPublicConfig
+  | VlessTcpTlsPublicConfig
   | TrojanInboundPublicConfig
   | ShadowsocksInboundPublicConfig;
 
@@ -72,6 +90,8 @@ export async function buildInboundStorage(
     | Hysteria2InboundSettings
     | VlessRealityInboundSettings
     | VlessXhttpTlsInboundSettings
+    | VlessGrpcTlsInboundSettings
+    | VlessTcpTlsInboundSettings
     | TrojanInboundSettings
     | ShadowsocksInboundSettings,
   previous: InboundStorage | undefined,
@@ -123,6 +143,24 @@ export async function buildInboundStorage(
       ),
     };
   }
+  if (protocol === 'VLESS_GRPC_TLS') {
+    return {
+      protocol,
+      storage: buildVlessGrpcTlsStorage(
+        settings as VlessGrpcTlsInboundSettings,
+        previous?.protocol === 'VLESS_GRPC_TLS' ? previous.storage : undefined,
+      ),
+    };
+  }
+  if (protocol === 'VLESS_TCP_TLS') {
+    return {
+      protocol,
+      storage: buildVlessTcpTlsStorage(
+        settings as VlessTcpTlsInboundSettings,
+        previous?.protocol === 'VLESS_TCP_TLS' ? previous.storage : undefined,
+      ),
+    };
+  }
   if (protocol === 'TROJAN') {
     return {
       protocol,
@@ -165,6 +203,18 @@ export function parseVlessXhttpTlsPublicConfig(
   return vlessXhttpTlsPublicConfigSchema.parse(config);
 }
 
+export function parseVlessGrpcTlsPublicConfig(
+  config: unknown,
+): VlessGrpcTlsPublicConfig {
+  return vlessGrpcTlsPublicConfigSchema.parse(config);
+}
+
+export function parseVlessTcpTlsPublicConfig(
+  config: unknown,
+): VlessTcpTlsPublicConfig {
+  return vlessTcpTlsPublicConfigSchema.parse(config);
+}
+
 export function parseShadowsocksPublicConfig(
   config: unknown,
 ): ShadowsocksInboundPublicConfig {
@@ -183,6 +233,12 @@ export function parseInboundPublicConfig(
   }
   if (protocol === 'VLESS_XHTTP_TLS') {
     return parseVlessXhttpTlsPublicConfig(config);
+  }
+  if (protocol === 'VLESS_GRPC_TLS') {
+    return parseVlessGrpcTlsPublicConfig(config);
+  }
+  if (protocol === 'VLESS_TCP_TLS') {
+    return parseVlessTcpTlsPublicConfig(config);
   }
   if (protocol === 'TROJAN') {
     return parseTrojanPublicConfig(config);
@@ -223,6 +279,24 @@ export function storageFromInbound(
       },
     };
   }
+  if (protocol === 'VLESS_GRPC_TLS') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as VlessGrpcTlsPublicConfig,
+        secrets: secrets,
+      },
+    };
+  }
+  if (protocol === 'VLESS_TCP_TLS') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as VlessTcpTlsPublicConfig,
+        secrets: secrets,
+      },
+    };
+  }
   if (protocol === 'TROJAN') {
     return {
       protocol,
@@ -245,6 +319,15 @@ export function encryptableSecrets(
   secrets: InboundSecretBundle,
 ): string | null {
   return Object.keys(secrets).length === 1 ? null : JSON.stringify(secrets);
+}
+
+function isXrayFilesTlsSecrets(value: Record<string, unknown>): boolean {
+  const keys = new Set(Object.keys(value));
+  return [...keys].every(
+    (key) =>
+      ['version', 'certificatePem', 'privateKeyPem'].includes(key) &&
+      (key === 'version' || typeof value[key] === 'string'),
+  );
 }
 
 export function isInboundSecretBundle(
@@ -282,12 +365,12 @@ export function isInboundSecretBundle(
       typeof value.publicKey === 'string'
     );
   }
-  if (protocol === 'VLESS_XHTTP_TLS') {
-    return [...keys].every(
-      (key) =>
-        ['version', 'certificatePem', 'privateKeyPem'].includes(key) &&
-        (key === 'version' || typeof value[key] === 'string'),
-    );
+  if (
+    protocol === 'VLESS_XHTTP_TLS' ||
+    protocol === 'VLESS_GRPC_TLS' ||
+    protocol === 'VLESS_TCP_TLS'
+  ) {
+    return isXrayFilesTlsSecrets(value);
   }
   if (protocol === 'TROJAN') {
     return [...keys].every(
