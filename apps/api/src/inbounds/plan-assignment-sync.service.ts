@@ -4,10 +4,12 @@ import type { CoreEngine } from '@overvpn/shared';
 import { SecretEncryptionService } from '../auth/auth-crypto';
 import { ApiException } from '../common/api-error';
 import type { AppEnvironment } from '../config/environment';
+import { coreStateId } from '../core/core-ids';
 import type { AssignmentCredential } from '../core/core-provider';
 import type { Inbound, Prisma } from '../generated/prisma/client';
 import { createCredential } from './hysteria2-domain';
 import { parseShadowsocksPublicConfig } from './inbound-storage';
+import { createMtproxyCredential } from './mtproxy-domain';
 import { createShadowsocksCredential } from './shadowsocks-domain';
 import { createTrojanCredential } from './trojan-domain';
 import { createVlessCredential } from './vless-reality-domain';
@@ -18,15 +20,17 @@ import { createVlessCredential } from './vless-reality-domain';
  */
 @Injectable()
 export class PlanAssignmentSyncService {
-  private readonly configPath: string;
-  private readonly xrayConfigPath: string;
+  private readonly configPaths: Record<CoreEngine, string>;
 
   constructor(
     private readonly encryption: SecretEncryptionService,
     config: ConfigService<AppEnvironment, true>,
   ) {
-    this.configPath = config.get('SING_BOX_CONFIG_PATH', { infer: true });
-    this.xrayConfigPath = config.get('XRAY_CONFIG_PATH', { infer: true });
+    this.configPaths = {
+      SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
+      XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
+      MTPROXY: config.get('MTPROXY_CONFIG_PATH', { infer: true }),
+    };
   }
 
   async planInboundIds(
@@ -144,6 +148,9 @@ export class PlanAssignmentSyncService {
       const publicConfig = parseShadowsocksPublicConfig(inbound.config);
       return createShadowsocksCredential(publicConfig.method);
     }
+    if (inbound.protocol === 'MTPROXY') {
+      return createMtproxyCredential();
+    }
     return createCredential();
   }
 
@@ -174,9 +181,8 @@ export class PlanAssignmentSyncService {
     tx: Prisma.TransactionClient,
     engine: CoreEngine,
   ): Promise<void> {
-    const id = engine === 'SING_BOX' ? 'sing-box' : 'xray';
-    const configPath =
-      engine === 'SING_BOX' ? this.configPath : this.xrayConfigPath;
+    const id = coreStateId(engine);
+    const configPath = this.configPaths[engine];
     await tx.coreState.upsert({
       where: { id },
       create: {

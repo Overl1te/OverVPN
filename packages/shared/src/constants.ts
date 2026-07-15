@@ -34,7 +34,7 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 export const PLAN_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
-export const CORE_ENGINES = ['SING_BOX', 'XRAY'] as const;
+export const CORE_ENGINES = ['SING_BOX', 'XRAY', 'MTPROXY'] as const;
 export type CoreEngine = (typeof CORE_ENGINES)[number];
 
 export const INBOUND_PROTOCOLS = [
@@ -45,8 +45,12 @@ export const INBOUND_PROTOCOLS = [
   'VLESS_XHTTP_TLS',
   'VLESS_GRPC_TLS',
   'VLESS_TCP_TLS',
+  'MTPROXY',
 ] as const;
 export type InboundProtocol = (typeof INBOUND_PROTOCOLS)[number];
+
+/** Telegram practical limit on concurrent MTProxy listeners per node. */
+export const MAX_MTPROXY_INBOUNDS = 16;
 
 export const PROTOCOL_ENGINE_MAP = {
   HYSTERIA2: 'SING_BOX',
@@ -56,6 +60,7 @@ export const PROTOCOL_ENGINE_MAP = {
   VLESS_XHTTP_TLS: 'XRAY',
   VLESS_GRPC_TLS: 'XRAY',
   VLESS_TCP_TLS: 'XRAY',
+  MTPROXY: 'MTPROXY',
 } as const satisfies Record<InboundProtocol, CoreEngine>;
 
 /**
@@ -70,6 +75,7 @@ export const PROTOCOL_DISPLAY_LABELS = {
   VLESS_TCP_TLS: 'TCP TLS',
   TROJAN: 'Trojan',
   SHADOWSOCKS: 'Shadowsocks',
+  MTPROXY: 'MTProxy',
 } as const satisfies Record<InboundProtocol, string>;
 
 export function protocolDisplayLabel(protocol: string): string {

@@ -55,6 +55,13 @@ RUN apk add --no-cache ca-certificates curl unzip \
     && install -m 644 /tmp/xray/geosite.dat /out/geosite.dat \
     && rm -rf /tmp/xray /tmp/xray.zip
 
+FROM alpine:3.22 AS mtproxy-fetch
+
+ARG MTPROXY_REF=master
+
+RUN apk add --no-cache git \
+    && git clone --depth 1 --branch "${MTPROXY_REF}" https://github.com/alexbers/mtprotoproxy.git /out/mtprotoproxy
+
 FROM node:24-bookworm-slim AS base
 
 ENV PNPM_HOME="/pnpm"
@@ -91,7 +98,7 @@ ENV NODE_ENV="production"
 ENV HOST="0.0.0.0"
 ENV PORT="3000"
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends dumb-init postgresql-client \
+    && apt-get install --yes --no-install-recommends dumb-init postgresql-client python3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build --chown=node:node /workspace/package.json /workspace/pnpm-lock.yaml /workspace/pnpm-workspace.yaml ./
@@ -104,7 +111,11 @@ COPY --from=xray-build /out/xray /usr/local/bin/xray
 COPY --from=xray-build /out/geoip.dat /usr/local/share/xray/geoip.dat
 COPY --from=xray-build /out/geosite.dat /usr/local/share/xray/geosite.dat
 COPY --chmod=755 deploy/xray/entrypoint.sh /usr/local/bin/xray-entrypoint
+COPY --from=mtproxy-fetch /out/mtprotoproxy /opt/mtprotoproxy
+COPY --chmod=755 deploy/mtproxy/entrypoint.sh /usr/local/bin/mtproxy-entrypoint
+COPY deploy/mtproxy/supervisor.py /opt/overvpn-mtproxy/supervisor.py
 ENV XRAY_LOCATION_ASSET=/usr/local/share/xray
+ENV MTPROXY_SRC=/opt/mtprotoproxy
 
 USER node
 EXPOSE 3000

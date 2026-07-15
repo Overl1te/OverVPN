@@ -166,6 +166,8 @@ function testConfig(): ConfigService<AppEnvironment, true> {
     XRAY_LISTEN_PORT: 9443,
     XRAY_GRPC_PORT: 9446,
     XRAY_TCP_TLS_PORT: 9447,
+    MTPROXY_PORT_MIN: 10001,
+    MTPROXY_PORT_MAX: 10016,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   };

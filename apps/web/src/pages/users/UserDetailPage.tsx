@@ -1,5 +1,6 @@
 import {
   Alert,
+  App as AntApp,
   Button,
   Card,
   Col,
@@ -34,7 +35,7 @@ import {
   updateUser,
 } from '@/api/users';
 import { listPlans } from '@/api/plans';
-import { listAssignments, listInbounds } from '@/api/inbounds';
+import { listAssignments, listInbounds, revealAssignmentLink } from '@/api/inbounds';
 import { getSettings } from '@/api/settings';
 import { PageHeader } from '@/components/PageHeader';
 import { UserStatusTag } from '@/components/StatusTag';
@@ -61,10 +62,12 @@ export function UserDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { canMutate } = useAuth();
+  const { message: messageApi } = AntApp.useApp();
   const [form] = Form.useForm();
   const onError = useApiErrorHandler();
   const onFormError = useApiErrorHandler(form);
   const [qrOpen, setQrOpen] = useState(false);
+  const [mtproxyQr, setMtproxyQr] = useState<string | null>(null);
   const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(29, 'day').startOf('day'),
     dayjs().startOf('day'),
@@ -126,12 +129,25 @@ export function UserDetailPage() {
           const page = await listAssignments(inbound.id, { page: 1, pageSize: 100 });
           return page.items
             .filter((item) => item.userId === id)
-            .map((item) => ({ ...item, inboundTag: inbound.tag, inboundId: inbound.id }));
+            .map((item) => ({
+              ...item,
+              inboundTag: inbound.tag,
+              inboundId: inbound.id,
+              inboundProtocol: inbound.protocol,
+            }));
         }),
       );
       return results.flat();
     },
   });
+
+  const mtproxyAssignments = useMemo(
+    () =>
+      (assignmentsQueries.data ?? []).filter(
+        (row) => row.inboundProtocol === 'MTPROXY' && row.status === 'ACTIVE',
+      ),
+    [assignmentsQueries.data],
+  );
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
@@ -743,6 +759,12 @@ export function UserDetailPage() {
                       ),
                     },
                     {
+                      title: t('inbounds.protocol'),
+                      dataIndex: 'inboundProtocol',
+                      render: (protocol: string) =>
+                        t(`enums.protocol.${protocol}`, { defaultValue: protocol }),
+                    },
+                    {
                       title: t('app.status'),
                       dataIndex: 'status',
                       render: (status: string) =>
@@ -752,12 +774,68 @@ export function UserDetailPage() {
                   ]}
                 />
               </Card>
+
+              {mtproxyAssignments.length > 0 ? (
+                <Card size="small" title={t('users.mtproxyTitle')} style={{ marginTop: 12 }}>
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
+                    {t('users.mtproxyHint')}
+                  </Typography.Paragraph>
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    pagination={false}
+                    dataSource={mtproxyAssignments}
+                    columns={[
+                      {
+                        title: t('inbounds.tag'),
+                        dataIndex: 'inboundTag',
+                      },
+                      {
+                        title: t('users.mtproxyActions'),
+                        key: 'actions',
+                        render: (_, row) => (
+                          <Space wrap>
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                void revealAssignmentLink(row.inboundId, row.id)
+                                  .then((link) => {
+                                    void navigator.clipboard.writeText(link.uri);
+                                    void messageApi.success(t('users.mtproxyCopied'));
+                                  })
+                                  .catch(onError);
+                              }}
+                            >
+                              {t('users.mtproxyCopy')}
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                void revealAssignmentLink(row.inboundId, row.id)
+                                  .then((link) => setMtproxyQr(link.uri))
+                                  .catch(onError);
+                              }}
+                            >
+                              {t('users.mtproxyQr')}
+                            </Button>
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+                </Card>
+              ) : null}
             </>
           ) : null}
         </Col>
       </Row>
 
       <QrModal open={qrOpen} value={subUrl} onClose={() => setQrOpen(false)} />
+      <QrModal
+        open={mtproxyQr != null}
+        value={mtproxyQr ?? ''}
+        onClose={() => setMtproxyQr(null)}
+      />
     </div>
   );
 }

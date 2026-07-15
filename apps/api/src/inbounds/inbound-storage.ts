@@ -2,6 +2,8 @@ import type { InboundProtocol } from '@overvpn/shared/constants';
 import type {
   Hysteria2InboundPublicConfig,
   Hysteria2InboundSettings,
+  MtproxyInboundPublicConfig,
+  MtproxyInboundSettings,
   ShadowsocksInboundPublicConfig,
   ShadowsocksInboundSettings,
   TrojanInboundPublicConfig,
@@ -17,6 +19,7 @@ import type {
 } from '@overvpn/shared/schemas';
 import {
   hysteria2InboundPublicConfigSchema,
+  mtproxyInboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
   vlessGrpcTlsPublicConfigSchema,
@@ -27,6 +30,7 @@ import {
 import type { ProcessAdapter } from '../core/core-adapters';
 import type {
   Hysteria2InboundSecrets,
+  MtproxyInboundSecrets,
   ShadowsocksInboundSecrets,
   TrojanInboundSecrets,
   VlessRealityInboundSecrets,
@@ -36,6 +40,7 @@ import {
   buildHysteria2Storage,
   type Hysteria2Storage,
 } from './hysteria2-domain';
+import { buildMtproxyStorage, type MtproxyStorage } from './mtproxy-domain';
 import {
   buildShadowsocksStorage,
   type ShadowsocksStorage,
@@ -66,7 +71,8 @@ export type InboundStorage =
   | { protocol: 'VLESS_GRPC_TLS'; storage: VlessGrpcTlsStorage }
   | { protocol: 'VLESS_TCP_TLS'; storage: VlessTcpTlsStorage }
   | { protocol: 'TROJAN'; storage: TrojanStorage }
-  | { protocol: 'SHADOWSOCKS'; storage: ShadowsocksStorage };
+  | { protocol: 'SHADOWSOCKS'; storage: ShadowsocksStorage }
+  | { protocol: 'MTPROXY'; storage: MtproxyStorage };
 
 export type InboundPublicConfig =
   | Hysteria2InboundPublicConfig
@@ -75,14 +81,16 @@ export type InboundPublicConfig =
   | VlessGrpcTlsPublicConfig
   | VlessTcpTlsPublicConfig
   | TrojanInboundPublicConfig
-  | ShadowsocksInboundPublicConfig;
+  | ShadowsocksInboundPublicConfig
+  | MtproxyInboundPublicConfig;
 
 export type InboundSecretBundle =
   | Hysteria2InboundSecrets
   | VlessRealityInboundSecrets
   | VlessXhttpTlsInboundSecrets
   | TrojanInboundSecrets
-  | ShadowsocksInboundSecrets;
+  | ShadowsocksInboundSecrets
+  | MtproxyInboundSecrets;
 
 export async function buildInboundStorage(
   protocol: InboundProtocol,
@@ -93,7 +101,8 @@ export async function buildInboundStorage(
     | VlessGrpcTlsInboundSettings
     | VlessTcpTlsInboundSettings
     | TrojanInboundSettings
-    | ShadowsocksInboundSettings,
+    | ShadowsocksInboundSettings
+    | MtproxyInboundSettings,
   previous: InboundStorage | undefined,
   deps: {
     processAdapter: ProcessAdapter;
@@ -170,6 +179,12 @@ export async function buildInboundStorage(
       ),
     };
   }
+  if (protocol === 'MTPROXY') {
+    return {
+      protocol,
+      storage: buildMtproxyStorage(settings as MtproxyInboundSettings),
+    };
+  }
   return {
     protocol: 'SHADOWSOCKS',
     storage: buildShadowsocksStorage(
@@ -221,6 +236,12 @@ export function parseShadowsocksPublicConfig(
   return shadowsocksInboundPublicConfigSchema.parse(config);
 }
 
+export function parseMtproxyPublicConfig(
+  config: unknown,
+): MtproxyInboundPublicConfig {
+  return mtproxyInboundPublicConfigSchema.parse(config);
+}
+
 export function parseInboundPublicConfig(
   protocol: InboundProtocol,
   config: unknown,
@@ -242,6 +263,9 @@ export function parseInboundPublicConfig(
   }
   if (protocol === 'TROJAN') {
     return parseTrojanPublicConfig(config);
+  }
+  if (protocol === 'MTPROXY') {
+    return parseMtproxyPublicConfig(config);
   }
   return parseShadowsocksPublicConfig(config);
 }
@@ -302,6 +326,15 @@ export function storageFromInbound(
       protocol,
       storage: {
         publicConfig: publicConfig as TrojanInboundPublicConfig,
+        secrets: secrets,
+      },
+    };
+  }
+  if (protocol === 'MTPROXY') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as MtproxyInboundPublicConfig,
         secrets: secrets,
       },
     };
@@ -388,6 +421,9 @@ export function isInboundSecretBundle(
         ].includes(key) &&
         (key === 'version' || typeof value[key] === 'string'),
     );
+  }
+  if (protocol === 'MTPROXY') {
+    return keys.size === 1 && keys.has('version');
   }
   return (
     keys.size <= 2 &&

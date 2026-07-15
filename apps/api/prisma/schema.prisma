@@ -35,6 +35,7 @@ enum PlanStatus {
 enum CoreEngine {
   SING_BOX
   XRAY
+  MTPROXY
 }
 
 enum InboundProtocol {
@@ -45,6 +46,7 @@ enum InboundProtocol {
   VLESS_XHTTP_TLS
   VLESS_GRPC_TLS
   VLESS_TCP_TLS
+  MTPROXY
 }
 
 enum ResetStrategy {

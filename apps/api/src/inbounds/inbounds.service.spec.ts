@@ -13,6 +13,7 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   const values: Record<string, unknown> = {
     SING_BOX_CONFIG_PATH: '/tmp/config.json',
     XRAY_CONFIG_PATH: '/tmp/xray/config.json',
+    MTPROXY_CONFIG_PATH: '/tmp/mtproxy/config.json',
     SING_BOX_BINARY_PATH: '/usr/bin/sing-box',
     SING_BOX_PROCESS_TIMEOUT_MS: 500,
     SING_BOX_UDP_PORT: 443,
@@ -22,6 +23,8 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     XRAY_LISTEN_PORT: 9443,
     XRAY_GRPC_PORT: 9446,
     XRAY_TCP_TLS_PORT: 9447,
+    MTPROXY_PORT_MIN: 10001,
+    MTPROXY_PORT_MAX: 10016,
     ...overrides,
   };
   return {

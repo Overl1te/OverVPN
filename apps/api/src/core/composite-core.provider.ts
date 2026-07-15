@@ -169,6 +169,7 @@ function ensureUniqueConnectionId(
   const prefixes: Record<CoreEngine, string> = {
     SING_BOX: 'sing-box:',
     XRAY: 'xray:',
+    MTPROXY: 'mtproxy:',
   };
   const prefix = prefixes[engine];
   if (

@@ -204,6 +204,12 @@
     "noActivePlans": "No active plans. Create a plan with inbounds first.",
     "usageChart": "Daily usage (UTC)",
     "noAssignments": "No inbound assignments found for this user",
+    "mtproxyTitle": "Telegram MTProxy",
+    "mtproxyHint": "These links are shown only in the panel — they are not included in subscription downloads for VPN apps.",
+    "mtproxyActions": "Link",
+    "mtproxyCopy": "Copy t.me link",
+    "mtproxyQr": "QR",
+    "mtproxyCopied": "Telegram proxy link copied",
     "needsApply": "Needs apply",
     "copySub": "Copy subscription",
     "openDetail": "Open"
@@ -288,7 +294,8 @@
       "SHADOWSOCKS": "Shadowsocks",
       "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
       "VLESS_GRPC_TLS": "VLESS gRPC TLS",
-      "VLESS_TCP_TLS": "VLESS TCP TLS"
+      "VLESS_TCP_TLS": "VLESS TCP TLS",
+      "MTPROXY": "MTProxy"
     },
     "inboundProtocol": {
       "HYSTERIA2": "Hysteria2",
@@ -297,11 +304,13 @@
       "SHADOWSOCKS": "Shadowsocks",
       "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
       "VLESS_GRPC_TLS": "VLESS gRPC TLS",
-      "VLESS_TCP_TLS": "VLESS TCP TLS"
+      "VLESS_TCP_TLS": "VLESS TCP TLS",
+      "MTPROXY": "MTProxy"
     },
     "coreEngine": {
       "SING_BOX": "sing-box",
-      "XRAY": "Xray"
+      "XRAY": "Xray",
+      "MTPROXY": "MTProxy"
     },
     "workerName": {
       "traffic-collector": "Traffic collector",
@@ -427,6 +436,14 @@
     "engine": "Core engine",
     "engineGroupSingBox": "sing-box",
     "engineGroupXray": "Xray",
+    "engineGroupMtproxy": "MTProxy",
+    "installPortRangeHint": "Install publishes TCP ports {{range}} for MTProxy. Pick a free port in that range.",
+    "mtproxySecretMode": "Secret mode",
+    "mtproxySecretMode.CLASSIC": "Classic",
+    "mtproxySecretMode.SECURE": "Secure (dd)",
+    "mtproxySecretMode.TLS": "FakeTLS (ee)",
+    "mtproxyTlsDomain": "FakeTLS domain",
+    "mtproxyTlsDomainHint": "Domain used in the ee-secret (SNI camouflage).",
     "xhttpPath": "xHTTP path",
     "xhttpHost": "xHTTP host",
     "xhttpHostOptional": "Optional Host header",

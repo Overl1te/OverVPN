@@ -56,6 +56,10 @@ class SystemSettingsReadOnlyDto {
   xrayGrpcPort!: number;
   @ApiProperty()
   xrayTcpTlsPort!: number;
+  @ApiProperty()
+  mtproxyPortMin!: number;
+  @ApiProperty()
+  mtproxyPortMax!: number;
   @ApiPropertyOptional({ nullable: true })
   tlsCertificatePath!: string | null;
   @ApiPropertyOptional({ nullable: true })

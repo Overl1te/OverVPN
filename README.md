@@ -20,27 +20,30 @@ Docker
 
 OverVPN — **однонодовая** панель для выдачи доступа, подписок и учёта:
 
-|               |                                                      |
-| ------------- | ---------------------------------------------------- |
-| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks     |
-| **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит |
-| **Подписки**  | JSON · Clash Meta · список ссылок · QR               |
-| **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce          |
-| **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты  |
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks · MTProxy |
+| **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит       |
+| **Подписки**  | JSON · Clash Meta · список ссылок · QR                     |
+| **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce                |
+| **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты        |
 
-Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — два независимых ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/) и [Xray-core](https://github.com/XTLS/Xray-core).
+Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — три независимых ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/), [Xray-core](https://github.com/XTLS/Xray-core) и MTProxy ([alexbers/mtprotoproxy](https://github.com/alexbers/mtprotoproxy)).
 
 > [!IMPORTANT]
-> Мульти-нода **не поддерживается**. Один сервер — два core-процесса (`core` + `core-xray`), один control plane.
+> Мульти-нода **не поддерживается**. Один сервер — три core-процесса (`core` + `core-xray` + `core-mtproxy`), один control plane.
 
-### Dual cores
+### Dual cores + MTProxy
 
-| Зона     | Engine     | Протоколы (MVP)                               | Compose service |
-| -------- | ---------- | --------------------------------------------- | --------------- |
-| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS | `core`          |
-| Xray     | `XRAY`     | VLESS_XHTTP_TLS                               | `core-xray`     |
+| Зона     | Engine     | Протоколы (MVP)                                    | Compose service |
+| -------- | ---------- | -------------------------------------------------- | --------------- |
+| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS      | `core`          |
+| Xray     | `XRAY`     | VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS     | `core-xray`     |
+| MTProxy  | `MTPROXY`  | MTPROXY (до 16 inbound’ов, secret на пользователя) | `core-mtproxy`  |
 
-Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами обоих ядер. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`).
+Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`). MTProxy публикует диапазон TCP `10001–10016` (`MTPROXY_PORT_MIN` / `MTPROXY_PORT_MAX`).
+
+Ссылки MTProxy выдаются **только в панели** (карточка пользователя) — в subscription formats (`sing-box` / `clash` / `links`) они не попадают.
 
 Ограничения подписок для Xray-only transports: полный endpoint всегда в `?format=links`; client `sing-box` JSON может пропускать xHTTP; Clash Meta — best-effort.
 
@@ -52,7 +55,7 @@ OverVPN — **однонодовая** панель для выдачи дост
 
 - **Ubuntu / Debian** (рекомендуется)
 - Доступ `root` / `sudo`
-- Свободные порты: `80`, `443` (и UDP `443` для VPN)
+- Свободные порты: `80`, `443` (и UDP `443` для VPN), плюс диапазон MTProxy `10001–10016`
 - DNS A-записи на IP сервера (если ставите с доменами)
 
 ### Одна команда
@@ -134,19 +137,20 @@ overvpn uninstall              # удалить установку
 
 ### Порты
 
-| Компонент        | По умолчанию                                               |
-| ---------------- | ---------------------------------------------------------- |
-| Веб-панель       | `8000` (без домена) / `443` через Nginx                    |
-| API              | внутри Compose; наружу через веб/прокси                    |
-| PostgreSQL       | `5432` → только `127.0.0.1`                                |
-| Redis            | `6379` → только `127.0.0.1`                                |
-| VPN UDP inbound  | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2       |
-| VPN TCP Reality  | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                  |
-| VPN TCP Trojan   | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)               |
-| VPN TCP SS       | `SING_BOX_SS_PORT` (по умолчанию `8445`)                   |
-| VPN Xray xHTTP   | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx)  |
-| VPN Xray gRPC    | `XRAY_GRPC_PORT` (по умолчанию `8446` / `9446` с Nginx)    |
-| VPN Xray TCP TLS | `XRAY_TCP_TLS_PORT` (по умолчанию `8447` / `9447` с Nginx) |
+| Компонент        | По умолчанию                                                       |
+| ---------------- | ------------------------------------------------------------------ |
+| Веб-панель       | `8000` (без домена) / `443` через Nginx                            |
+| API              | внутри Compose; наружу через веб/прокси                            |
+| PostgreSQL       | `5432` → только `127.0.0.1`                                        |
+| Redis            | `6379` → только `127.0.0.1`                                        |
+| VPN UDP inbound  | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2               |
+| VPN TCP Reality  | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                          |
+| VPN TCP Trojan   | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)                       |
+| VPN TCP SS       | `SING_BOX_SS_PORT` (по умолчанию `8445`)                           |
+| VPN Xray xHTTP   | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx)          |
+| VPN Xray gRPC    | `XRAY_GRPC_PORT` (по умолчанию `8446` / `9446` с Nginx)            |
+| VPN Xray TCP TLS | `XRAY_TCP_TLS_PORT` (по умолчанию `8447` / `9447` с Nginx)         |
+| MTProxy TCP      | `MTPROXY_PORT_MIN`–`MTPROXY_PORT_MAX` (по умолчанию `10001–10016`) |
 
 > [!WARNING]
 > Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
@@ -157,13 +161,13 @@ overvpn uninstall              # удалить установку
 
 ### 1. Создать inbound
 
-1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks).
+1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks / Xray VLESS / MTProxy).
 2. Укажите `tag`, listen / public host и port.
 3. TLS-файлы кладите в каталог сертификатов ядра (`deploy/sing-box/certs`, в контейнере — `/var/lib/sing-box-certs`).
 
 При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_`* — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
-Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP), `XRAY_GRPC_PORT` (gRPC), `XRAY_TCP_TLS_PORT` (TCP TLS). Не выбирайте другие порты без правки `.env` и publish в Compose.
+Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP), `XRAY_GRPC_PORT` (gRPC), `XRAY_TCP_TLS_PORT` (TCP TLS), `MTPROXY_PORT_MIN`…`MAX` (MTProxy). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
 ### 2. Создать план и пользователя
 

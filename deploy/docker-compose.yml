@@ -65,6 +65,16 @@ x-api-environment: &api-environment
   XRAY_PROCESS_TIMEOUT_MS: ${XRAY_PROCESS_TIMEOUT_MS:-15000}
   XRAY_RELOAD_TIMEOUT_MS: ${XRAY_RELOAD_TIMEOUT_MS:-20000}
   XRAY_HEALTH_TIMEOUT_MS: ${XRAY_HEALTH_TIMEOUT_MS:-5000}
+  MTPROXY_CONFIG_PATH: /var/lib/mtproxy/config.json
+  MTPROXY_LAST_KNOWN_GOOD_PATH: /var/lib/mtproxy/config.last-known-good.json
+  MTPROXY_RELOAD_REQUEST_PATH: /var/lib/overvpn/mtproxy-reload/request
+  MTPROXY_RELOAD_ACK_PATH: /var/lib/overvpn/mtproxy-reload/ack
+  MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
+  MTPROXY_PORT_MIN: ${MTPROXY_PORT_MIN:-10001}
+  MTPROXY_PORT_MAX: ${MTPROXY_PORT_MAX:-10016}
+  MTPROXY_PROCESS_TIMEOUT_MS: ${MTPROXY_PROCESS_TIMEOUT_MS:-15000}
+  MTPROXY_RELOAD_TIMEOUT_MS: ${MTPROXY_RELOAD_TIMEOUT_MS:-20000}
+  MTPROXY_HEALTH_TIMEOUT_MS: ${MTPROXY_HEALTH_TIMEOUT_MS:-5000}
   CORE_APPLY_LOCK_TTL_MS: ${CORE_APPLY_LOCK_TTL_MS:-60000}
   WORKERS_ENABLED: ${WORKERS_ENABLED:-true}
   WORKER_LOCK_TTL_MS: ${WORKER_LOCK_TTL_MS:-60000}
@@ -281,6 +291,65 @@ services:
       - core
     <<: *service-security
 
+  core-mtproxy-config-init:
+    image: busybox:1.37
+    restart: 'no'
+    network_mode: none
+    entrypoint: ['/bin/sh', '/seed/bootstrap-config.sh']
+    volumes:
+      - ./mtproxy/bootstrap-config.sh:/seed/bootstrap-config.sh:ro
+      - ./mtproxy/config.json:/seed/config.json:ro
+      - mtproxy_config:/shared
+      - mtproxy_reload:/reload
+      - mtproxy_state:/state
+      - mtproxy_work:/work
+    <<: *service-security
+
+  core-mtproxy:
+    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
+    build: *api-build
+    restart: unless-stopped
+    entrypoint: ['/usr/bin/dumb-init', '--', '/bin/sh', '/entrypoint/mtproxy-entrypoint.sh']
+    environment:
+      MTPROXY_CONFIG_PATH: /var/lib/mtproxy/config.json
+      MTPROXY_RELOAD_REQUEST_PATH: /var/lib/overvpn/mtproxy-reload/request
+      MTPROXY_RELOAD_ACK_PATH: /var/lib/overvpn/mtproxy-reload/ack
+      MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
+      MTPROXY_WORK_DIR: /var/lib/mtproxy-work
+      MTPROXY_SRC: /opt/mtprotoproxy
+    depends_on:
+      core-mtproxy-config-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./mtproxy/entrypoint.sh:/entrypoint/mtproxy-entrypoint.sh:ro
+      - ./mtproxy/supervisor.py:/opt/overvpn-mtproxy/supervisor.py:ro
+      - mtproxy_config:/var/lib/mtproxy:ro
+      - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
+      - mtproxy_state:/var/lib/mtproxy-state
+      - mtproxy_work:/var/lib/mtproxy-work
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - '${MTPROXY_BIND_ADDRESS:-0.0.0.0}:${MTPROXY_PORT_MIN:-10001}-${MTPROXY_PORT_MAX:-10016}:${MTPROXY_PORT_MIN:-10001}-${MTPROXY_PORT_MAX:-10016}/tcp'
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'test -r /var/lib/overvpn/mtproxy-reload/mtproxy.pid && kill -0 "$$(cat /var/lib/overvpn/mtproxy-reload/mtproxy.pid)"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - core
+    <<: *service-security
+
   migrate:
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
@@ -319,6 +388,8 @@ services:
         condition: service_healthy
       core-xray:
         condition: service_healthy
+      core-mtproxy:
+        condition: service_healthy
     volumes:
       - /proc:/host/proc:ro
       - singbox_config:/var/lib/sing-box
@@ -329,6 +400,9 @@ services:
       - xray_reload:/var/lib/overvpn/xray-reload
       - xray_state:/var/lib/xray-state
       - ./xray/certs:/var/lib/xray-certs:ro
+      - mtproxy_config:/var/lib/mtproxy
+      - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
+      - mtproxy_state:/var/lib/mtproxy-state
       - backup_data:/var/lib/overvpn/backups
     read_only: true
     tmpfs:
@@ -379,6 +453,10 @@ volumes:
   xray_config:
   xray_reload:
   xray_state:
+  mtproxy_config:
+  mtproxy_reload:
+  mtproxy_state:
+  mtproxy_work:
   backup_data:
 
 networks:

@@ -1,6 +1,7 @@
 import type { InboundProtocol } from './constants.js';
 import type {
   Hysteria2InboundSettings,
+  MtproxyInboundSettings,
   ShadowsocksInboundSettings,
   TrojanInboundSettings,
   VlessGrpcTlsInboundSettings,
@@ -27,6 +28,10 @@ export type InboundDefaultsContext = {
   xrayGrpcPort?: number;
   /** Published Xray TCP TLS port (compose XRAY_TCP_TLS_PORT). */
   xrayTcpTlsPort?: number;
+  /** First published MTProxy TCP port (compose MTPROXY_PORT_MIN). */
+  mtproxyPortMin?: number;
+  /** Last published MTProxy TCP port (compose MTPROXY_PORT_MAX). */
+  mtproxyPortMax?: number;
   /** Container paths from install (LE sync). Prefer FILES TLS when set. */
   tlsCertificatePath?: string | null;
   tlsKeyPath?: string | null;
@@ -48,19 +53,23 @@ const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>([
   'VLESS_TCP_TLS',
 ]);
 
+export type PublishedPortContext = Pick<
+  InboundDefaultsContext,
+  | 'singBoxUdpPort'
+  | 'singBoxTcpPort'
+  | 'singBoxTrojanPort'
+  | 'singBoxSsPort'
+  | 'xrayListenPort'
+  | 'xrayGrpcPort'
+  | 'xrayTcpTlsPort'
+  | 'mtproxyPortMin'
+  | 'mtproxyPortMax'
+>;
+
 /** Install-published listen port for a protocol (Simple mode / API guard). */
 export function publishedListenPortForProtocol(
   protocol: InboundProtocol,
-  context: Pick<
-    InboundDefaultsContext,
-    | 'singBoxUdpPort'
-    | 'singBoxTcpPort'
-    | 'singBoxTrojanPort'
-    | 'singBoxSsPort'
-    | 'xrayListenPort'
-    | 'xrayGrpcPort'
-    | 'xrayTcpTlsPort'
-  >,
+  context: PublishedPortContext,
 ): number {
   switch (protocol) {
     case 'HYSTERIA2':
@@ -77,7 +86,23 @@ export function publishedListenPortForProtocol(
       return context.xrayGrpcPort ?? 8446;
     case 'VLESS_TCP_TLS':
       return context.xrayTcpTlsPort ?? 8447;
+    case 'MTPROXY':
+      return context.mtproxyPortMin ?? 10_001;
   }
+}
+
+export function mtproxyPublishedPortRange(context: PublishedPortContext): {
+  min: number;
+  max: number;
+} {
+  const min = context.mtproxyPortMin ?? 10_001;
+  const max = context.mtproxyPortMax ?? 10_016;
+  return { min, max: Math.max(min, max) };
+}
+
+export function isPublishedMtproxyPort(listenPort: number, context: PublishedPortContext): boolean {
+  const { min, max } = mtproxyPublishedPortRange(context);
+  return listenPort >= min && listenPort <= max;
 }
 
 export function publishedTransportForProtocol(
@@ -200,7 +225,8 @@ export function buildDefaultInboundSettings(
   | VlessGrpcTlsInboundSettings
   | VlessTcpTlsInboundSettings
   | TrojanInboundSettings
-  | ShadowsocksInboundSettings {
+  | ShadowsocksInboundSettings
+  | MtproxyInboundSettings {
   const publicHost = overrides?.publicHost ?? context.publicHost;
   const common = listenFields(protocol, { ...context, publicHost }, overrides);
 
@@ -293,6 +319,12 @@ export function buildDefaultInboundSettings(
         },
       };
     }
+    case 'MTPROXY':
+      return {
+        ...common,
+        secretMode: 'SECURE',
+        tlsDomain: undefined,
+      };
   }
 }
 

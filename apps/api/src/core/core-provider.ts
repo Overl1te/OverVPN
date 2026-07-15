@@ -1,6 +1,7 @@
 import type { CoreEngine } from '@overvpn/shared/constants';
 import type {
   Hysteria2InboundPublicConfig,
+  MtproxyInboundPublicConfig,
   ShadowsocksInboundPublicConfig,
   TrojanInboundPublicConfig,
   VlessGrpcTlsPublicConfig,
@@ -58,6 +59,10 @@ export interface TrojanInboundSecrets {
 export interface ShadowsocksInboundSecrets {
   version: 1;
   serverPassword: string;
+}
+
+export interface MtproxyInboundSecrets {
+  version: 1;
 }
 
 export interface PasswordCredential {
@@ -137,6 +142,12 @@ export interface DesiredShadowsocksInbound extends DesiredInboundBase {
   secrets: ShadowsocksInboundSecrets;
 }
 
+export interface DesiredMtproxyInbound extends DesiredInboundBase {
+  protocol: 'MTPROXY';
+  config: MtproxyInboundPublicConfig;
+  secrets: MtproxyInboundSecrets;
+}
+
 export type DesiredInbound =
   | DesiredHysteria2Inbound
   | DesiredVlessRealityInbound
@@ -144,7 +155,8 @@ export type DesiredInbound =
   | DesiredVlessGrpcTlsInbound
   | DesiredVlessTcpTlsInbound
   | DesiredTrojanInbound
-  | DesiredShadowsocksInbound;
+  | DesiredShadowsocksInbound
+  | DesiredMtproxyInbound;
 
 export interface CoreDesiredState {
   engine: CoreEngine;

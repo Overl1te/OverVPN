@@ -26,6 +26,7 @@ describe('PROTOCOL_ENGINE_MAP', () => {
       VLESS_XHTTP_TLS: 'XRAY',
       VLESS_GRPC_TLS: 'XRAY',
       VLESS_TCP_TLS: 'XRAY',
+      MTPROXY: 'MTPROXY',
     } as const satisfies Record<InboundProtocol, CoreEngine>;
 
     assert.deepEqual(PROTOCOL_ENGINE_MAP, expected);

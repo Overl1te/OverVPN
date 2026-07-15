@@ -106,6 +106,8 @@ describe('buildDefaultInboundSettings', () => {
       xrayListenPort: 9443,
       xrayGrpcPort: 9446,
       xrayTcpTlsPort: 9447,
+      mtproxyPortMin: 10001,
+      mtproxyPortMax: 10016,
       tlsCertificatePath: '/certs/fullchain.pem',
       tlsKeyPath: '/certs/privkey.pem',
     };
@@ -142,6 +144,11 @@ describe('buildDefaultInboundSettings', () => {
 
     const ss = buildDefaultInboundSettings('SHADOWSOCKS', context);
     assert.equal(ss.listenPort, 8445);
+
+    const mtproxy = buildDefaultInboundSettings('MTPROXY', context);
+    assert.equal(mtproxy.listenPort, 10001);
+    assert.equal(mtproxy.publicPort, 10001);
+    assert.equal(mtproxy.secretMode, 'SECURE');
   });
 });
 

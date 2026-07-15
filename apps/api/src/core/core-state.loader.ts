@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { CoreEngine } from '@overvpn/shared/constants';
 import {
   hysteria2InboundPublicConfigSchema,
+  mtproxyInboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
   vlessGrpcTlsPublicConfigSchema,
@@ -17,6 +18,7 @@ import type {
   CoreDesiredState,
   DesiredInbound,
   Hysteria2InboundSecrets,
+  MtproxyInboundSecrets,
   ShadowsocksInboundSecrets,
   TrojanInboundSecrets,
   VlessGrpcTlsInboundSecrets,
@@ -75,6 +77,12 @@ const shadowsocksSecretsSchema = z
   .object({
     version: z.literal(1),
     serverPassword: z.string().min(1),
+  })
+  .strict();
+
+const mtproxySecretsSchema = z
+  .object({
+    version: z.literal(1),
   })
   .strict();
 
@@ -255,6 +263,18 @@ export class CoreStateLoader {
         });
         continue;
       }
+      if (inbound.protocol === 'MTPROXY') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'MTPROXY',
+          config: mtproxyInboundPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptMtproxySecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+        });
+        continue;
+      }
       throw new Error(
         `Enabled inbound ${inbound.id} uses unsupported protocol ${String(
           inbound.protocol,
@@ -359,6 +379,22 @@ export class CoreStateLoader {
     }
     try {
       return shadowsocksSecretsSchema.parse(
+        JSON.parse(this.encryption.decrypt(encrypted)) as unknown,
+      );
+    } catch {
+      throw new Error(`Inbound ${inboundId} has unreadable encrypted secrets`);
+    }
+  }
+
+  private decryptMtproxySecrets(
+    inboundId: string,
+    encrypted: string | null,
+  ): MtproxyInboundSecrets {
+    if (!encrypted) {
+      return { version: 1 };
+    }
+    try {
+      return mtproxySecretsSchema.parse(
         JSON.parse(this.encryption.decrypt(encrypted)) as unknown,
       );
     } catch {

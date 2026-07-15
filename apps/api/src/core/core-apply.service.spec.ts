@@ -371,6 +371,7 @@ function fakeConfig() {
   const values = {
     SING_BOX_CONFIG_PATH: '/tmp/config.json',
     XRAY_CONFIG_PATH: '/tmp/xray/config.json',
+    MTPROXY_CONFIG_PATH: '/tmp/mtproxy/config.json',
   } satisfies Partial<AppEnvironment>;
   return {
     get: (key: keyof AppEnvironment) => values[key as keyof typeof values],

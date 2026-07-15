@@ -72,6 +72,7 @@ export class CoreApplyService {
     this.configPaths = {
       SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
       XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
+      MTPROXY: config.get('MTPROXY_CONFIG_PATH', { infer: true }),
     };
   }
 

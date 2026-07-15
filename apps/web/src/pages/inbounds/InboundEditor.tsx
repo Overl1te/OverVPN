@@ -44,7 +44,9 @@ const SING_BOX_PROTOCOLS: InboundProtocol[] = [
   'SHADOWSOCKS',
 ];
 const XRAY_PROTOCOLS: InboundProtocol[] = ['VLESS_XHTTP_TLS', 'VLESS_GRPC_TLS', 'VLESS_TCP_TLS'];
+const MTPROXY_PROTOCOLS: InboundProtocol[] = ['MTPROXY'];
 const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>(XRAY_PROTOCOLS);
+const MTPROXY_SECRET_MODES = ['CLASSIC', 'SECURE', 'TLS'] as const;
 
 const VLESS_FLOWS = ['', 'xtls-rprx-vision'] as const;
 const VLESS_XHTTP_MODES = ['auto', 'packet-up', 'stream-up', 'stream-one'] as const;
@@ -888,6 +890,41 @@ function XrayFilesTlsFields({ detailed }: { detailed: boolean }) {
   );
 }
 
+function MtproxyFields() {
+  const { t } = useTranslation();
+  const secretMode = Form.useWatch(['settings', 'secretMode']);
+  return (
+    <>
+      <Form.Item
+        name={['settings', 'secretMode']}
+        label={t('inbounds.mtproxySecretMode')}
+        rules={[{ required: true }]}
+      >
+        <Select
+          options={MTPROXY_SECRET_MODES.map((value) => ({
+            value,
+            label: t(`inbounds.mtproxySecretMode.${value}`, { defaultValue: value }),
+          }))}
+        />
+      </Form.Item>
+      {secretMode === 'TLS' ? (
+        <Form.Item
+          name={['settings', 'tlsDomain']}
+          label={t('inbounds.mtproxyTlsDomain')}
+          rules={[{ required: true }]}
+          extra={t('inbounds.mtproxyTlsDomainHint')}
+        >
+          <Input autoComplete="off" placeholder="www.google.com" />
+        </Form.Item>
+      ) : (
+        <Form.Item name={['settings', 'tlsDomain']} hidden>
+          <Input />
+        </Form.Item>
+      )}
+    </>
+  );
+}
+
 function ProtocolFields({
   protocol,
   detailed,
@@ -910,6 +947,8 @@ function ProtocolFields({
       return <VlessTcpTlsFields detailed={detailed} />;
     case 'SHADOWSOCKS':
       return <ShadowsocksFields />;
+    case 'MTPROXY':
+      return <MtproxyFields />;
     default:
       return null;
   }
@@ -961,6 +1000,8 @@ export function InboundEditor({
       xrayListenPort: readOnly.xrayListenPort,
       xrayGrpcPort: readOnly.xrayGrpcPort,
       xrayTcpTlsPort: readOnly.xrayTcpTlsPort,
+      mtproxyPortMin: readOnly.mtproxyPortMin,
+      mtproxyPortMax: readOnly.mtproxyPortMax,
       tlsCertificatePath: readOnly.tlsCertificatePath,
       tlsKeyPath: readOnly.tlsKeyPath,
     };
@@ -970,9 +1011,19 @@ export function InboundEditor({
     if (!defaultsContext || !protocol) {
       return null;
     }
+    if (protocol === 'MTPROXY') {
+      const min = defaultsContext.mtproxyPortMin ?? 10_001;
+      const max = defaultsContext.mtproxyPortMax ?? 10_016;
+      return {
+        port: min,
+        transport: publishedTransportForProtocol(protocol),
+        rangeLabel: `${min}-${max}`,
+      };
+    }
     return {
       port: publishedListenPortForProtocol(protocol, defaultsContext),
       transport: publishedTransportForProtocol(protocol),
+      rangeLabel: null as string | null,
     };
   }, [defaultsContext, protocol]);
 
@@ -1288,6 +1339,15 @@ export function InboundEditor({
                     }),
                   })),
                 },
+                {
+                  label: t('inbounds.engineGroupMtproxy'),
+                  options: MTPROXY_PROTOCOLS.map((value) => ({
+                    value,
+                    label: t(`enums.protocol.${value}`, {
+                      defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
+                    }),
+                  })),
+                },
               ]}
               onChange={handleProtocolChange}
             />
@@ -1316,12 +1376,17 @@ export function InboundEditor({
                 showIcon
                 style={{ marginBottom: 12 }}
                 message={
-                  installPortInfo
-                    ? t('inbounds.installPortHint', {
-                        port: installPortInfo.port,
+                  installPortInfo?.rangeLabel
+                    ? t('inbounds.installPortRangeHint', {
+                        range: installPortInfo.rangeLabel,
                         transport: installPortInfo.transport.toUpperCase(),
                       })
-                    : t('inbounds.installPort')
+                    : installPortInfo
+                      ? t('inbounds.installPortHint', {
+                          port: installPortInfo.port,
+                          transport: installPortInfo.transport.toUpperCase(),
+                        })
+                      : t('inbounds.installPort')
                 }
               />
               <Space size="large" wrap>
@@ -1378,19 +1443,48 @@ export function InboundEditor({
                   onChange={(event) => handlePublicHostChange(event.target.value)}
                 />
               </Form.Item>
-              <Form.Item label={t('inbounds.installPort')}>
-                <Typography.Text>
-                  {installPortInfo
-                    ? t('inbounds.installPortValue', {
-                        port: installPortInfo.port,
-                        transport: installPortInfo.transport.toUpperCase(),
-                      })
-                    : '—'}
-                </Typography.Text>
-              </Form.Item>
-              <Form.Item name={['settings', 'listenPort']} hidden>
-                <InputNumber />
-              </Form.Item>
+              {protocol === 'MTPROXY' ? (
+                <Form.Item
+                  name={['settings', 'listenPort']}
+                  label={t('inbounds.listenPort')}
+                  rules={[{ required: true }]}
+                  extra={
+                    installPortInfo?.rangeLabel
+                      ? t('inbounds.installPortRangeHint', {
+                          range: installPortInfo.rangeLabel,
+                          transport: 'TCP',
+                        })
+                      : undefined
+                  }
+                >
+                  <InputNumber
+                    min={1}
+                    max={65535}
+                    style={{ width: 140 }}
+                    onChange={(value) => {
+                      if (typeof value === 'number') {
+                        form.setFieldValue(['settings', 'publicPort'], value);
+                      }
+                    }}
+                  />
+                </Form.Item>
+              ) : (
+                <Form.Item label={t('inbounds.installPort')}>
+                  <Typography.Text>
+                    {installPortInfo
+                      ? t('inbounds.installPortValue', {
+                          port: installPortInfo.port,
+                          transport: installPortInfo.transport.toUpperCase(),
+                        })
+                      : '—'}
+                  </Typography.Text>
+                </Form.Item>
+              )}
+              {protocol === 'MTPROXY' ? null : (
+                <Form.Item name={['settings', 'listenPort']} hidden>
+                  <InputNumber />
+                </Form.Item>
+              )}
               <Form.Item name={['settings', 'listenHost']} hidden>
                 <Input />
               </Form.Item>

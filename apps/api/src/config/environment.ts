@@ -313,6 +313,63 @@ export const environmentSchema = z
       .min(250)
       .max(60_000)
       .default(5_000),
+    MTPROXY_CONFIG_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/mtproxy/config.json'),
+    MTPROXY_LAST_KNOWN_GOOD_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/mtproxy/config.last-known-good.json'),
+    MTPROXY_RELOAD_REQUEST_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/mtproxy-reload/request'),
+    MTPROXY_RELOAD_ACK_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/mtproxy-reload/ack'),
+    MTPROXY_PID_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/mtproxy-reload/mtproxy.pid'),
+    /** First published TCP port for MTProxy (compose range start). */
+    MTPROXY_PORT_MIN: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(10_001),
+    /** Last published TCP port for MTProxy (compose range end, inclusive). */
+    MTPROXY_PORT_MAX: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(10_016),
+    MTPROXY_PROCESS_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(15_000),
+    MTPROXY_RELOAD_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(20_000),
+    MTPROXY_HEALTH_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(60_000)
+      .default(5_000),
     /** Published UDP port for Hysteria2 (compose → host). */
     SING_BOX_UDP_PORT: z.coerce.number().int().min(1).max(65_535).default(443),
     /** Published TCP port for VLESS Reality (compose → host). */

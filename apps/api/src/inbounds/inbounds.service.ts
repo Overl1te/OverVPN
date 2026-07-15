@@ -1,7 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  MAX_MTPROXY_INBOUNDS,
   PROTOCOL_ENGINE_MAP,
+  isPublishedMtproxyPort,
+  mtproxyPublishedPortRange,
   publishedListenPortForProtocol,
   renderEndpointDisplayName,
   type CoreEngine,
@@ -28,6 +31,7 @@ import type {
 import type { AppEnvironment } from '../config/environment';
 import { ProcessAdapter } from '../core/core-adapters';
 import { CoreApplyService } from '../core/core-apply.service';
+import { coreStateId } from '../core/core-ids';
 import type {
   AssignmentCredential,
   Hysteria2InboundSecrets,
@@ -52,6 +56,7 @@ import {
   encryptableSecrets,
   isInboundSecretBundle,
   parseHysteria2PublicConfig,
+  parseMtproxyPublicConfig,
   parseShadowsocksPublicConfig,
   parseTrojanPublicConfig,
   parseVlessGrpcTlsPublicConfig,
@@ -63,6 +68,11 @@ import {
   type InboundStorage,
   type InboundPublicConfig,
 } from './inbound-storage';
+import {
+  buildMtproxyUri,
+  createMtproxyCredential,
+  normalizeMtproxySecret,
+} from './mtproxy-domain';
 import {
   buildShadowsocksUri,
   composeShadowsocksClientPassword,
@@ -94,8 +104,7 @@ type AssignmentWithUser = UserInboundAssignment & {
 
 @Injectable()
 export class InboundsService {
-  private readonly configPath: string;
-  private readonly xrayConfigPath: string;
+  private readonly configPaths: Record<CoreEngine, string>;
   private readonly binaryPath: string;
   private readonly processTimeoutMs: number;
   private readonly singBoxUdpPort: number;
@@ -105,6 +114,8 @@ export class InboundsService {
   private readonly xrayListenPort: number;
   private readonly xrayGrpcPort: number;
   private readonly xrayTcpTlsPort: number;
+  private readonly mtproxyPortMin: number;
+  private readonly mtproxyPortMax: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -114,8 +125,11 @@ export class InboundsService {
     private readonly processAdapter: ProcessAdapter,
     config: ConfigService<AppEnvironment, true>,
   ) {
-    this.configPath = config.get('SING_BOX_CONFIG_PATH', { infer: true });
-    this.xrayConfigPath = config.get('XRAY_CONFIG_PATH', { infer: true });
+    this.configPaths = {
+      SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
+      XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
+      MTPROXY: config.get('MTPROXY_CONFIG_PATH', { infer: true }),
+    };
     this.binaryPath = config.get('SING_BOX_BINARY_PATH', { infer: true });
     this.processTimeoutMs = config.get('SING_BOX_PROCESS_TIMEOUT_MS', {
       infer: true,
@@ -129,6 +143,8 @@ export class InboundsService {
     this.xrayListenPort = config.get('XRAY_LISTEN_PORT', { infer: true });
     this.xrayGrpcPort = config.get('XRAY_GRPC_PORT', { infer: true });
     this.xrayTcpTlsPort = config.get('XRAY_TCP_TLS_PORT', { infer: true });
+    this.mtproxyPortMin = config.get('MTPROXY_PORT_MIN', { infer: true });
+    this.mtproxyPortMax = config.get('MTPROXY_PORT_MAX', { infer: true });
   }
 
   async list(query: InboundListQuery): Promise<{
@@ -189,6 +205,9 @@ export class InboundsService {
   ) {
     try {
       const engine = this.resolveEngine(input.protocol);
+      if (input.protocol === 'MTPROXY') {
+        await this.assertMtproxyInboundLimit();
+      }
       this.assertListenPortPublished(input.protocol, input.settings.listenPort);
       await this.assertListenPortAvailable(
         input.settings.listenHost,
@@ -935,6 +954,16 @@ export class InboundsService {
           label,
         });
         protocol = 'TROJAN';
+      } else if (inbound.protocol === 'MTPROXY') {
+        const publicConfig = parseMtproxyPublicConfig(inbound.config);
+        uri = buildMtproxyUri({
+          host,
+          port,
+          secret: (credential as PasswordCredential).password,
+          mode: publicConfig.secretMode,
+          tlsDomain: publicConfig.tlsDomain,
+        });
+        protocol = 'MTPROXY';
       } else {
         const publicConfig = parseShadowsocksPublicConfig(inbound.config);
         const ssSecrets = secrets as ShadowsocksInboundSecrets;
@@ -1032,11 +1061,8 @@ export class InboundsService {
     return engine;
   }
 
-  private assertListenPortPublished(
-    protocol: InboundProtocol,
-    listenPort: number,
-  ): void {
-    const allowedPort = publishedListenPortForProtocol(protocol, {
+  private publishedPortContext() {
+    return {
       singBoxUdpPort: this.singBoxUdpPort,
       singBoxTcpPort: this.singBoxTcpPort,
       singBoxTrojanPort: this.singBoxTrojanPort,
@@ -1044,7 +1070,51 @@ export class InboundsService {
       xrayListenPort: this.xrayListenPort,
       xrayGrpcPort: this.xrayGrpcPort,
       xrayTcpTlsPort: this.xrayTcpTlsPort,
+      mtproxyPortMin: this.mtproxyPortMin,
+      mtproxyPortMax: this.mtproxyPortMax,
+    };
+  }
+
+  private async assertMtproxyInboundLimit(
+    client: Pick<PrismaService, 'inbound'> | Prisma.TransactionClient = this
+      .prisma,
+  ): Promise<void> {
+    const count = await client.inbound.count({
+      where: { protocol: 'MTPROXY' },
     });
+    if (count >= MAX_MTPROXY_INBOUNDS) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_mtproxy_limit_reached',
+        message: `At most ${MAX_MTPROXY_INBOUNDS} MTPROXY inbounds are allowed`,
+        messageRu: `Допускается не более ${MAX_MTPROXY_INBOUNDS} inbound’ов MTPROXY`,
+        limit: MAX_MTPROXY_INBOUNDS,
+        count,
+      });
+    }
+  }
+
+  private assertListenPortPublished(
+    protocol: InboundProtocol,
+    listenPort: number,
+  ): void {
+    const context = this.publishedPortContext();
+    if (protocol === 'MTPROXY') {
+      if (isPublishedMtproxyPort(listenPort, context)) {
+        return;
+      }
+      const range = mtproxyPublishedPortRange(context);
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_listen_port_not_published',
+        message: `Listen port ${listenPort} is not published for MTPROXY. Use a port in ${range.min}-${range.max} (or change MTPROXY_PORT_MIN / MTPROXY_PORT_MAX and Compose publish).`,
+        messageRu: `Порт ${listenPort} не опубликован для MTPROXY. Используйте порт из диапазона ${range.min}-${range.max}, либо измените MTPROXY_PORT_MIN / MTPROXY_PORT_MAX и publish в Compose.`,
+        protocol,
+        listenPort,
+        allowedPortMin: range.min,
+        allowedPortMax: range.max,
+        transport: 'TCP',
+      });
+    }
+    const allowedPort = publishedListenPortForProtocol(protocol, context);
     if (listenPort === allowedPort) {
       return;
     }
@@ -1132,6 +1202,9 @@ export class InboundsService {
       const publicConfig = this.parseShadowsocksPublicConfig(inbound);
       return createShadowsocksCredential(publicConfig.method, input.password);
     }
+    if (inbound.protocol === 'MTPROXY') {
+      return createMtproxyCredential(input.password);
+    }
     return createCredential(input.password);
   }
 
@@ -1212,6 +1285,8 @@ export class InboundsService {
         normalizeHysteria2Password(parsed.password);
       } else if (protocol === 'TROJAN') {
         normalizeTrojanPassword(parsed.password);
+      } else if (protocol === 'MTPROXY') {
+        normalizeMtproxySecret(parsed.password);
       }
       return parsed;
     } catch (error: unknown) {
@@ -1258,9 +1333,8 @@ export class InboundsService {
     tx: Prisma.TransactionClient,
     engine: CoreEngine,
   ): Promise<void> {
-    const id = engine === 'SING_BOX' ? 'sing-box' : 'xray';
-    const configPath =
-      engine === 'SING_BOX' ? this.configPath : this.xrayConfigPath;
+    const id = coreStateId(engine);
+    const configPath = this.configPaths[engine];
     await tx.coreState.upsert({
       where: { id },
       create: {
@@ -1363,6 +1437,16 @@ export class InboundsService {
         },
       };
     }
+    if (inbound.protocol === 'MTPROXY') {
+      return {
+        ...common,
+        protocol: 'MTPROXY',
+        settings: {
+          ...this.parseMtproxyPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
     return {
       ...common,
       protocol: 'SHADOWSOCKS',
@@ -1450,6 +1534,17 @@ export class InboundsService {
     }
   }
 
+  private parseMtproxyPublicConfig(inbound: Inbound) {
+    try {
+      return parseMtproxyPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
   private parsePublicConfig(inbound: Inbound): InboundPublicConfig {
     if (inbound.protocol === 'HYSTERIA2') {
       return this.parseHysteria2PublicConfig(inbound);
@@ -1468,6 +1563,9 @@ export class InboundsService {
     }
     if (inbound.protocol === 'TROJAN') {
       return this.parseTrojanPublicConfig(inbound);
+    }
+    if (inbound.protocol === 'MTPROXY') {
+      return this.parseMtproxyPublicConfig(inbound);
     }
     return this.parseShadowsocksPublicConfig(inbound);
   }

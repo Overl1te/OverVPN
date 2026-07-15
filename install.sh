@@ -1303,6 +1303,8 @@ configure_firewall() {
   colorized_echo blue "$(cli_t configuring_ufw)"
   ufw allow OpenSSH >/dev/null 2>&1 || true
   ufw allow 443/udp >/dev/null 2>&1 || true
+  # Published MTProxy TCP range (compose MTPROXY_PORT_MIN..MAX).
+  ufw allow 10001:10016/tcp >/dev/null 2>&1 || true
 
   if [[ "$with_nginx" == "true" ]]; then
     ufw allow 80/tcp >/dev/null 2>&1 || true
@@ -1895,6 +1897,8 @@ generate_env() {
   set_env_var "SING_BOX_SS_PORT" "8445"
   set_env_var "XRAY_LISTEN_PORT" "8443"
   set_env_var "XRAY_GRPC_PORT" "8446"
+  set_env_var "MTPROXY_PORT_MIN" "10001"
+  set_env_var "MTPROXY_PORT_MAX" "10016"
   set_env_var "XRAY_TCP_TLS_PORT" "8447"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"

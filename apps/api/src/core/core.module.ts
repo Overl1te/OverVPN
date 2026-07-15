@@ -6,10 +6,12 @@ import {
   CoreFileSystem,
   CoreHttpAdapter,
   FetchCoreHttpAdapter,
+  MtproxyReloadHandshakeAdapter,
   NodeCoreFileSystem,
   NodeProcessAdapter,
   ProcessAdapter,
   ReloadHandshakeAdapter,
+  SharedVolumeMtproxyReloadHandshakeAdapter,
   SharedVolumeReloadHandshakeAdapter,
   SharedVolumeXrayReloadHandshakeAdapter,
   XrayReloadHandshakeAdapter,
@@ -27,6 +29,7 @@ import { CoreController } from './core.controller';
 import { CoreProvider, type EngineProvider } from './core-provider';
 import { CoreStateLoader } from './core-state.loader';
 import { RedisDistributedLock } from './distributed-lock';
+import { MtproxyProvider } from './mtproxy.provider';
 import { SingBoxProvider } from './sing-box.provider';
 import {
   GrpcV2RayStatsAdapter,
@@ -61,6 +64,10 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
       useClass: SharedVolumeXrayReloadHandshakeAdapter,
     },
     {
+      provide: MtproxyReloadHandshakeAdapter,
+      useClass: SharedVolumeMtproxyReloadHandshakeAdapter,
+    },
+    {
       provide: CoreHttpAdapter,
       useClass: FetchCoreHttpAdapter,
     },
@@ -74,13 +81,19 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
     },
     SingBoxProvider,
     XrayProvider,
+    MtproxyProvider,
     {
       provide: CORE_ENGINE_PROVIDERS,
-      inject: [SingBoxProvider, XrayProvider],
+      inject: [SingBoxProvider, XrayProvider, MtproxyProvider],
       useFactory: (
         singBoxProvider: SingBoxProvider,
         xrayProvider: XrayProvider,
-      ): readonly EngineProvider[] => [singBoxProvider, xrayProvider],
+        mtproxyProvider: MtproxyProvider,
+      ): readonly EngineProvider[] => [
+        singBoxProvider,
+        xrayProvider,
+        mtproxyProvider,
+      ],
     },
     CoreEngineRegistry,
     CompositeCoreProvider,
@@ -102,6 +115,7 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
     CoreFileSystem,
     ReloadHandshakeAdapter,
     XrayReloadHandshakeAdapter,
+    MtproxyReloadHandshakeAdapter,
   ],
 })
 export class CoreModule {}

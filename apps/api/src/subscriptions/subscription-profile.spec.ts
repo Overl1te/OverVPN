@@ -398,6 +398,69 @@ describe('SubscriptionProfileBuilder', () => {
     ]);
   });
 
+  it('omits MTPROXY assignments from all subscription formats (UI-only)', () => {
+    const encryption = {
+      decrypt: jest.fn((payload: string) => {
+        if (payload === 'v1:credential-envelope') {
+          return JSON.stringify({
+            version: 1,
+            password: 'p@ssword /?# ü',
+          });
+        }
+        if (payload === 'inbound-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            obfsPassword: 'obfs &/secret',
+          });
+        }
+        if (payload === 'v1:mtproxy-credential') {
+          return JSON.stringify({
+            version: 1,
+            password: '0123456789abcdef0123456789abcdef',
+          });
+        }
+        throw new Error('Unknown encrypted fixture');
+      }),
+    };
+    const mixedBuilder = createBuilder(
+      encryption as unknown as SecretEncryptionService,
+    );
+    const base = profileUser();
+    const user: SubscriptionProfileUser = {
+      ...base,
+      inboundAssignments: [
+        ...base.inboundAssignments,
+        {
+          id: 'assignment-mtproxy',
+          credentialEncrypted: 'v1:mtproxy-credential',
+          inbound: {
+            id: 'inbound-mtproxy',
+            tag: 'Edge_TG',
+            protocol: 'MTPROXY',
+            publicHost: 'vpn.example.com',
+            publicPort: 10001,
+            listenPort: 10001,
+            displayNameTemplate: null,
+            config: {
+              secretMode: 'SECURE',
+              tlsDomain: null,
+            },
+            secretDataEncrypted: null,
+          },
+        },
+      ],
+    };
+
+    const mixedProfile = mixedBuilder.build(user);
+    expect(mixedProfile.endpoints.map((endpoint) => endpoint.protocol)).toEqual(
+      ['HYSTERIA2'],
+    );
+    expect(renderLinkList(mixedProfile)).not.toContain('t.me/proxy');
+    expect(renderLinkList(mixedProfile)).not.toContain('tg://proxy');
+    expect(renderClashProfile(mixedProfile)).not.toContain('mtproxy');
+    expect(renderSingBoxProfile(mixedProfile)).not.toContain('mtproxy');
+  });
+
   it('builds VLESS_GRPC_TLS and VLESS_TCP_TLS share links and sing-box outbounds', () => {
     const encryption = {
       decrypt: jest.fn((payload: string) => {

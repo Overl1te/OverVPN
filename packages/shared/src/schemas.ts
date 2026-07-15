@@ -1318,6 +1318,35 @@ export const shadowsocksInboundSettingsSchema = z
   });
 export type ShadowsocksInboundSettings = z.infer<typeof shadowsocksInboundSettingsSchema>;
 
+export const mtproxySecretModeSchema = z.enum(['CLASSIC', 'SECURE', 'TLS']);
+export type MtproxySecretMode = z.infer<typeof mtproxySecretModeSchema>;
+
+/** Raw 16-byte MTProxy secret as 32 lowercase hex chars (no dd/ee prefix). */
+export const mtproxyRawSecretSchema = z
+  .string()
+  .regex(/^[0-9a-f]{32}$/, 'MTProxy secret must be 32 lowercase hex characters');
+
+export const mtproxyInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    secretMode: mtproxySecretModeSchema.default('SECURE'),
+    tlsDomain: singBoxHostSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.secretMode === 'TLS') {
+      const domain = value.tlsDomain?.trim();
+      if (!domain) {
+        context.addIssue({
+          code: 'custom',
+          path: ['tlsDomain'],
+          message: 'tlsDomain is required when secretMode is TLS',
+        });
+      }
+    }
+  });
+export type MtproxyInboundSettings = z.infer<typeof mtproxyInboundSettingsSchema>;
+
 export const createInboundSchema = z.discriminatedUnion('protocol', [
   z
     .object({
@@ -1375,6 +1404,14 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
       settings: shadowsocksInboundSettingsSchema,
     })
     .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
+      protocol: z.literal('MTPROXY'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: mtproxyInboundSettingsSchema,
+    })
+    .strict(),
 ]);
 export type CreateInbound = z.infer<typeof createInboundSchema>;
 
@@ -1392,6 +1429,7 @@ export const updateInboundSchema = z
         vlessTcpTlsInboundSettingsSchema,
         trojanInboundSettingsSchema,
         shadowsocksInboundSettingsSchema,
+        mtproxyInboundSettingsSchema,
       ])
       .optional(),
   })
@@ -1587,6 +1625,14 @@ export const shadowsocksInboundPublicConfigSchema = z
   .strict();
 export type ShadowsocksInboundPublicConfig = z.infer<typeof shadowsocksInboundPublicConfigSchema>;
 
+export const mtproxyInboundPublicConfigSchema = z
+  .object({
+    secretMode: mtproxySecretModeSchema,
+    tlsDomain: z.string().nullable(),
+  })
+  .strict();
+export type MtproxyInboundPublicConfig = z.infer<typeof mtproxyInboundPublicConfigSchema>;
+
 const inboundResultCommonFields = {
   id: idSchema,
   tag: z.string(),
@@ -1655,6 +1701,13 @@ export const inboundResultSchema = z.discriminatedUnion('protocol', [
       ...inboundResultCommonFields,
       protocol: z.literal('SHADOWSOCKS'),
       settings: shadowsocksInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('MTPROXY'),
+      settings: mtproxyInboundPublicConfigSchema.extend(inboundListenPublicFields),
     })
     .strict(),
 ]);
@@ -1813,6 +1866,17 @@ export const shadowsocksLinkSchema = z
   .strict();
 export type ShadowsocksLinkResult = z.infer<typeof shadowsocksLinkSchema>;
 
+export const mtproxyLinkSchema = z
+  .object({
+    assignmentId: idSchema,
+    credentialVersion: z.number().int().positive(),
+    protocol: z.literal('MTPROXY'),
+    uri: z.string().min(1),
+    generatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type MtproxyLinkResult = z.infer<typeof mtproxyLinkSchema>;
+
 export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   hysteria2LinkSchema,
   vlessRealityLinkSchema,
@@ -1821,6 +1885,7 @@ export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   vlessTcpTlsLinkSchema,
   trojanLinkSchema,
   shadowsocksLinkSchema,
+  mtproxyLinkSchema,
 ]);
 export type InboundLinkResult = z.infer<typeof inboundLinkSchema>;
 
@@ -2302,6 +2367,8 @@ export const systemSettingsReadOnlySchema = z
     xrayListenPort: z.number().int().min(1).max(65_535),
     xrayGrpcPort: z.number().int().min(1).max(65_535),
     xrayTcpTlsPort: z.number().int().min(1).max(65_535),
+    mtproxyPortMin: z.number().int().min(1).max(65_535),
+    mtproxyPortMax: z.number().int().min(1).max(65_535),
     tlsCertificatePath: z.string().nullable(),
     tlsKeyPath: z.string().nullable(),
     telegramEnvConfigured: z.boolean(),

@@ -309,6 +309,8 @@ export class SettingsService {
         xrayListenPort: this.config.get('XRAY_LISTEN_PORT', { infer: true }),
         xrayGrpcPort: this.config.get('XRAY_GRPC_PORT', { infer: true }),
         xrayTcpTlsPort: this.config.get('XRAY_TCP_TLS_PORT', { infer: true }),
+        mtproxyPortMin: this.config.get('MTPROXY_PORT_MIN', { infer: true }),
+        mtproxyPortMax: this.config.get('MTPROXY_PORT_MAX', { infer: true }),
         tlsCertificatePath:
           this.config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }) ?? null,
         tlsKeyPath:

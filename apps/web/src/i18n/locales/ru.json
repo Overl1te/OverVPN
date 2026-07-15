@@ -204,6 +204,12 @@
     "noActivePlans": "Нет активных планов. Сначала создайте план с точками входа.",
     "usageChart": "Суточное использование (UTC)",
     "noAssignments": "У пользователя нет назначений на точки входа",
+    "mtproxyTitle": "Telegram MTProxy",
+    "mtproxyHint": "Эти ссылки только в панели — они не попадают в скачивание подписки для VPN-клиентов.",
+    "mtproxyActions": "Ссылка",
+    "mtproxyCopy": "Копировать t.me",
+    "mtproxyQr": "QR",
+    "mtproxyCopied": "Ссылка Telegram proxy скопирована",
     "needsApply": "Требуется применение",
     "copySub": "Скопировать подписку",
     "openDetail": "Открыть"
@@ -288,7 +294,8 @@
       "SHADOWSOCKS": "Shadowsocks",
       "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
       "VLESS_GRPC_TLS": "VLESS gRPC TLS",
-      "VLESS_TCP_TLS": "VLESS TCP TLS"
+      "VLESS_TCP_TLS": "VLESS TCP TLS",
+      "MTPROXY": "MTProxy"
     },
     "inboundProtocol": {
       "HYSTERIA2": "Hysteria2",
@@ -297,11 +304,13 @@
       "SHADOWSOCKS": "Shadowsocks",
       "VLESS_XHTTP_TLS": "VLESS xHTTP TLS",
       "VLESS_GRPC_TLS": "VLESS gRPC TLS",
-      "VLESS_TCP_TLS": "VLESS TCP TLS"
+      "VLESS_TCP_TLS": "VLESS TCP TLS",
+      "MTPROXY": "MTProxy"
     },
     "coreEngine": {
       "SING_BOX": "sing-box",
-      "XRAY": "Xray"
+      "XRAY": "Xray",
+      "MTPROXY": "MTProxy"
     },
     "workerName": {
       "traffic-collector": "Сборщик трафика",
@@ -427,6 +436,14 @@
     "engine": "Ядро",
     "engineGroupSingBox": "sing-box",
     "engineGroupXray": "Xray",
+    "engineGroupMtproxy": "MTProxy",
+    "installPortRangeHint": "Установка публикует TCP-порты {{range}} для MTProxy. Выберите свободный порт в этом диапазоне.",
+    "mtproxySecretMode": "Режим секрета",
+    "mtproxySecretMode.CLASSIC": "Classic",
+    "mtproxySecretMode.SECURE": "Secure (dd)",
+    "mtproxySecretMode.TLS": "FakeTLS (ee)",
+    "mtproxyTlsDomain": "Домен FakeTLS",
+    "mtproxyTlsDomainHint": "Домен в ee-секрете (маскировка SNI).",
     "xhttpPath": "Путь xHTTP",
     "xhttpHost": "Host xHTTP",
     "xhttpHostOptional": "Необязательный заголовок Host",
