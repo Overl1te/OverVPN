@@ -313,6 +313,7 @@ export const environmentSchema = z
       .min(250)
       .max(60_000)
       .default(5_000),
+    MTPROXY_ENABLED: booleanFromEnvironment.default(true),
     MTPROXY_CONFIG_PATH: z
       .string()
       .trim()

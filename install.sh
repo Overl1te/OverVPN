@@ -33,6 +33,10 @@ DEFAULT_WEB_PORT="8000"
 DEFAULT_IMAGE_TAG="${OVERVPN_IMAGE_TAG:-latest}"
 GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
 GHCR_WEB_IMAGE="ghcr.io/overl1te/overvpn-web"
+GHCR_MTPROXY_IMAGE="ghcr.io/overl1te/overvpn-mtproxy"
+DEFAULT_POSTGRES_IMAGE="postgres:18-alpine"
+DEFAULT_REDIS_IMAGE="redis:8-alpine"
+BUSYBOX_IMAGE="busybox:1.37"
 CLI_LANG="${OVERVPN_CLI_LANG:-en}"
 
 # TUI drawing (MTProxyMax-style console screens)
@@ -273,6 +277,13 @@ cli_t() {
       summary_vpn) printf 'VPN-хост:     %s' "$1" ;;
       summary_email) printf 'Email:        %s' "$1" ;;
       summary_mode_ip) printf 'Режим:        IP-only (порт %s)' "$1" ;;
+      summary_mtproxy_on) printf '%s' "MTProxy:      да (Telemt)" ;;
+      summary_mtproxy_off) printf '%s' "MTProxy:      нет" ;;
+      mtproxy_screen_title) printf '%s' "MTProxy (Telemt)" ;;
+      mtproxy_screen_hint) printf '%s' "Опциональный Telegram MTProxy на Telemt (порты 10001–10016)." ;;
+      mtproxy_opt_yes) printf '%s' "Установить MTProxy" ;;
+      mtproxy_opt_no) printf '%s' "Пропустить MTProxy" ;;
+      prompt_mtproxy) printf '%s' "Ставить MTProxy (Telemt)? [Y/n]" ;;
       dns_title) printf '%s' "DNS A-записи" ;;
       dns_hint) printf 'У регистратора DNS → A-записи → %s' "$1" ;;
       dns_point) printf '%s  →  %s' "$1" "$2" ;;
@@ -337,6 +348,9 @@ cli_t() {
       starting_containers) printf '%s' "Запускаем контейнеры…" ;;
       checking_api_image) printf '%s' "Проверяем, что API-образ содержит Xray…" ;;
       api_image_missing_xray) printf 'Образ %s не содержит Xray (нужен свежий GHCR или локальная сборка).\nПовторите: sudo overvpn install --build\nИли дождитесь publish образов после зелёного CI и сделайте: sudo overvpn update' "$1" ;;
+      checking_mtproxy_image) printf '%s' "Проверяем, что MTProxy-образ содержит Telemt…" ;;
+      mtproxy_image_missing) printf 'Образ %s не содержит Telemt.\nПовторите: sudo overvpn install --build' "$1" ;;
+      building_mtproxy_image) printf '%s' "Собираем образ MTProxy (Telemt)…" ;;
       refreshing_core_config) printf '%s' "Обновляем bootstrap-конфиг VPN-ядра…" ;;
       installing_cli) printf 'Устанавливаем CLI в %s…' "$1" ;;
       cli_installed) printf 'CLI установлен. Команда: %s <command>' "$1" ;;
@@ -400,7 +414,7 @@ cli_t() {
       update_check_no_digest) printf '%s' "Не удалось получить digest образа (часто так с локальной сборкой). Смотрите статус в панели или выполните: sudo overvpn update" ;;
       update_check_local) printf 'Локальный:  %s' "$1" ;;
       update_check_remote) printf 'В реестре:  %s' "$1" ;;
-      uninstall_warn) printf '%s' "Будут удалены контейнеры OverVPN, /opt/overvpn, сайт nginx и CLI." ;;
+      uninstall_warn) printf '%s' "Будут удалены контейнеры OverVPN, Docker-образы стека, /opt/overvpn, сайт nginx и CLI." ;;
       prompt_wipe_volumes) printf '%s' "Удалить Docker volumes (БД/данные)? [Y/n] " ;;
       prompt_purge_certs) printf '%s' "Удалить сертификаты Let'\''s Encrypt для panel/sub/vpn? [Y/n] " ;;
       prompt_purge_nginx) printf '%s' "Удалить пакеты Nginx + Certbot из системы? [y/N] " ;;
@@ -456,6 +470,13 @@ cli_t() {
       summary_vpn) printf 'VPN host:     %s' "$1" ;;
       summary_email) printf 'Email:        %s' "$1" ;;
       summary_mode_ip) printf 'Mode:         IP-only (port %s)' "$1" ;;
+      summary_mtproxy_on) printf '%s' "MTProxy:      yes (Telemt)" ;;
+      summary_mtproxy_off) printf '%s' "MTProxy:      no" ;;
+      mtproxy_screen_title) printf '%s' "MTProxy (Telemt)" ;;
+      mtproxy_screen_hint) printf '%s' "Optional Telegram MTProxy via Telemt (ports 10001–10016)." ;;
+      mtproxy_opt_yes) printf '%s' "Install MTProxy" ;;
+      mtproxy_opt_no) printf '%s' "Skip MTProxy" ;;
+      prompt_mtproxy) printf '%s' "Install MTProxy (Telemt)? [Y/n]" ;;
       dns_title) printf '%s' "DNS A records" ;;
       dns_hint) printf 'At your DNS provider → A records → %s' "$1" ;;
       dns_point) printf '%s  →  %s' "$1" "$2" ;;
@@ -520,6 +541,9 @@ cli_t() {
       starting_containers) printf '%s' "Starting containers..." ;;
       checking_api_image) printf '%s' "Checking that the API image includes Xray..." ;;
       api_image_missing_xray) printf 'Image %s is missing Xray (need a fresh GHCR publish or a local build).\nRetry with: sudo overvpn install --build\nOr wait for CI publish, then: sudo overvpn update' "$1" ;;
+      checking_mtproxy_image) printf '%s' "Checking that the MTProxy image includes Telemt..." ;;
+      mtproxy_image_missing) printf 'Image %s is missing Telemt.\nRetry with: sudo overvpn install --build' "$1" ;;
+      building_mtproxy_image) printf '%s' "Building MTProxy (Telemt) image..." ;;
       refreshing_core_config) printf '%s' "Refreshing VPN core bootstrap config..." ;;
       installing_cli) printf 'Installing CLI to %s...' "$1" ;;
       cli_installed) printf 'CLI installed. Use: %s <command>' "$1" ;;
@@ -583,7 +607,7 @@ cli_t() {
       update_check_no_digest) printf '%s' "Could not resolve image digests (common with local --build). Check the panel or run: sudo overvpn update" ;;
       update_check_local) printf 'Local:   %s' "$1" ;;
       update_check_remote) printf 'Remote:  %s' "$1" ;;
-      uninstall_warn) printf '%s' "This removes OverVPN containers, /opt/overvpn, nginx site, and CLI." ;;
+      uninstall_warn) printf '%s' "This removes OverVPN containers, stack Docker images, /opt/overvpn, nginx site, and CLI." ;;
       prompt_wipe_volumes) printf '%s' "Delete Docker volumes (DB/data)? [Y/n] " ;;
       prompt_purge_certs) printf '%s' "Delete Let'\''s Encrypt certs for panel/sub/vpn hosts? [Y/n] " ;;
       prompt_purge_nginx) printf '%s' "Remove Nginx + Certbot packages from the system? [y/N] " ;;
@@ -788,6 +812,11 @@ prompt_install_confirm() {
       draw_box_line " $(cli_t summary_mode_ip "$DEFAULT_WEB_PORT")" "$w"
       draw_box_line " $(cli_t leave_empty_ip "$ip" "$DEFAULT_WEB_PORT")" "$w"
     fi
+    if [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]]; then
+      draw_box_line " $(cli_t summary_mtproxy_on)" "$w"
+    else
+      draw_box_line " $(cli_t summary_mtproxy_off)" "$w"
+    fi
     draw_box_sep "$w"
     draw_box_empty "$w"
     draw_box_line " ${TUI_GREEN}[Y]${TUI_NC} $(cli_t confirm_opt_yes)" "$w"
@@ -812,6 +841,39 @@ prompt_install_confirm() {
   done
 }
 
+prompt_install_mtproxy() {
+  if [[ "${CFG_MTPROXY_SKIP_PROMPT:-}" == "true" ]]; then
+    return
+  fi
+  local w choice
+  w="$(tui_term_width)"
+  while true; do
+    clear_screen
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t mtproxy_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t mtproxy_screen_hint)" "$w"
+    draw_box_empty "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[Y]${TUI_NC} $(cli_t mtproxy_opt_yes)" "$w"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[n]${TUI_NC} $(cli_t mtproxy_opt_no)" "$w"
+    draw_box_empty "$w"
+    draw_box_bottom "$w"
+    choice="$(ui_choice "$(cli_t prompt_mtproxy)" "Y")"
+    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case "$choice" in
+      y|yes|"")
+        CFG_MTPROXY_ENABLED="true"
+        return
+        ;;
+      n|no)
+        CFG_MTPROXY_ENABLED="false"
+        return
+        ;;
+    esac
+  done
+}
+
 prompt_install_endpoints() {
   local ip
   ip="$(public_ip)"
@@ -823,6 +885,7 @@ prompt_install_endpoints() {
   CFG_EMAIL=""
   CFG_MODE="ip"
   CFG_SKIP_DNS="false"
+  CFG_MTPROXY_ENABLED="${CFG_MTPROXY_ENABLED:-true}"
 
   prompt_wizard_language
 
@@ -835,6 +898,7 @@ prompt_install_endpoints() {
 
   if [[ "$CFG_MODE" == "ip" ]]; then
     colorized_echo green "$(cli_t mode_ip_only)"
+    prompt_install_mtproxy
     prompt_install_confirm "$ip"
     return
   fi
@@ -858,6 +922,7 @@ prompt_install_endpoints() {
       colorized_echo yellow "$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")"
       sleep 1
       CFG_MODE="ip"
+      prompt_install_mtproxy
       prompt_install_confirm "$ip"
       return
     fi
@@ -875,6 +940,7 @@ prompt_install_endpoints() {
   local -a dns_hosts=()
   mapfile -t dns_hosts < <(unique_hosts "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
   prompt_install_dns_screen "$ip" "${dns_hosts[@]}"
+  prompt_install_mtproxy
   prompt_install_confirm "$ip"
 }
 
@@ -939,6 +1005,46 @@ compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+# Remove app + dependency images pulled/built for this install.
+# Safe to call when some refs are missing or still shared by other containers.
+remove_overvpn_images() {
+  local images=()
+  local img
+
+  if [[ -f "$ENV_FILE" ]]; then
+    img="$(get_env_var API_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
+    img="$(get_env_var WEB_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
+    img="$(get_env_var POSTGRES_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
+    img="$(get_env_var REDIS_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
+    img="$(get_env_var MTPROXY_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
+  fi
+
+  images+=(
+    "${GHCR_API_IMAGE}:latest"
+    "${GHCR_WEB_IMAGE}:latest"
+    "${GHCR_MTPROXY_IMAGE}:latest"
+    "$DEFAULT_POSTGRES_IMAGE"
+    "$DEFAULT_REDIS_IMAGE"
+    "$BUSYBOX_IMAGE"
+  )
+
+  while IFS= read -r img; do
+    [[ -n "$img" && "$img" != *":<none>" ]] && images+=("$img")
+  done < <(
+    docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
+      | grep -E '^(ghcr\.io/overl1te/overvpn-|overvpn/)' || true
+  )
+
+  printf '%s\n' "${images[@]}" | awk 'NF && !seen[$0]++' | while IFS= read -r img; do
+    docker rmi -f "$img" >/dev/null 2>&1 || true
+  done
+}
+
 api_image_ref() {
   local image
   image="$(get_env_var API_IMAGE "$ENV_FILE" 2>/dev/null || true)"
@@ -946,6 +1052,24 @@ api_image_ref() {
     image="ghcr.io/overl1te/overvpn-api:latest"
   fi
   printf '%s\n' "$image"
+}
+
+mtproxy_image_ref() {
+  local image
+  image="$(get_env_var MTPROXY_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+  if [[ -z "$image" ]]; then
+    image="${GHCR_MTPROXY_IMAGE}:latest"
+  fi
+  printf '%s\n' "$image"
+}
+
+mtproxy_enabled() {
+  local value
+  value="$(get_env_var MTPROXY_ENABLED "$ENV_FILE" 2>/dev/null || true)"
+  case "${value:-true}" in
+    true|1|yes|YES|True) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 assert_api_image_has_xray() {
@@ -958,14 +1082,36 @@ assert_api_image_has_xray() {
   fi
 }
 
+assert_mtproxy_image() {
+  local image=$1
+  colorized_echo blue "$(cli_t checking_mtproxy_image)"
+  if ! docker run --rm --entrypoint /bin/sh "$image" -c \
+    'test -x /usr/local/bin/telemt && test -f /opt/overvpn-mtproxy/supervisor.py && command -v python3 >/dev/null'; then
+    colorized_echo red "$(cli_t mtproxy_image_missing "$image")"
+    exit 1
+  fi
+}
+
 compose_up() {
   local do_build=${1:-false}
+  local enable_mtproxy="false"
+  if mtproxy_enabled; then
+    enable_mtproxy="true"
+  fi
+
+  if [[ "$enable_mtproxy" == "true" ]]; then
+    colorized_echo blue "$(cli_t building_mtproxy_image)"
+    compose build core-mtproxy
+    assert_mtproxy_image "$(mtproxy_image_ref)"
+  fi
+
   if [[ "$do_build" == "true" ]]; then
     colorized_echo blue "$(cli_t building_images)"
     compose up -d --build
   else
     colorized_echo blue "$(cli_t pulling_images)"
-    compose pull
+    # Avoid failing when MTProxy GHCR image is not published yet.
+    COMPOSE_PROFILES= compose pull
     assert_api_image_has_xray "$(api_image_ref)"
     colorized_echo blue "$(cli_t starting_containers)"
     compose up -d --pull missing
@@ -976,6 +1122,10 @@ compose_up() {
   compose up -d --force-recreate --no-deps core
   compose up -d --force-recreate --no-deps core-xray-config-init
   compose up -d --force-recreate --no-deps core-xray
+  if [[ "$enable_mtproxy" == "true" ]]; then
+    compose up -d --force-recreate --no-deps core-mtproxy-config-init
+    compose up -d --force-recreate --no-deps core-mtproxy
+  fi
 }
 
 image_repo_digest() {
@@ -1067,12 +1217,13 @@ mark_install_complete() {
 cleanup_partial_install() {
   colorized_echo yellow "$(cli_t partial_install_cleaning)"
   if [[ -f "$COMPOSE_FILE" && -f "$ENV_FILE" ]]; then
-    compose down -v --remove-orphans >/dev/null 2>&1 || true
+    compose down -v --remove-orphans --rmi all >/dev/null 2>&1 || true
   else
     docker ps -aq --filter "name=overvpn-" 2>/dev/null | xargs -r docker rm -f || true
     docker network ls -q --filter "name=overvpn" 2>/dev/null | xargs -r docker network rm || true
     docker volume ls -q --filter "name=overvpn" 2>/dev/null | xargs -r docker volume rm || true
   fi
+  remove_overvpn_images
   remove_nginx_site
   rm -rf "$APP_DIR"
   rm -f "$BIN_PATH"
@@ -1303,8 +1454,10 @@ configure_firewall() {
   colorized_echo blue "$(cli_t configuring_ufw)"
   ufw allow OpenSSH >/dev/null 2>&1 || true
   ufw allow 443/udp >/dev/null 2>&1 || true
-  # Published MTProxy TCP range (compose MTPROXY_PORT_MIN..MAX).
-  ufw allow 10001:10016/tcp >/dev/null 2>&1 || true
+  if mtproxy_enabled; then
+    # Published MTProxy TCP range (compose MTPROXY_PORT_MIN..MAX).
+    ufw allow 10001:10016/tcp >/dev/null 2>&1 || true
+  fi
 
   if [[ "$with_nginx" == "true" ]]; then
     ufw allow 80/tcp >/dev/null 2>&1 || true
@@ -1696,6 +1849,7 @@ fetch_deploy_bundle() {
     "$APP_DIR/deploy/landing/assets" \
     "$APP_DIR/deploy/sing-box/certs" \
     "$APP_DIR/deploy/xray/certs" \
+    "$APP_DIR/deploy/mtproxy" \
     "$APP_DIR/deploy/proxy"
 
   local -a files=(
@@ -1713,6 +1867,11 @@ fetch_deploy_bundle() {
     "deploy/xray/config.json"
     "deploy/xray/entrypoint.sh"
     "deploy/xray/certs/.gitkeep"
+    "deploy/mtproxy/bootstrap-config.sh"
+    "deploy/mtproxy/config.json"
+    "deploy/mtproxy/entrypoint.sh"
+    "deploy/mtproxy/supervisor.py"
+    "deploy/mtproxy/Dockerfile"
     "deploy/proxy/nginx.reverse-proxy.conf.example"
   )
 
@@ -1725,7 +1884,9 @@ fetch_deploy_bundle() {
     "${APP_DIR}/deploy/sing-box/entrypoint.sh" \
     "${APP_DIR}/deploy/sing-box/bootstrap-config.sh" \
     "${APP_DIR}/deploy/xray/entrypoint.sh" \
-    "${APP_DIR}/deploy/xray/bootstrap-config.sh"
+    "${APP_DIR}/deploy/xray/bootstrap-config.sh" \
+    "${APP_DIR}/deploy/mtproxy/entrypoint.sh" \
+    "${APP_DIR}/deploy/mtproxy/bootstrap-config.sh"
 
   fetch_raw_file "$branch" "install.sh" "${APP_DIR}/install.sh"
   chmod 755 "${APP_DIR}/install.sh"
@@ -1897,9 +2058,20 @@ generate_env() {
   set_env_var "SING_BOX_SS_PORT" "8445"
   set_env_var "XRAY_LISTEN_PORT" "8443"
   set_env_var "XRAY_GRPC_PORT" "8446"
-  set_env_var "MTPROXY_PORT_MIN" "10001"
-  set_env_var "MTPROXY_PORT_MAX" "10016"
   set_env_var "XRAY_TCP_TLS_PORT" "8447"
+  if [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]]; then
+    set_env_var "MTPROXY_ENABLED" "true"
+    set_env_var "COMPOSE_PROFILES" "mtproxy"
+    set_env_var "MTPROXY_PORT_MIN" "10001"
+    set_env_var "MTPROXY_PORT_MAX" "10016"
+    set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
+  else
+    set_env_var "MTPROXY_ENABLED" "false"
+    set_env_var "COMPOSE_PROFILES" ""
+    set_env_var "MTPROXY_PORT_MIN" "10001"
+    set_env_var "MTPROXY_PORT_MAX" "10016"
+    set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
+  fi
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
 
@@ -1958,6 +2130,7 @@ SUB_HOST=${CFG_SUB_HOST:-}
 SUB_PATH=${CFG_SUB_PATH:-}
 VPN_HOST=${CFG_VPN_HOST:-}
 EMAIL=${CFG_EMAIL:-}
+MTPROXY_ENABLED=${CFG_MTPROXY_ENABLED:-true}
 CLI_LANG=${CLI_LANG}
 EOF
   apply_deploy_permissions
@@ -2043,7 +2216,7 @@ Config (domains, nginx, certificates):
   ${APP_NAME} config apply
 
 Install wizard (console screens):
-  language → install mode → domains/email → DNS → confirm
+  language → install mode → domains/email → DNS → MTProxy → confirm
   Then runs unattended (packages, Docker, images, Nginx/TLS).
 
 Options:
@@ -2056,6 +2229,8 @@ Options:
   --branch <name>          Git branch (default: ${DEFAULT_BRANCH})
   --tag <tag>              GHCR image tag (default: ${DEFAULT_IMAGE_TAG})
   --build                  Build images locally instead of pulling from GHCR
+  --with-mtproxy           Enable MTProxy / Telemt (default)
+  --without-mtproxy        Skip MTProxy / Telemt
   --skip-dns               Do not wait for DNS before issuing certificates
   --no-nginx               Skip Nginx/TLS
   --no-ufw                 Do not touch UFW
@@ -2077,7 +2252,9 @@ cmd_install() {
   local image_tag="$DEFAULT_IMAGE_TAG" do_build="false"
   local with_nginx="auto" use_ufw="true"
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
+  local flag_mtproxy=""
   CFG_SKIP_DNS="false"
+  CFG_MTPROXY_ENABLED="true"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2090,6 +2267,8 @@ cmd_install() {
       --branch) branch="${2:-}"; shift 2 ;;
       --tag|--version) image_tag="${2:-}"; shift 2 ;;
       --build) do_build="true"; shift ;;
+      --with-mtproxy) flag_mtproxy="true"; shift ;;
+      --without-mtproxy) flag_mtproxy="false"; shift ;;
       --skip-dns) CFG_SKIP_DNS="true"; shift ;;
       --no-nginx) with_nginx="false"; shift ;;
       --no-ufw) use_ufw="false"; shift ;;
@@ -2112,6 +2291,10 @@ cmd_install() {
   CFG_VPN_HOST=""
   CFG_EMAIL=""
   CFG_MODE="ip"
+  if [[ -n "$flag_mtproxy" ]]; then
+    CFG_MTPROXY_ENABLED="$flag_mtproxy"
+    CFG_MTPROXY_SKIP_PROMPT="true"
+  fi
 
   # Collect ALL answers first — then run unattended.
   if [[ -n "$flag_base" ]]; then
@@ -2246,6 +2429,7 @@ cmd_update() {
   if [[ -n "$image_tag" ]]; then
     set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
     set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
+    set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
   fi
 
   compose_up "$do_build"
@@ -2277,9 +2461,9 @@ cmd_uninstall() {
 
   if [[ -f "$COMPOSE_FILE" && -f "$ENV_FILE" ]]; then
     if [[ "${wipe,,}" == "y" || "${wipe,,}" == "yes" ]]; then
-      compose down -v --remove-orphans || true
+      compose down -v --remove-orphans --rmi all || true
     else
-      compose down --remove-orphans || true
+      compose down --remove-orphans --rmi all || true
     fi
   else
     # Best-effort if compose files are already gone
@@ -2290,10 +2474,8 @@ cmd_uninstall() {
     fi
   fi
 
-  # Drop local/GHCR app images used by this stack
-  docker images --format '{{.Repository}}:{{.Tag}}' \
-    | grep -E '^(ghcr\.io/overl1te/overvpn-|overvpn/)' \
-    | xargs -r docker rmi -f || true
+  # Drop app + dependency images (postgres/redis/busybox and any leftover tags)
+  remove_overvpn_images
 
   local panel_host=""
   if [[ -f "$INSTALL_CONF" ]]; then

@@ -38,3 +38,7 @@ Thumbs.db
 # Prefetched release zips for Docker builds (CI); keep directory via .gitkeep
 .docker-cache/**/*.zip
 .docker-cache/**/*.partial
+
+__pycache__/
+*.py[cod]
+

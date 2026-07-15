@@ -65,6 +65,7 @@ x-api-environment: &api-environment
   XRAY_PROCESS_TIMEOUT_MS: ${XRAY_PROCESS_TIMEOUT_MS:-15000}
   XRAY_RELOAD_TIMEOUT_MS: ${XRAY_RELOAD_TIMEOUT_MS:-20000}
   XRAY_HEALTH_TIMEOUT_MS: ${XRAY_HEALTH_TIMEOUT_MS:-5000}
+  MTPROXY_ENABLED: ${MTPROXY_ENABLED:-true}
   MTPROXY_CONFIG_PATH: /var/lib/mtproxy/config.json
   MTPROXY_LAST_KNOWN_GOOD_PATH: /var/lib/mtproxy/config.last-known-good.json
   MTPROXY_RELOAD_REQUEST_PATH: /var/lib/overvpn/mtproxy-reload/request
@@ -292,6 +293,7 @@ services:
     <<: *service-security
 
   core-mtproxy-config-init:
+    profiles: ['mtproxy']
     image: busybox:1.37
     restart: 'no'
     network_mode: none
@@ -306,23 +308,23 @@ services:
     <<: *service-security
 
   core-mtproxy:
-    image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
-    build: *api-build
+    profiles: ['mtproxy']
+    image: ${MTPROXY_IMAGE:-ghcr.io/overl1te/overvpn-mtproxy:latest}
+    build:
+      context: ./mtproxy
+      dockerfile: Dockerfile
     restart: unless-stopped
-    entrypoint: ['/usr/bin/dumb-init', '--', '/bin/sh', '/entrypoint/mtproxy-entrypoint.sh']
     environment:
       MTPROXY_CONFIG_PATH: /var/lib/mtproxy/config.json
       MTPROXY_RELOAD_REQUEST_PATH: /var/lib/overvpn/mtproxy-reload/request
       MTPROXY_RELOAD_ACK_PATH: /var/lib/overvpn/mtproxy-reload/ack
       MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
       MTPROXY_WORK_DIR: /var/lib/mtproxy-work
-      MTPROXY_SRC: /opt/mtprotoproxy
+      TELEMT_BIN: /usr/local/bin/telemt
     depends_on:
       core-mtproxy-config-init:
         condition: service_completed_successfully
     volumes:
-      - ./mtproxy/entrypoint.sh:/entrypoint/mtproxy-entrypoint.sh:ro
-      - ./mtproxy/supervisor.py:/opt/overvpn-mtproxy/supervisor.py:ro
       - mtproxy_config:/var/lib/mtproxy:ro
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
@@ -390,6 +392,7 @@ services:
         condition: service_healthy
       core-mtproxy:
         condition: service_healthy
+        required: false
     volumes:
       - /proc:/host/proc:ro
       - singbox_config:/var/lib/sing-box

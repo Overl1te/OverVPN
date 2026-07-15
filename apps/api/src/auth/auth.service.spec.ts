@@ -68,6 +68,7 @@ const environment: AppEnvironment = {
   XRAY_PROCESS_TIMEOUT_MS: 15_000,
   XRAY_RELOAD_TIMEOUT_MS: 20_000,
   XRAY_HEALTH_TIMEOUT_MS: 5_000,
+  MTPROXY_ENABLED: true,
   MTPROXY_CONFIG_PATH: '/tmp/mtproxy/config.json',
   MTPROXY_LAST_KNOWN_GOOD_PATH: '/tmp/mtproxy/config.lkg.json',
   MTPROXY_RELOAD_REQUEST_PATH: '/tmp/mtproxy/reload/request',

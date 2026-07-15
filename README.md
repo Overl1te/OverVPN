@@ -28,10 +28,10 @@ OverVPN — **однонодовая** панель для выдачи дост
 | **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce                |
 | **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты        |
 
-Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — три независимых ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/), [Xray-core](https://github.com/XTLS/Xray-core) и MTProxy ([alexbers/mtprotoproxy](https://github.com/alexbers/mtprotoproxy)).
+Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — независимые ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/), [Xray-core](https://github.com/XTLS/Xray-core) и опционально MTProxy на [Telemt](https://github.com/telemt/telemt) (образ [`whn0thacked/telemt-docker`](https://hub.docker.com/r/whn0thacked/telemt-docker)).
 
 > [!IMPORTANT]
-> Мульти-нода **не поддерживается**. Один сервер — три core-процесса (`core` + `core-xray` + `core-mtproxy`), один control plane.
+> Мульти-нода **не поддерживается**. Один сервер — core-процессы (`core` + `core-xray` + опционально `core-mtproxy`), один control plane.
 
 ### Dual cores + MTProxy
 
@@ -41,7 +41,7 @@ OverVPN — **однонодовая** панель для выдачи дост
 | Xray     | `XRAY`     | VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS     | `core-xray`     |
 | MTProxy  | `MTPROXY`  | MTPROXY (до 16 inbound’ов, secret на пользователя) | `core-mtproxy`  |
 
-Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`). MTProxy публикует диапазон TCP `10001–10016` (`MTPROXY_PORT_MIN` / `MTPROXY_PORT_MAX`).
+Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`). MTProxy (если включён при установке) публикует диапазон TCP `10001–10016` (`MTPROXY_PORT_MIN` / `MTPROXY_PORT_MAX`, профиль Compose `mtproxy`).
 
 Ссылки MTProxy выдаются **только в панели** (карточка пользователя) — в subscription formats (`sing-box` / `clash` / `links`) они не попадают.
 
@@ -55,7 +55,7 @@ OverVPN — **однонодовая** панель для выдачи дост
 
 - **Ubuntu / Debian** (рекомендуется)
 - Доступ `root` / `sudo`
-- Свободные порты: `80`, `443` (и UDP `443` для VPN), плюс диапазон MTProxy `10001–10016`
+- Свободные порты: `80`, `443` (и UDP `443` для VPN); при установке MTProxy — ещё TCP `10001–10016`
 - DNS A-записи на IP сервера (если ставите с доменами)
 
 ### Одна команда
@@ -84,6 +84,8 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 | `--port <port>`         | Порт панели без домена (по умолчанию `8000`) |
 | `--tag <tag>`           | Тег образов GHCR                             |
 | `--build`               | Собрать образы локально                      |
+| `--with-mtproxy`        | Включить MTProxy / Telemt (по умолчанию)     |
+| `--without-mtproxy`     | Не ставить MTProxy                           |
 | `--skip-dns`            | Не ждать DNS перед сертификатами             |
 | `--no-nginx`            | Без Nginx/TLS                                |
 | `--no-ufw`              | Не трогать UFW                               |
@@ -96,7 +98,8 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 2. **Режим** — с доменом (Nginx + TLS) или только IP (`http://IP:8000`)
 3. **Домены** — базовый, панель, подписки, VPN-хост, email Let’s Encrypt
 4. **DNS** — список A-записей; проверить сейчас или пропустить (`s`)
-5. **Подтверждение** — summary и старт
+5. **MTProxy** — ставить Telemt (порты `10001–10016`) или пропустить
+6. **Подтверждение** — summary и старт
 
 Дальше скрипт ждёт DNS (до ~15 мин), ставит Docker, образы, Nginx и сертификаты. В конце — экран с URL и логином владельца.
 

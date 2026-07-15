@@ -14,6 +14,7 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     SING_BOX_CONFIG_PATH: '/tmp/config.json',
     XRAY_CONFIG_PATH: '/tmp/xray/config.json',
     MTPROXY_CONFIG_PATH: '/tmp/mtproxy/config.json',
+    MTPROXY_ENABLED: true,
     SING_BOX_BINARY_PATH: '/usr/bin/sing-box',
     SING_BOX_PROCESS_TIMEOUT_MS: 500,
     SING_BOX_UDP_PORT: 443,

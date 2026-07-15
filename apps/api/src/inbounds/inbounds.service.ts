@@ -116,6 +116,7 @@ export class InboundsService {
   private readonly xrayTcpTlsPort: number;
   private readonly mtproxyPortMin: number;
   private readonly mtproxyPortMax: number;
+  private readonly mtproxyEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -145,6 +146,7 @@ export class InboundsService {
     this.xrayTcpTlsPort = config.get('XRAY_TCP_TLS_PORT', { infer: true });
     this.mtproxyPortMin = config.get('MTPROXY_PORT_MIN', { infer: true });
     this.mtproxyPortMax = config.get('MTPROXY_PORT_MAX', { infer: true });
+    this.mtproxyEnabled = config.get('MTPROXY_ENABLED', { infer: true });
   }
 
   async list(query: InboundListQuery): Promise<{
@@ -206,6 +208,7 @@ export class InboundsService {
     try {
       const engine = this.resolveEngine(input.protocol);
       if (input.protocol === 'MTPROXY') {
+        this.assertMtproxyEnabled();
         await this.assertMtproxyInboundLimit();
       }
       this.assertListenPortPublished(input.protocol, input.settings.listenPort);
@@ -1073,6 +1076,19 @@ export class InboundsService {
       mtproxyPortMin: this.mtproxyPortMin,
       mtproxyPortMax: this.mtproxyPortMax,
     };
+  }
+
+  private assertMtproxyEnabled(): void {
+    if (this.mtproxyEnabled) {
+      return;
+    }
+    throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+      reason: 'mtproxy_disabled',
+      message:
+        'MTProxy is disabled on this install. Re-run install with MTProxy enabled (COMPOSE_PROFILES=mtproxy, MTPROXY_ENABLED=true).',
+      messageRu:
+        'MTProxy отключён на этой установке. Переустановите с MTProxy (COMPOSE_PROFILES=mtproxy, MTPROXY_ENABLED=true).',
+    });
   }
 
   private async assertMtproxyInboundLimit(

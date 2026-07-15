@@ -13,6 +13,8 @@ tar -czf "$OUT" \
   deploy/docker-compose.yml \
   deploy/landing \
   deploy/sing-box \
+  deploy/xray \
+  deploy/mtproxy \
   deploy/proxy
 
 printf 'Created %s\n' "$OUT"

@@ -1,5 +1,7 @@
 import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
+import type { AppEnvironment } from '../config/environment';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CompositeCoreProvider } from './composite-core.provider';
 import {
@@ -84,16 +86,19 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
     MtproxyProvider,
     {
       provide: CORE_ENGINE_PROVIDERS,
-      inject: [SingBoxProvider, XrayProvider, MtproxyProvider],
+      inject: [SingBoxProvider, XrayProvider, MtproxyProvider, ConfigService],
       useFactory: (
         singBoxProvider: SingBoxProvider,
         xrayProvider: XrayProvider,
         mtproxyProvider: MtproxyProvider,
-      ): readonly EngineProvider[] => [
-        singBoxProvider,
-        xrayProvider,
-        mtproxyProvider,
-      ],
+        config: ConfigService<AppEnvironment, true>,
+      ): readonly EngineProvider[] => {
+        const providers: EngineProvider[] = [singBoxProvider, xrayProvider];
+        if (config.get('MTPROXY_ENABLED', { infer: true })) {
+          providers.push(mtproxyProvider);
+        }
+        return providers;
+      },
     },
     CoreEngineRegistry,
     CompositeCoreProvider,
