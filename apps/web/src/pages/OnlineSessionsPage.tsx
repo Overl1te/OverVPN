@@ -1,28 +1,47 @@
 import { Card, Form, Input, Select, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { listOnlineSessions } from '@/api/online-sessions';
 import { PageHeader } from '@/components/PageHeader';
+import { formatBytes } from '@/utils/format';
 import dayjs from 'dayjs';
 
 export function OnlineSessionsPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [userId, setUserId] = useState<string | undefined>();
-  const [inboundId, setInboundId] = useState<string | undefined>();
+  const [userId, setUserId] = useState<string | undefined>(
+    () => searchParams.get('userId') || undefined,
+  );
+  const [username, setUsername] = useState<string | undefined>();
+  const [inboundTag, setInboundTag] = useState<string | undefined>();
   const [ip, setIp] = useState<string | undefined>();
-  const [state, setState] = useState<'active' | 'history' | 'all'>('active');
+  const [state, setState] = useState<'active' | 'history' | 'all'>(() => {
+    const value = searchParams.get('state');
+    return value === 'history' || value === 'all' || value === 'active' ? value : 'active';
+  });
+
+  useEffect(() => {
+    const nextUserId = searchParams.get('userId') || undefined;
+    const nextState = searchParams.get('state');
+    setUserId(nextUserId);
+    if (nextState === 'history' || nextState === 'all' || nextState === 'active') {
+      setState(nextState);
+    }
+  }, [searchParams]);
 
   const query = useQuery({
-    queryKey: ['online-sessions', page, pageSize, userId, inboundId, ip, state],
+    queryKey: ['online-sessions', page, pageSize, userId, username, inboundTag, ip, state],
     queryFn: () =>
       listOnlineSessions({
         page,
         pageSize,
         userId,
-        inboundId,
+        username,
+        inboundTag,
         ip,
         state,
       }),
@@ -37,11 +56,11 @@ export function OnlineSessionsPage() {
           <Form.Item label={t('online.user')}>
             <Input
               allowClear
-              style={{ width: 260 }}
-              placeholder={t('online.userIdPlaceholder')}
-              value={userId}
+              style={{ width: 160 }}
+              placeholder={t('online.usernamePlaceholder')}
+              value={username}
               onChange={(e) => {
-                setUserId(e.target.value || undefined);
+                setUsername(e.target.value || undefined);
                 setPage(1);
               }}
             />
@@ -49,11 +68,11 @@ export function OnlineSessionsPage() {
           <Form.Item label={t('online.inbound')}>
             <Input
               allowClear
-              style={{ width: 260 }}
-              placeholder={t('online.inboundIdPlaceholder')}
-              value={inboundId}
+              style={{ width: 160 }}
+              placeholder={t('online.inboundTagPlaceholder')}
+              value={inboundTag}
               onChange={(e) => {
-                setInboundId(e.target.value || undefined);
+                setInboundTag(e.target.value || undefined);
                 setPage(1);
               }}
             />
@@ -92,6 +111,7 @@ export function OnlineSessionsPage() {
         rowKey="id"
         loading={query.isLoading}
         dataSource={query.data?.items ?? []}
+        scroll={{ x: true }}
         pagination={{
           current: page,
           pageSize,
@@ -102,10 +122,24 @@ export function OnlineSessionsPage() {
           },
         }}
         columns={[
-          { title: t('online.user'), dataIndex: 'username' },
+          {
+            title: t('online.user'),
+            dataIndex: 'username',
+            render: (usernameValue: string, row) => (
+              <Link to={`/users/${row.userId}`}>{usernameValue}</Link>
+            ),
+          },
           { title: t('online.inbound'), dataIndex: 'inboundTag' },
           { title: t('online.ip'), dataIndex: 'ipAddress' },
           { title: t('online.device'), dataIndex: 'deviceId', ellipsis: true },
+          {
+            title: t('online.traffic'),
+            key: 'traffic',
+            render: (_, row) =>
+              row.uploadBytes != null || row.downloadBytes != null
+                ? `${formatBytes(row.uploadBytes)} ↑ / ${formatBytes(row.downloadBytes)} ↓`
+                : '—',
+          },
           {
             title: t('online.connectedAt'),
             dataIndex: 'connectedAt',

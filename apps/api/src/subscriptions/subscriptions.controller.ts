@@ -29,6 +29,10 @@ import type { Request, Response } from 'express';
 import { ApiException } from '../common/api-error';
 import { Public } from '../common/authorization';
 import { ZodQuery } from '../common/zod-validation';
+import {
+  encodeHappBase64Value,
+  prependHappLinksMeta,
+} from './happ-subscription-meta';
 import { SubscriptionProfileBuilder } from './subscription-profile';
 import { SubscriptionRateLimitGuard } from './subscription-rate-limit';
 import {
@@ -83,6 +87,24 @@ class SubscriptionInfoDto implements SubscriptionInfo {
   supportUrl!: string | null;
   @ApiPropertyOptional({ nullable: true, format: 'uri' })
   profileWebPageUrl!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 128 })
+  happProviderId!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  subInfoText!: string | null;
+  @ApiPropertyOptional({ enum: ['red', 'blue', 'green'], nullable: true })
+  subInfoColor!: 'red' | 'blue' | 'green' | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 25 })
+  subInfoButtonText!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  subInfoButtonLink!: string | null;
+  @ApiProperty()
+  subExpireEnabled!: boolean;
+  @ApiPropertyOptional({ nullable: true })
+  subExpireButtonLink!: string | null;
+  @ApiPropertyOptional({ nullable: true, format: 'uri' })
+  fallbackUrl!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  colorProfile!: string | null;
   @ApiProperty({ format: 'uri' })
   subscriptionUrl!: string;
   @ApiProperty({ enum: SUBSCRIPTION_FORMATS, isArray: true })
@@ -116,6 +138,42 @@ const profileResponseHeaders = {
   'profile-web-page-url': {
     description: 'Optional informational web page URL for clients.',
     schema: { type: 'string', format: 'uri' },
+  },
+  providerid: {
+    description: 'Optional Happ Provider ID (advanced client features).',
+    schema: { type: 'string' },
+  },
+  'sub-info-text': {
+    description: 'Optional Happ advanced info-block text (base64:<base64>).',
+    schema: { type: 'string' },
+  },
+  'sub-info-color': {
+    description: 'Optional Happ info-block color (red|blue|green).',
+    schema: { type: 'string' },
+  },
+  'sub-info-button-text': {
+    description: 'Optional Happ info-block button label (base64:<base64>).',
+    schema: { type: 'string' },
+  },
+  'sub-info-button-link': {
+    description: 'Optional Happ info-block button URL / deeplink.',
+    schema: { type: 'string' },
+  },
+  'sub-expire': {
+    description: 'When 1, Happ shows near-expiry / expired renew UI.',
+    schema: { type: 'string' },
+  },
+  'sub-expire-button-link': {
+    description: 'Optional Happ renew button URL / deeplink.',
+    schema: { type: 'string' },
+  },
+  'fallback-url': {
+    description: 'Optional backup subscription URL for Happ.',
+    schema: { type: 'string', format: 'uri' },
+  },
+  'color-profile': {
+    description: 'Optional Happ color theme (base64:<base64> or plain JSON).',
+    schema: { type: 'string' },
   },
   'RateLimit-Limit': {
     description: 'Effective request limit for the active window.',
@@ -274,6 +332,9 @@ export class SubscriptionsController {
       'Content-Disposition',
       contentDisposition(access.info.username, rendered.extension),
     );
+    if (format === 'links') {
+      return prependHappLinksMeta(rendered.body, access.info);
+    }
     return rendered.body;
   }
 
@@ -419,21 +480,51 @@ function setSubscriptionHeaders(
     'profile-update-interval',
     info.updateIntervalHours.toString(),
   );
-  response.setHeader(
-    'profile-title',
-    `base64:${Buffer.from(info.profileTitle, 'utf8').toString('base64')}`,
-  );
+  response.setHeader('profile-title', encodeHappBase64Value(info.profileTitle));
   if (info.announce) {
-    response.setHeader(
-      'announce',
-      `base64:${Buffer.from(info.announce, 'utf8').toString('base64')}`,
-    );
+    response.setHeader('announce', encodeHappBase64Value(info.announce));
   }
   if (info.supportUrl) {
     response.setHeader('support-url', info.supportUrl);
   }
   if (info.profileWebPageUrl) {
     response.setHeader('profile-web-page-url', info.profileWebPageUrl);
+  }
+  if (info.happProviderId) {
+    response.setHeader('providerid', info.happProviderId);
+  }
+  if (info.subInfoText) {
+    response.setHeader(
+      'sub-info-text',
+      encodeHappBase64Value(info.subInfoText),
+    );
+  }
+  if (info.subInfoColor) {
+    response.setHeader('sub-info-color', info.subInfoColor);
+  }
+  if (info.subInfoButtonText) {
+    response.setHeader(
+      'sub-info-button-text',
+      encodeHappBase64Value(info.subInfoButtonText),
+    );
+  }
+  if (info.subInfoButtonLink) {
+    response.setHeader('sub-info-button-link', info.subInfoButtonLink);
+  }
+  if (info.subExpireEnabled) {
+    response.setHeader('sub-expire', '1');
+  }
+  if (info.subExpireButtonLink) {
+    response.setHeader('sub-expire-button-link', info.subExpireButtonLink);
+  }
+  if (info.fallbackUrl) {
+    response.setHeader('fallback-url', info.fallbackUrl);
+  }
+  if (info.colorProfile) {
+    response.setHeader(
+      'color-profile',
+      encodeHappBase64Value(info.colorProfile),
+    );
   }
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   response.setHeader('Pragma', 'no-cache');

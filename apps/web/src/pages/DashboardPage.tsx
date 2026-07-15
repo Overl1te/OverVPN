@@ -1,5 +1,17 @@
-import { Alert, Card, Col, Progress, Row, Statistic, Table, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Card,
+  Col,
+  DatePicker,
+  Progress,
+  Row,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Column } from '@ant-design/charts';
 import { getDashboard, getHostStats, getSystemHealth, getUpdateStatus } from '@/api/system';
@@ -26,9 +38,18 @@ function memoryPercent(used: string | undefined, total: string | undefined): num
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
+  const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+    dayjs().subtract(29, 'day').startOf('day'),
+    dayjs().startOf('day'),
+  ]);
+
   const dashboardQuery = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => getDashboard(),
+    queryKey: ['dashboard', usageRange[0].format('YYYY-MM-DD'), usageRange[1].format('YYYY-MM-DD')],
+    queryFn: () =>
+      getDashboard({
+        from: usageRange[0].format('YYYY-MM-DD'),
+        to: usageRange[1].format('YYYY-MM-DD'),
+      }),
     refetchInterval: 15_000,
   });
   const healthQuery = useQuery({
@@ -141,6 +162,9 @@ export function DashboardPage() {
         <Col xs={24} sm={24} lg={8}>
           <Card size="small" loading={hostQuery.isLoading}>
             <Typography.Text type="secondary">{t('dashboard.network')}</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
+              {t('dashboard.networkHint')}
+            </Typography.Paragraph>
             <Row gutter={8} style={{ marginTop: 8 }}>
               <Col span={12}>
                 <Statistic
@@ -178,10 +202,15 @@ export function DashboardPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card size="small">
             {data?.traffic.throughput.available ? (
-              <Statistic
-                title={t('dashboard.throughput')}
-                value={formatBytesPerSecond(data.traffic.throughput.totalBytesPerSecond)}
-              />
+              <>
+                <Statistic
+                  title={t('dashboard.throughput')}
+                  value={formatBytesPerSecond(data.traffic.throughput.totalBytesPerSecond)}
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('dashboard.throughputHint')}
+                </Typography.Text>
+              </>
             ) : (
               <>
                 <Typography.Text type="secondary">{t('dashboard.throughput')}</Typography.Text>
@@ -210,6 +239,9 @@ export function DashboardPage() {
               title={t('dashboard.currentTraffic')}
               value={formatBytes(data?.traffic.current.totalBytes)}
             />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('dashboard.currentTrafficHint')}
+            </Typography.Text>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -284,7 +316,27 @@ export function DashboardPage() {
             size="small"
             title={t('dashboard.trafficPeriod')}
             loading={dashboardQuery.isLoading}
+            extra={
+              <DatePicker.RangePicker
+                size="small"
+                value={usageRange}
+                onChange={(values) => {
+                  if (values?.[0] && values[1]) {
+                    setUsageRange([values[0], values[1]]);
+                  }
+                }}
+              />
+            }
           >
+            {data?.traffic.period ? (
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                {t('dashboard.periodTotals', {
+                  total: formatBytes(data.traffic.period.totalBytes),
+                  upload: formatBytes(data.traffic.period.uploadBytes),
+                  download: formatBytes(data.traffic.period.downloadBytes),
+                })}
+              </Typography.Text>
+            ) : null}
             {chartData.length > 0 ? (
               <Column
                 data={chartData}

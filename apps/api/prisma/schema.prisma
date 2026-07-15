@@ -236,11 +236,20 @@ model Plan {
   defaultIpLimit             Int?
   defaultSpeedLimitBps       BigInt?
   defaultResetStrategy       ResetStrategy @default(NO_RESET)
-  subscriptionTitleTemplate  String?       @db.VarChar(200)
-  subscriptionAnnounce       String?       @db.VarChar(500)
-  subscriptionSupportUrl     String?       @db.VarChar(2048)
-  subscriptionWebPageUrl     String?       @db.VarChar(2048)
-  createdAt                  DateTime      @default(now()) @db.Timestamptz(3)
+  subscriptionTitleTemplate          String?       @db.VarChar(200)
+  subscriptionAnnounce               String?       @db.VarChar(500)
+  subscriptionSupportUrl             String?       @db.VarChar(2048)
+  subscriptionWebPageUrl             String?       @db.VarChar(2048)
+  happProviderId                     String?       @db.VarChar(128)
+  subscriptionSubInfoText            String?       @db.VarChar(500)
+  subscriptionSubInfoColor           String?       @db.VarChar(16)
+  subscriptionSubInfoButtonText      String?       @db.VarChar(25)
+  subscriptionSubInfoButtonLink      String?       @db.VarChar(2048)
+  subscriptionSubExpireEnabled       Boolean       @default(false)
+  subscriptionSubExpireButtonLink    String?       @db.VarChar(2048)
+  subscriptionFallbackUrlTemplate    String?       @db.VarChar(2048)
+  subscriptionColorProfile           String?       @db.Text
+  createdAt                          DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt                  DateTime      @updatedAt @db.Timestamptz(3)
   archivedAt                 DateTime?     @db.Timestamptz(3)
   users                      User[]
@@ -399,6 +408,9 @@ model OnlineSession {
   inboundId      String     @db.Uuid
   ipAddress      String?    @db.VarChar(64)
   deviceId       String?    @db.VarChar(255)
+  /** Last observed connection counters from core; null when engine does not report them. */
+  uploadBytes    BigInt?
+  downloadBytes  BigInt?
   connectedAt    DateTime   @db.Timestamptz(3)
   lastSeenAt     DateTime   @db.Timestamptz(3)
   disconnectedAt DateTime?  @db.Timestamptz(3)

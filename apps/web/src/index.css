@@ -71,19 +71,100 @@ a {
 }
 
 .support-dock {
-  padding: 8px 12px 16px;
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 12px 12px 16px;
+  background: linear-gradient(180deg, transparent 0%, #0b1220 28%, #0b1220 100%);
+}
+
+.support-dock--collapsed {
+  padding-inline: 8px;
 }
 
 .support-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
-  justify-content: flex-start !important;
-  color: #94a3b8 !important;
-  padding-inline: 12px !important;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #be123c 0%, #e11d48 48%, #f43f5e 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 8px 20px rgba(190, 18, 60, 0.35);
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  text-decoration: none !important;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
+}
+
+.support-dock--collapsed .support-button {
+  padding: 10px;
+  min-height: 40px;
+}
+
+.support-button__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  animation: support-heart-pulse 1.8s ease-in-out infinite;
+}
+
+.support-button__label {
+  white-space: nowrap;
 }
 
 .support-button:hover {
-  color: #f87171 !important;
+  color: #fff !important;
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 10px 24px rgba(190, 18, 60, 0.45);
+}
+
+.support-button:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+.support-button:focus-visible {
+  outline: 2px solid #fda4af;
+  outline-offset: 2px;
+}
+
+@keyframes support-heart-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.12);
+  }
+  60% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-button,
+  .support-button__icon {
+    animation: none;
+    transition: none;
+  }
 }
 
 .login-brand {

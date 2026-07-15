@@ -4,6 +4,8 @@ import {
   SUBSCRIPTION_FORMATS,
   buildSubscriptionPublicUrl,
   renderSubscriptionAnnounce,
+  renderSubscriptionFallbackUrl,
+  renderSubscriptionSubInfoText,
   renderSubscriptionTitle,
   type UserStatus,
   type UserStatusReason,
@@ -11,6 +13,7 @@ import {
 import type {
   SubscriptionInfo,
   SubscriptionProfileDescriptor,
+  SubscriptionSubInfoColor,
 } from '@overvpn/shared/schemas';
 import { subscriptionTokenSchema } from '@overvpn/shared/schemas';
 import { ApiException } from '../common/api-error';
@@ -28,6 +31,15 @@ const subscriptionPlanSelect = {
   subscriptionAnnounce: true,
   subscriptionSupportUrl: true,
   subscriptionWebPageUrl: true,
+  happProviderId: true,
+  subscriptionSubInfoText: true,
+  subscriptionSubInfoColor: true,
+  subscriptionSubInfoButtonText: true,
+  subscriptionSubInfoButtonLink: true,
+  subscriptionSubExpireEnabled: true,
+  subscriptionSubExpireButtonLink: true,
+  subscriptionFallbackUrlTemplate: true,
+  subscriptionColorProfile: true,
 } as const;
 
 const subscriptionInfoSelect = {
@@ -110,6 +122,15 @@ export interface SubscriptionInfoSource {
     subscriptionAnnounce: string | null;
     subscriptionSupportUrl: string | null;
     subscriptionWebPageUrl: string | null;
+    happProviderId: string | null;
+    subscriptionSubInfoText: string | null;
+    subscriptionSubInfoColor: string | null;
+    subscriptionSubInfoButtonText: string | null;
+    subscriptionSubInfoButtonLink: string | null;
+    subscriptionSubExpireEnabled: boolean;
+    subscriptionSubExpireButtonLink: string | null;
+    subscriptionFallbackUrlTemplate: string | null;
+    subscriptionColorProfile: string | null;
   } | null;
 }
 
@@ -216,6 +237,8 @@ export function buildSubscriptionInfo(
     username: source.username,
     identity: source.identity,
     planName: source.plan?.name ?? null,
+    token,
+    subscriptionUrl,
     traffic: {
       uploadBytes: upload,
       downloadBytes: download,
@@ -247,6 +270,21 @@ export function buildSubscriptionInfo(
     ),
     supportUrl: source.plan?.subscriptionSupportUrl ?? null,
     profileWebPageUrl: source.plan?.subscriptionWebPageUrl ?? null,
+    happProviderId: source.plan?.happProviderId ?? null,
+    subInfoText: renderSubscriptionSubInfoText(
+      source.plan?.subscriptionSubInfoText,
+      brandingContext,
+    ),
+    subInfoColor: parseSubInfoColor(source.plan?.subscriptionSubInfoColor),
+    subInfoButtonText: source.plan?.subscriptionSubInfoButtonText ?? null,
+    subInfoButtonLink: source.plan?.subscriptionSubInfoButtonLink ?? null,
+    subExpireEnabled: source.plan?.subscriptionSubExpireEnabled ?? false,
+    subExpireButtonLink: source.plan?.subscriptionSubExpireButtonLink ?? null,
+    fallbackUrl: renderSubscriptionFallbackUrl(
+      source.plan?.subscriptionFallbackUrlTemplate,
+      brandingContext,
+    ),
+    colorProfile: source.plan?.subscriptionColorProfile ?? null,
     subscriptionUrl,
     formats: [...SUBSCRIPTION_FORMATS],
     formatUrls: {
@@ -255,6 +293,15 @@ export function buildSubscriptionInfo(
       clash: `${subscriptionUrl}?format=clash`,
     },
   };
+}
+
+function parseSubInfoColor(
+  value: string | null | undefined,
+): SubscriptionSubInfoColor | null {
+  if (value === 'red' || value === 'blue' || value === 'green') {
+    return value;
+  }
+  return null;
 }
 
 export function formatSubscriptionUserinfo(info: SubscriptionInfo): string {

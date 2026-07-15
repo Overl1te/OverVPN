@@ -16,14 +16,23 @@ curl "$SUB_URL/info"  # метаданные подписки</code></pre>
 
 <h2>Брендинг подписки</h2>
 <p>
-  Название подписки, announce и ссылки (Telegram / info) настраиваются в
-  <strong>плане</strong>. Имя подключения — шаблон на <strong>точке входа</strong>. Пустые поля
-  оставляют дефолты (<code>OverVPN - {username}</code>, <code>{identity} - {tag}</code>).
+  Название подписки, announce, ссылки (Telegram / info), Happ Provider ID, info-блок
+  (<code>sub-info-*</code>), уведомление об истечении (<code>sub-expire*</code>), fallback URL и
+  тема (<code>color-profile</code>) настраиваются в <strong>плане</strong>. Имя подключения — шаблон
+  на <strong>точке входа</strong>. Пустые поля оставляют дефолты (<code>OverVPN - {username}</code>,
+  <code>{identity} - {tag}</code>).
 </p>
 <p>
   Заголовки: <code>subscription-userinfo</code>, <code>profile-update-interval</code>,
   <code>profile-title</code>, опционально <code>announce</code>, <code>support-url</code>,
-  <code>profile-web-page-url</code>.
+  <code>profile-web-page-url</code>, <code>providerid</code>, <code>sub-info-*</code>,
+  <code>sub-expire*</code>, <code>fallback-url</code>, <code>color-profile</code>. Для
+  <code>?format=links</code> те же параметры дублируются строками <code>#…</code> в начале body
+  (совместимость с Happ).
+</p>
+<p>
+  Расширенный UI Happ (кнопка в info-блоке, Renew, тема) обычно требует Provider ID с
+  <a href="https://happ-proxy.com" rel="noopener noreferrer">happ-proxy.com</a>.
 </p>
 
 <h2>Ротация токена</h2>

@@ -1,7 +1,3 @@
-<div align="center">
-
-<img src="brand/logo.png" alt="OverVPN" width="120" height="120" />
-
 # OverVPN
 
 ### Однонодовая панель управления VPN
@@ -10,17 +6,13 @@
 
 [Документация](https://overl1te.github.io/OverVPN/) · [Установка](#-установка) · [Управление](#-управление) · [Панель](#-работа-в-панели) · [Подписки](#-подписки-клиентов) · [Contributing](CONTRIBUTING.md)
 
-<br />
-
-[![CI](https://github.com/Overl1te/OverVPN/actions/workflows/ci.yml/badge.svg)](https://github.com/Overl1te/OverVPN/actions/workflows/ci.yml)
-[![Docs](https://github.com/Overl1te/OverVPN/actions/workflows/docs.yml/badge.svg)](https://github.com/Overl1te/OverVPN/actions/workflows/docs.yml)
-[![Stars](https://img.shields.io/github/stars/Overl1te/OverVPN?style=flat-square)](https://github.com/Overl1te/OverVPN/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/Overl1te/OverVPN?style=flat-square)](https://github.com/Overl1te/OverVPN/commits/master)
-![Node.js](https://img.shields.io/badge/Node.js-24_LTS-339933?style=flat-square&logo=nodedotjs&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
-[![License](https://img.shields.io/github/license/Overl1te/OverVPN?style=flat-square)](LICENSE)
-
-</div>
+[CI](https://github.com/Overl1te/OverVPN/actions/workflows/ci.yml)
+[Docs](https://github.com/Overl1te/OverVPN/actions/workflows/docs.yml)
+[Stars](https://github.com/Overl1te/OverVPN/stargazers)
+[Last commit](https://github.com/Overl1te/OverVPN/commits/master)
+Node.js
+Docker
+[License](LICENSE)
 
 ---
 
@@ -29,7 +21,7 @@
 OverVPN — **однонодовая** панель для выдачи доступа, подписок и учёта:
 
 |               |                                                      |
-| :------------ | :--------------------------------------------------- |
+| ------------- | ---------------------------------------------------- |
 | **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks     |
 | **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит |
 | **Подписки**  | JSON · Clash Meta · список ссылок · QR               |
@@ -77,8 +69,7 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build
 ```
 
-<details>
-<summary><strong>Флаги установщика</strong></summary>
+**Флаги установщика**
 
 | Флаг                    | Назначение                                   |
 | ----------------------- | -------------------------------------------- |
@@ -93,8 +84,6 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 | `--skip-dns`            | Не ждать DNS перед сертификатами             |
 | `--no-nginx`            | Без Nginx/TLS                                |
 | `--no-ufw`              | Не трогать UFW                               |
-
-</details>
 
 ### Что спросит мастер
 
@@ -169,7 +158,7 @@ overvpn uninstall              # удалить установку
 2. Укажите `tag`, listen / public host и port.
 3. TLS-файлы кладите в каталог сертификатов ядра (`deploy/sing-box/certs`, в контейнере — `/var/lib/sing-box-certs`).
 
-При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_*` — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
+При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_`* — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
 Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
@@ -270,11 +259,11 @@ curl -o clash.yaml "$SUB_URL?format=clash"
 curl "$SUB_URL/info"
 ```
 
-Заголовки ответа (где применимо): `subscription-userinfo`, `profile-update-interval`, `profile-title`, опционально `announce`, `support-url`, `profile-web-page-url`.
+Заголовки ответа (где применимо): `subscription-userinfo`, `profile-update-interval`, `profile-title`, опционально `announce`, `support-url`, `profile-web-page-url`, а также Happ advanced: `providerid`, `sub-info-*`, `sub-expire*`, `fallback-url`, `color-profile`. Для `?format=links` те же параметры дублируются `#`-строками в body.
 
 Кастомизация брендинга:
 
-- **План** — шаблон названия подписки, announce, ссылки support/Telegram и info page (`{username}`, `{used}`, `{limit}`, `{expire}`, …).
+- **План** — шаблон названия, announce, support/Telegram, info page, Happ Provider ID, info-блок с кнопкой, renew при истечении, fallback URL и color-profile (`{username}`, `{used}`, `{limit}`, `{expire}`, `{token}`, `{subscriptionUrl}`, …).
 - **Точка входа** — шаблон имени подключения для всех форматов (`{identity}`, `{tag}`, `{protocol}`, …). Эмодзи допускаются. Пустые поля = прежние дефолты (`OverVPN - {username}`, `{identity} - {tag}`).
 
 **Ротация токена** (старый URL сразу мёртв, VPN-пароли не меняются):
@@ -284,8 +273,7 @@ curl "$SUB_URL/info"
 
 Не светите токен в тикетах, скриншотах и логах прокси.
 
-<details>
-<summary><strong>Примеры клиентских URI</strong></summary>
+**Примеры клиентских URI**
 
 **Hysteria2**
 
@@ -308,8 +296,6 @@ trojan://PASSWORD@host:443?security=tls&sni=...&allowInsecure=0&type=tcp#LABEL
 **Shadowsocks 2022** — пароль клиента: `SERVER_PASSWORD:USER_PASSWORD`  
 SIP002: `ss://BASE64(method:password)@host:port#LABEL`
 
-</details>
-
 ---
 
 ## Ручной запуск (Docker)
@@ -322,7 +308,7 @@ SIP002: `ss://BASE64(method:password)@host:port#LABEL`
 cp .env.example .env
 ```
 
-Замените **все** `REPLACE_*`. Секреты генерируйте независимо:
+Замените **все** `REPLACE_`*. Секреты генерируйте независимо:
 
 ```bash
 openssl rand -hex 32          # пароли / JWT / Clash API
@@ -371,8 +357,8 @@ docker compose --env-file .env -f deploy/docker-compose.yml --profile tools run 
 
 ### 4. Вход
 
-- Панель: **http://localhost:8080**
-- OpenAPI (если `SWAGGER_ENABLED=true`): **http://localhost:8080/api/docs**
+- Панель: **[http://localhost:8080](http://localhost:8080)**
+- OpenAPI (если `SWAGGER_ENABLED=true`): **[http://localhost:8080/api/docs](http://localhost:8080/api/docs)**
 
 ```bash
 curl -s http://localhost:8080/api/health
@@ -418,14 +404,10 @@ OverVPN — свободное ПО: его можно распространя�
 [GNU Affero General Public License v3](LICENSE) (только версия 3, без «or later»).
 
 Программа распространяется в надежде, что будет полезной, но **БЕЗ КАКИХ-ЛИБО
-ГАРАНТИЙ**. Полный текст — в файле [`LICENSE`](LICENSE).
+ГАРАНТИЙ**. Полный текст — в файле `[LICENSE](LICENSE)`.
 
-Исходники: https://github.com/Overl1te/OverVPN
+Исходники: [https://github.com/Overl1te/OverVPN](https://github.com/Overl1te/OverVPN)
 
 ---
 
-<div align="center">
-
 **OverVPN** · single-node VPN control panel
-
-</div>

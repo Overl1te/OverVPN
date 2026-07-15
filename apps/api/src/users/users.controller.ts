@@ -249,10 +249,16 @@ class OnlineSessionDto {
   sessionKey!: string;
   @ApiProperty({ format: 'uuid' })
   inboundId!: string;
+  @ApiProperty()
+  inboundTag!: string;
   @ApiPropertyOptional({ nullable: true })
   ipAddress!: string | null;
   @ApiPropertyOptional({ nullable: true })
   deviceId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  uploadBytes!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  downloadBytes!: string | null;
   @ApiProperty({ format: 'date-time' })
   connectedAt!: string;
   @ApiProperty({ format: 'date-time' })

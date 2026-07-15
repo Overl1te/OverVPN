@@ -13,8 +13,11 @@ type OnlineSession = {
   id: string;
   sessionKey: string;
   inboundId: string;
+  inboundTag: string;
   ipAddress: string | null;
   deviceId: string | null;
+  uploadBytes: string | null;
+  downloadBytes: string | null;
   connectedAt: string;
   lastSeenAt: string;
   disconnectedAt: string | null;

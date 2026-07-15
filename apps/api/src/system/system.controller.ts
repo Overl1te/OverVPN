@@ -48,6 +48,10 @@ class AdminOnlineSessionDto {
   ipAddress!: string | null;
   @ApiPropertyOptional({ nullable: true })
   deviceId!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  uploadBytes!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  downloadBytes!: string | null;
   @ApiProperty({ format: 'date-time' })
   connectedAt!: string;
   @ApiProperty({ format: 'date-time' })
@@ -316,6 +320,8 @@ export class OnlineSessionsController {
   @ApiQuery({ name: 'pageSize', required: false, minimum: 1, maximum: 100 })
   @ApiQuery({ name: 'userId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'inboundId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'username', required: false, maxLength: 64 })
+  @ApiQuery({ name: 'inboundTag', required: false, maxLength: 64 })
   @ApiQuery({ name: 'ip', required: false, maxLength: 64 })
   @ApiQuery({
     name: 'state',

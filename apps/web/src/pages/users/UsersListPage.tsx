@@ -11,6 +11,7 @@ import {
   Space,
   Table,
   Tag,
+  Typography,
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -26,7 +27,7 @@ import { UserStatusTag } from '@/components/StatusTag';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
-import { buildSubscriptionUrl, formatBytes } from '@/utils/format';
+import { buildSubscriptionUrl, formatBytes, sumByteCounts, usagePercent } from '@/utils/format';
 import dayjs from 'dayjs';
 
 export function UsersListPage() {
@@ -287,8 +288,30 @@ export function UsersListPage() {
           },
           {
             title: t('users.usage'),
-            render: (_, row) =>
-              `${formatBytes(row.usedUploadBytes)} ↑ / ${formatBytes(row.usedDownloadBytes)} ↓`,
+            render: (_, row) => {
+              const used = sumByteCounts(row.usedUploadBytes, row.usedDownloadBytes);
+              const percent = usagePercent(used, row.dataLimitBytes);
+              return (
+                <div>
+                  <div>
+                    {t('users.usageOfLimit', {
+                      used: formatBytes(used),
+                      limit: row.dataLimitBytes
+                        ? formatBytes(row.dataLimitBytes)
+                        : t('app.unlimited'),
+                    })}
+                    {percent != null ? (
+                      <Typography.Text type="secondary" style={{ marginLeft: 6 }}>
+                        {t('users.usagePercent', { percent: percent.toFixed(0) })}
+                      </Typography.Text>
+                    ) : null}
+                  </div>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {formatBytes(row.usedUploadBytes)} ↑ / {formatBytes(row.usedDownloadBytes)} ↓
+                  </Typography.Text>
+                </div>
+              );
+            },
           },
           {
             title: t('users.limit'),

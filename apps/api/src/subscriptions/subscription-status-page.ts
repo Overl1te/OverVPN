@@ -17,6 +17,7 @@ type StatusPageCopy = {
   singBox: string;
   hintBefore: string;
   hintAfter: string;
+  quota: string;
   statusValue: string;
   expireValue: string;
   usedValue: string;
@@ -24,6 +25,8 @@ type StatusPageCopy = {
   remainingValue: string;
   uploadValue: string;
   downloadValue: string;
+  percentValue: string;
+  usedOfLimit: string;
 };
 
 const UI = {
@@ -43,6 +46,7 @@ const UI = {
     hintBefore: 'Apps also read machine status at',
     hintAfter:
       '. Use the format links above if your client needs an explicit profile.',
+    quota: 'Quota',
   },
   ru: {
     status: 'Статус',
@@ -60,6 +64,7 @@ const UI = {
     hintBefore: 'Клиенты также читают машинный статус по',
     hintAfter:
       '. Используйте ссылки форматов выше, если клиенту нужен явный профиль.',
+    quota: 'Квота',
   },
 } as const;
 
@@ -97,6 +102,29 @@ function formatBytes(value: string | null | undefined, locale: Locale): string {
   }
   const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
   return `${scaled.toFixed(digits)} ${units[unit]}`;
+}
+
+/** 0–100 percent of quota used; null when unlimited. */
+export function quotaUsagePercent(
+  usedBytes: string,
+  limitBytes: string | null,
+): number | null {
+  if (limitBytes == null || limitBytes === '') {
+    return null;
+  }
+  try {
+    const used = BigInt(usedBytes);
+    const limit = BigInt(limitBytes);
+    if (limit <= 0n || used < 0n) {
+      return null;
+    }
+    if (used >= limit) {
+      return 100;
+    }
+    return Math.min(100, Number((used * 1000n) / limit) / 10);
+  } catch {
+    return null;
+  }
 }
 
 function russianDaysWord(days: number): string {
@@ -207,15 +235,21 @@ function buildCopy(
   now = new Date(),
 ): StatusPageCopy {
   const ui = UI[locale];
+  const usedValue = formatBytes(info.totalBytes, locale);
+  const limitValue = formatBytes(info.limitBytes, locale);
+  const percent = quotaUsagePercent(info.totalBytes, info.limitBytes);
   return {
     ...ui,
     statusValue: statusLabel(info.status, locale),
     expireValue: daysRemaining(info.expireAt, locale, now),
-    usedValue: formatBytes(info.totalBytes, locale),
-    limitValue: formatBytes(info.limitBytes, locale),
+    usedValue,
+    limitValue,
     remainingValue: formatBytes(info.remainingBytes, locale),
     uploadValue: formatBytes(info.uploadBytes, locale),
     downloadValue: formatBytes(info.downloadBytes, locale),
+    percentValue:
+      percent == null ? '' : `${percent.toFixed(percent >= 10 ? 0 : 1)}%`,
+    usedOfLimit: `${usedValue} / ${limitValue}`,
   };
 }
 
@@ -259,6 +293,16 @@ export function renderSubscriptionStatusPage(
       : info.status === 'DISABLED'
         ? 'bad'
         : 'warn';
+  const percent = quotaUsagePercent(info.totalBytes, info.limitBytes);
+  const progressClass =
+    percent == null
+      ? ''
+      : percent >= 100
+        ? 'full'
+        : percent >= 90
+          ? 'high'
+          : '';
+  const progressWidth = percent == null ? 0 : Math.min(100, percent);
   const i18nJson = JSON.stringify(packs).replaceAll('<', '\\u003c');
 
   return `<!doctype html>
@@ -346,6 +390,36 @@ export function renderSubscriptionStatusPage(
       padding: 1.25rem;
       margin-bottom: 1rem;
     }
+    .quota-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.55rem;
+    }
+    .quota-head .label { color: var(--muted); font-size: 0.9rem; }
+    .quota-head .value { font-size: 1.15rem; font-weight: 700; text-align: right; }
+    .quota-head .percent {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-left: 0.4rem;
+    }
+    .bar {
+      height: 0.55rem;
+      border-radius: 999px;
+      background: #1a2438;
+      overflow: hidden;
+      margin-bottom: 0.85rem;
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      background: var(--accent);
+      border-radius: inherit;
+    }
+    .bar.high > span { background: var(--warn); }
+    .bar.full > span { background: var(--bad); }
     .row {
       display: flex;
       justify-content: space-between;
@@ -355,6 +429,8 @@ export function renderSubscriptionStatusPage(
     }
     .row:last-child { border-bottom: 0; padding-bottom: 0; }
     .row:first-child { padding-top: 0; }
+    .row.primary .value { font-size: 1.05rem; }
+    .row.muted .value { font-weight: 500; color: var(--muted); }
     .label { color: var(--muted); }
     .value { font-weight: 600; text-align: right; }
     .status.ok { color: var(--ok); }
@@ -415,10 +491,28 @@ export function renderSubscriptionStatusPage(
     <section class="card">
       <div class="row"><span class="label" data-i18n="status">${escapeHtml(copy.status)}</span><span class="value status ${statusClass}" data-i18n="statusValue">${escapeHtml(copy.statusValue)}</span></div>
       <div class="row"><span class="label" data-i18n="expiry">${escapeHtml(copy.expiry)}</span><span class="value"><span data-i18n="expireValue">${escapeHtml(copy.expireValue)}</span><br /><small style="color:var(--muted);font-weight:500">${expireExact}</small></span></div>
-      <div class="row"><span class="label" data-i18n="used">${escapeHtml(copy.used)}</span><span class="value" data-i18n="usedValue">${escapeHtml(copy.usedValue)}</span></div>
-      <div class="row"><span class="label" data-i18n="limit">${escapeHtml(copy.limit)}</span><span class="value" data-i18n="limitValue">${escapeHtml(copy.limitValue)}</span></div>
-      <div class="row"><span class="label" data-i18n="remaining">${escapeHtml(copy.remaining)}</span><span class="value" data-i18n="remainingValue">${escapeHtml(copy.remainingValue)}</span></div>
-      <div class="row"><span class="label" data-i18n="uploadDownload">${escapeHtml(copy.uploadDownload)}</span><span class="value"><span data-i18n="uploadValue">${escapeHtml(copy.uploadValue)}</span> / <span data-i18n="downloadValue">${escapeHtml(copy.downloadValue)}</span></span></div>
+    </section>
+    <section class="card">
+      <div class="quota-head">
+        <span class="label" data-i18n="quota">${escapeHtml(copy.quota)}</span>
+        <span class="value">
+          <span data-i18n="usedOfLimit">${escapeHtml(copy.usedOfLimit)}</span>
+          ${
+            percent == null
+              ? ''
+              : `<span class="percent" data-i18n="percentValue">${escapeHtml(copy.percentValue)}</span>`
+          }
+        </span>
+      </div>
+      ${
+        percent == null
+          ? ''
+          : `<div class="bar ${progressClass}" aria-hidden="true"><span style="width:${progressWidth}%"></span></div>`
+      }
+      <div class="row primary"><span class="label" data-i18n="used">${escapeHtml(copy.used)}</span><span class="value" data-i18n="usedValue">${escapeHtml(copy.usedValue)}</span></div>
+      <div class="row primary"><span class="label" data-i18n="limit">${escapeHtml(copy.limit)}</span><span class="value" data-i18n="limitValue">${escapeHtml(copy.limitValue)}</span></div>
+      <div class="row primary"><span class="label" data-i18n="remaining">${escapeHtml(copy.remaining)}</span><span class="value" data-i18n="remainingValue">${escapeHtml(copy.remainingValue)}</span></div>
+      <div class="row muted"><span class="label" data-i18n="uploadDownload">${escapeHtml(copy.uploadDownload)}</span><span class="value"><span data-i18n="uploadValue">${escapeHtml(copy.uploadValue)}</span> / <span data-i18n="downloadValue">${escapeHtml(copy.downloadValue)}</span></span></div>
     </section>
     <section class="card">
       <div class="label" style="margin-bottom:0.75rem" data-i18n="subscription">${escapeHtml(copy.subscription)}</div>

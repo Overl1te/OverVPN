@@ -374,13 +374,18 @@ export const onlineSessionSchema = z
     id: idSchema,
     sessionKey: z.string(),
     inboundId: idSchema,
+    inboundTag: z.string(),
     ipAddress: z.string().nullable(),
     deviceId: z.string().nullable(),
+    uploadBytes: byteCountSchema.nullable(),
+    downloadBytes: byteCountSchema.nullable(),
     connectedAt: isoDateTimeSchema,
     lastSeenAt: isoDateTimeSchema,
     disconnectedAt: isoDateTimeSchema.nullable(),
   })
   .strict();
+
+export type OnlineSession = z.infer<typeof onlineSessionSchema>;
 
 export const userConnectionIdentitySchema = z
   .object({
@@ -414,6 +419,8 @@ export const onlineSessionListQuerySchema = paginationQuerySchema
   .extend({
     userId: idSchema.optional(),
     inboundId: idSchema.optional(),
+    username: z.string().trim().min(1).max(64).optional(),
+    inboundTag: z.string().trim().min(1).max(64).optional(),
     ip: z.string().trim().min(1).max(64).optional(),
     state: z.enum(['active', 'history', 'all']).default('active'),
   })
@@ -424,7 +431,6 @@ export const adminOnlineSessionSchema = onlineSessionSchema
   .extend({
     userId: idSchema,
     username: z.string(),
-    inboundTag: z.string(),
   })
   .strict();
 
@@ -614,6 +620,9 @@ export type SystemUpdateStatus = z.infer<typeof systemUpdateStatusSchema>;
 const subscriptionTitleTemplateSchema = z.string().trim().max(200);
 const subscriptionAnnounceSchema = z.string().trim().max(500);
 const optionalHttpUrlSchema = z.union([z.url().max(2048), z.literal(''), z.null()]);
+const optionalDeeplinkSchema = z.union([z.string().trim().max(2048), z.null()]);
+export const subscriptionSubInfoColorSchema = z.enum(['red', 'blue', 'green']);
+export type SubscriptionSubInfoColor = z.infer<typeof subscriptionSubInfoColorSchema>;
 
 export const planSchema = z
   .object({
@@ -631,6 +640,15 @@ export const planSchema = z
     subscriptionAnnounce: z.string().nullable(),
     subscriptionSupportUrl: z.string().nullable(),
     subscriptionWebPageUrl: z.string().nullable(),
+    happProviderId: z.string().nullable(),
+    subscriptionSubInfoText: z.string().nullable(),
+    subscriptionSubInfoColor: subscriptionSubInfoColorSchema.nullable(),
+    subscriptionSubInfoButtonText: z.string().nullable(),
+    subscriptionSubInfoButtonLink: z.string().nullable(),
+    subscriptionSubExpireEnabled: z.boolean(),
+    subscriptionSubExpireButtonLink: z.string().nullable(),
+    subscriptionFallbackUrlTemplate: z.string().nullable(),
+    subscriptionColorProfile: z.string().nullable(),
     inboundIds: z.array(idSchema),
     userCount: z.number().int().nonnegative(),
     createdAt: isoDateTimeSchema,
@@ -653,30 +671,51 @@ const planFields = {
   subscriptionAnnounce: subscriptionAnnounceSchema.nullable().optional(),
   subscriptionSupportUrl: optionalHttpUrlSchema.optional(),
   subscriptionWebPageUrl: optionalHttpUrlSchema.optional(),
+  happProviderId: z.string().trim().max(128).nullable().optional(),
+  subscriptionSubInfoText: z.string().trim().max(500).nullable().optional(),
+  subscriptionSubInfoColor: subscriptionSubInfoColorSchema.nullable().optional(),
+  subscriptionSubInfoButtonText: z.string().trim().max(25).nullable().optional(),
+  subscriptionSubInfoButtonLink: optionalDeeplinkSchema.optional(),
+  subscriptionSubExpireEnabled: z.boolean().optional(),
+  subscriptionSubExpireButtonLink: optionalDeeplinkSchema.optional(),
+  subscriptionFallbackUrlTemplate: z.string().trim().max(2048).nullable().optional(),
+  subscriptionColorProfile: z.string().trim().max(65_536).nullable().optional(),
   inboundIds: z.array(idSchema).max(128).optional(),
 };
+
+function normalizePlanBrandingFields<T extends Record<string, unknown>>(value: T): T {
+  const stringKeys = [
+    'subscriptionTitleTemplate',
+    'subscriptionAnnounce',
+    'subscriptionSupportUrl',
+    'subscriptionWebPageUrl',
+    'happProviderId',
+    'subscriptionSubInfoText',
+    'subscriptionSubInfoButtonText',
+    'subscriptionSubInfoButtonLink',
+    'subscriptionSubExpireButtonLink',
+    'subscriptionFallbackUrlTemplate',
+    'subscriptionColorProfile',
+  ] as const;
+  const next: Record<string, unknown> = { ...value };
+  for (const key of stringKeys) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      const raw = value[key];
+      next[key] = typeof raw === 'string' || raw === null ? emptyToNull(raw) : raw;
+    }
+  }
+  return next as T;
+}
 
 export const createPlanSchema = z
   .object(planFields)
   .strict()
-  .transform((value) => ({
-    ...value,
-    inboundIds: [...new Set(value.inboundIds ?? [])],
-    ...(value.subscriptionTitleTemplate !== undefined
-      ? {
-          subscriptionTitleTemplate: emptyToNull(value.subscriptionTitleTemplate),
-        }
-      : {}),
-    ...(value.subscriptionAnnounce !== undefined
-      ? { subscriptionAnnounce: emptyToNull(value.subscriptionAnnounce) }
-      : {}),
-    ...(value.subscriptionSupportUrl !== undefined
-      ? { subscriptionSupportUrl: emptyToNull(value.subscriptionSupportUrl) }
-      : {}),
-    ...(value.subscriptionWebPageUrl !== undefined
-      ? { subscriptionWebPageUrl: emptyToNull(value.subscriptionWebPageUrl) }
-      : {}),
-  }));
+  .transform((value) =>
+    normalizePlanBrandingFields({
+      ...value,
+      inboundIds: [...new Set(value.inboundIds ?? [])],
+    }),
+  );
 export type CreatePlan = z.infer<typeof createPlanSchema>;
 
 export const updatePlanSchema = z
@@ -686,24 +725,12 @@ export const updatePlanSchema = z
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'At least one field is required')
-  .transform((value) => ({
-    ...value,
-    inboundIds: value.inboundIds ? [...new Set(value.inboundIds)] : undefined,
-    ...(value.subscriptionTitleTemplate !== undefined
-      ? {
-          subscriptionTitleTemplate: emptyToNull(value.subscriptionTitleTemplate),
-        }
-      : {}),
-    ...(value.subscriptionAnnounce !== undefined
-      ? { subscriptionAnnounce: emptyToNull(value.subscriptionAnnounce) }
-      : {}),
-    ...(value.subscriptionSupportUrl !== undefined
-      ? { subscriptionSupportUrl: emptyToNull(value.subscriptionSupportUrl) }
-      : {}),
-    ...(value.subscriptionWebPageUrl !== undefined
-      ? { subscriptionWebPageUrl: emptyToNull(value.subscriptionWebPageUrl) }
-      : {}),
-  }));
+  .transform((value) =>
+    normalizePlanBrandingFields({
+      ...value,
+      inboundIds: value.inboundIds ? [...new Set(value.inboundIds)] : undefined,
+    }),
+  );
 export type UpdatePlan = z.infer<typeof updatePlanSchema>;
 
 function emptyToNull(value: string | null): string | null {
@@ -1710,6 +1737,15 @@ export const subscriptionInfoSchema = z
     announce: z.string().max(500).nullable(),
     supportUrl: z.string().max(2048).nullable(),
     profileWebPageUrl: z.string().max(2048).nullable(),
+    happProviderId: z.string().max(128).nullable(),
+    subInfoText: z.string().max(200).nullable(),
+    subInfoColor: subscriptionSubInfoColorSchema.nullable(),
+    subInfoButtonText: z.string().max(25).nullable(),
+    subInfoButtonLink: z.string().max(2048).nullable(),
+    subExpireEnabled: z.boolean(),
+    subExpireButtonLink: z.string().max(2048).nullable(),
+    fallbackUrl: z.string().max(2048).nullable(),
+    colorProfile: z.string().max(65_536).nullable(),
     subscriptionUrl: z.url(),
     formats: z.array(subscriptionFormatSchema).length(SUBSCRIPTION_FORMATS.length),
     formatUrls: z

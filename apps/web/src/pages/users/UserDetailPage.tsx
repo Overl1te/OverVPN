@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   Popconfirm,
+  Progress,
   Row,
   Select,
   Space,
@@ -42,7 +43,16 @@ import { QrModal } from '@/components/QrModal';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
-import { buildSubscriptionClientLinks, buildSubscriptionUrl, formatBytes } from '@/utils/format';
+import {
+  buildSubscriptionClientLinks,
+  buildSubscriptionUrl,
+  formatBytes,
+  formatBytesPerSecond,
+  formatDuration,
+  remainingBytes,
+  sumByteCounts,
+  usagePercent,
+} from '@/utils/format';
 
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -334,28 +344,83 @@ export function UserDetailPage() {
           {!isNew && user ? (
             <>
               <Card size="small" title={t('users.limits')} style={{ marginTop: 12 }}>
-                <Descriptions size="small" column={1}>
-                  <Descriptions.Item label={t('users.expireAt')}>
-                    {user.expireAt ? dayjs(user.expireAt).format('YYYY-MM-DD HH:mm') : '—'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('users.limit')}>
-                    {user.dataLimitBytes ? formatBytes(user.dataLimitBytes) : t('app.unlimited')}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('users.usage')}>
-                    {formatBytes(user.usedUploadBytes)} ↑ / {formatBytes(user.usedDownloadBytes)} ↓
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('users.deviceLimit')}>
-                    {user.deviceLimit ?? t('app.unlimited')}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('users.resetStrategy')}>
-                    {t(`enums.resetStrategy.${user.resetStrategy}`, {
-                      defaultValue: user.resetStrategy,
-                    })}
-                  </Descriptions.Item>
-                </Descriptions>
-                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-                  {t('users.limitsFromPlan')}
-                </Typography.Paragraph>
+                {(() => {
+                  const usedTotal = sumByteCounts(user.usedUploadBytes, user.usedDownloadBytes);
+                  const percent = usagePercent(usedTotal, user.dataLimitBytes);
+                  const remaining = remainingBytes(usedTotal, user.dataLimitBytes);
+                  return (
+                    <>
+                      <div style={{ marginBottom: 12 }}>
+                        <Typography.Text type="secondary">{t('users.quota')}</Typography.Text>
+                        <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                          {formatBytes(usedTotal)}
+                          <Typography.Text
+                            type="secondary"
+                            style={{ fontSize: 14, fontWeight: 400 }}
+                          >
+                            {' / '}
+                            {user.dataLimitBytes
+                              ? formatBytes(user.dataLimitBytes)
+                              : t('app.unlimited')}
+                          </Typography.Text>
+                        </div>
+                        {percent != null ? (
+                          <Progress
+                            percent={percent}
+                            size="small"
+                            status={
+                              percent >= 100 ? 'exception' : percent >= 90 ? 'active' : 'normal'
+                            }
+                            style={{ marginTop: 8, marginBottom: 0 }}
+                          />
+                        ) : null}
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {t('users.usageSplit', {
+                            upload: formatBytes(user.usedUploadBytes),
+                            download: formatBytes(user.usedDownloadBytes),
+                          })}
+                        </Typography.Text>
+                      </div>
+                      <Descriptions size="small" column={1}>
+                        <Descriptions.Item label={t('users.remaining')}>
+                          {remaining != null ? formatBytes(remaining) : t('app.unlimited')}
+                        </Descriptions.Item>
+                        <Descriptions.Item label={t('users.expireAt')}>
+                          {user.expireAt ? dayjs(user.expireAt).format('YYYY-MM-DD HH:mm') : '—'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label={t('users.deviceLimit')}>
+                          {user.deviceLimit ?? t('app.unlimited')}
+                        </Descriptions.Item>
+                        <Descriptions.Item label={t('users.speedLimit')}>
+                          {user.speedLimitBps
+                            ? formatBytesPerSecond(user.speedLimitBps)
+                            : t('app.unlimited')}
+                        </Descriptions.Item>
+                        <Descriptions.Item label={t('users.resetStrategy')}>
+                          {t(`enums.resetStrategy.${user.resetStrategy}`, {
+                            defaultValue: user.resetStrategy,
+                          })}
+                        </Descriptions.Item>
+                        <Descriptions.Item label={t('users.nextResetAt')}>
+                          {user.nextResetAt
+                            ? dayjs(user.nextResetAt).format('YYYY-MM-DD HH:mm')
+                            : '—'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label={t('users.trafficResetAt')}>
+                          {user.trafficResetAt
+                            ? dayjs(user.trafficResetAt).format('YYYY-MM-DD HH:mm')
+                            : '—'}
+                        </Descriptions.Item>
+                      </Descriptions>
+                      <Typography.Paragraph
+                        type="secondary"
+                        style={{ marginTop: 8, marginBottom: 0 }}
+                      >
+                        {t('users.limitsFromPlan')}
+                      </Typography.Paragraph>
+                    </>
+                  );
+                })()}
               </Card>
 
               <Card size="small" title={t('users.subscription')} style={{ marginTop: 12 }}>
@@ -454,14 +519,29 @@ export function UserDetailPage() {
               >
                 {usageQuery.data ? (
                   <>
-                    <Typography.Text type="secondary">
-                      {t('app.periodRemaining', {
-                        period: formatBytes(usageQuery.data.periodTotalBytes),
-                        remaining: usageQuery.data.remainingBytes
-                          ? formatBytes(usageQuery.data.remainingBytes)
-                          : t('app.unlimited'),
-                      })}
-                    </Typography.Text>
+                    <Space direction="vertical" size={2} style={{ marginBottom: 8, width: '100%' }}>
+                      <Typography.Text type="secondary">
+                        {t('users.periodUsage', {
+                          total: formatBytes(usageQuery.data.periodTotalBytes),
+                          upload: formatBytes(usageQuery.data.periodUploadBytes),
+                          download: formatBytes(usageQuery.data.periodDownloadBytes),
+                        })}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {t('users.quotaSummary', {
+                          used: formatBytes(usageQuery.data.usedTotalBytes),
+                          limit: usageQuery.data.dataLimitBytes
+                            ? formatBytes(usageQuery.data.dataLimitBytes)
+                            : t('app.unlimited'),
+                          remaining: usageQuery.data.remainingBytes
+                            ? formatBytes(usageQuery.data.remainingBytes)
+                            : t('app.unlimited'),
+                        })}
+                      </Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {t('users.usageChartHint')}
+                      </Typography.Text>
+                    </Space>
                     <Line
                       data={chartData}
                       xField="day"
@@ -496,7 +576,7 @@ export function UserDetailPage() {
                           deviceLimit: identitiesQuery.data.deviceLimit
                             ? t('users.limitOf', { limit: identitiesQuery.data.deviceLimit })
                             : '',
-                          online: identitiesQuery.data.ips.filter((row) => row.online).length,
+                          online: identitiesQuery.data.devices.filter((row) => row.online).length,
                         })}
                       </Tag>
                       {identitiesQuery.data.identityLimitHoldUntil ? (
@@ -509,6 +589,50 @@ export function UserDetailPage() {
                         </Tag>
                       ) : null}
                     </Space>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                      {t('users.devices')}
+                    </Typography.Text>
+                    <Table
+                      size="small"
+                      rowKey="key"
+                      pagination={false}
+                      style={{ marginBottom: 16 }}
+                      dataSource={identitiesQuery.data.devices}
+                      locale={{ emptyText: '—' }}
+                      columns={[
+                        {
+                          title: t('app.device'),
+                          dataIndex: 'deviceId',
+                          ellipsis: true,
+                          render: (v: string | null, row) => v || row.key,
+                        },
+                        {
+                          title: t('online.ip'),
+                          dataIndex: 'ipAddress',
+                          width: 130,
+                        },
+                        {
+                          title: t('users.sessionCount'),
+                          dataIndex: 'sessionCount',
+                          width: 90,
+                        },
+                        {
+                          title: t('users.onlineNow'),
+                          dataIndex: 'online',
+                          width: 90,
+                          render: (online: boolean) =>
+                            online ? <Tag color="success">online</Tag> : <Tag>off</Tag>,
+                        },
+                        {
+                          title: t('users.lastSeen'),
+                          dataIndex: 'lastSeenAt',
+                          render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                        },
+                      ]}
+                    />
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                      {t('users.ips')}
+                    </Typography.Text>
                     <Table
                       size="small"
                       rowKey="key"
@@ -545,25 +669,58 @@ export function UserDetailPage() {
                 ) : null}
               </Card>
 
-              <Card size="small" title={t('users.sessions')} style={{ marginTop: 12 }}>
+              <Card
+                size="small"
+                title={t('users.sessions')}
+                style={{ marginTop: 12 }}
+                extra={
+                  id ? (
+                    <Link to={`/online?userId=${id}&state=all`}>{t('users.viewAllSessions')}</Link>
+                  ) : null
+                }
+              >
                 <Table
                   size="small"
                   rowKey="id"
                   pagination={false}
+                  scroll={{ x: true }}
                   dataSource={sessionsQuery.data ?? []}
                   columns={[
-                    { title: t('app.key'), dataIndex: 'sessionKey', ellipsis: true },
-                    { title: t('online.ip'), dataIndex: 'ipAddress' },
-                    { title: t('app.device'), dataIndex: 'deviceId', ellipsis: true },
+                    {
+                      title: t('online.inbound'),
+                      dataIndex: 'inboundTag',
+                      width: 120,
+                    },
+                    { title: t('online.ip'), dataIndex: 'ipAddress', width: 120 },
+                    { title: t('app.device'), dataIndex: 'deviceId', ellipsis: true, width: 140 },
                     {
                       title: t('online.connectedAt'),
                       dataIndex: 'connectedAt',
                       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                      width: 140,
                     },
                     {
-                      title: t('users.lastSeen'),
-                      dataIndex: 'lastSeenAt',
-                      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                      title: t('users.duration'),
+                      key: 'duration',
+                      width: 90,
+                      render: (_, row) =>
+                        formatDuration(row.connectedAt, row.disconnectedAt ?? row.lastSeenAt),
+                    },
+                    {
+                      title: t('online.disconnectedAt'),
+                      dataIndex: 'disconnectedAt',
+                      width: 140,
+                      render: (v: string | null) =>
+                        v ? dayjs(v).format('YYYY-MM-DD HH:mm') : t('online.active'),
+                    },
+                    {
+                      title: t('users.usage'),
+                      key: 'traffic',
+                      width: 140,
+                      render: (_, row) =>
+                        row.uploadBytes != null || row.downloadBytes != null
+                          ? `${formatBytes(row.uploadBytes)} ↑ / ${formatBytes(row.downloadBytes)} ↓`
+                          : '—',
                     },
                   ]}
                 />

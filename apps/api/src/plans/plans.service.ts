@@ -3,6 +3,7 @@ import type {
   CreatePlan,
   PlanListQuery,
   PlanResult,
+  SubscriptionSubInfoColor,
   UpdatePlan,
 } from '@overvpn/shared/schemas';
 import { AuditService } from '../audit/audit.service';
@@ -20,6 +21,15 @@ type PlanWithRelations = Plan & {
   planInbounds: Array<{ inboundId: string }>;
   _count: { users: number };
 };
+
+function parseSubInfoColor(
+  value: string | null,
+): SubscriptionSubInfoColor | null {
+  if (value === 'red' || value === 'blue' || value === 'green') {
+    return value;
+  }
+  return null;
+}
 
 @Injectable()
 export class PlansService {
@@ -111,6 +121,20 @@ export class PlansService {
             subscriptionAnnounce: input.subscriptionAnnounce ?? null,
             subscriptionSupportUrl: input.subscriptionSupportUrl ?? null,
             subscriptionWebPageUrl: input.subscriptionWebPageUrl ?? null,
+            happProviderId: input.happProviderId ?? null,
+            subscriptionSubInfoText: input.subscriptionSubInfoText ?? null,
+            subscriptionSubInfoColor: input.subscriptionSubInfoColor ?? null,
+            subscriptionSubInfoButtonText:
+              input.subscriptionSubInfoButtonText ?? null,
+            subscriptionSubInfoButtonLink:
+              input.subscriptionSubInfoButtonLink ?? null,
+            subscriptionSubExpireEnabled:
+              input.subscriptionSubExpireEnabled ?? false,
+            subscriptionSubExpireButtonLink:
+              input.subscriptionSubExpireButtonLink ?? null,
+            subscriptionFallbackUrlTemplate:
+              input.subscriptionFallbackUrlTemplate ?? null,
+            subscriptionColorProfile: input.subscriptionColorProfile ?? null,
             planInbounds: {
               create: input.inboundIds.map((inboundId, priority) => ({
                 inboundId,
@@ -195,6 +219,17 @@ export class PlansService {
             subscriptionAnnounce: input.subscriptionAnnounce,
             subscriptionSupportUrl: input.subscriptionSupportUrl,
             subscriptionWebPageUrl: input.subscriptionWebPageUrl,
+            happProviderId: input.happProviderId,
+            subscriptionSubInfoText: input.subscriptionSubInfoText,
+            subscriptionSubInfoColor: input.subscriptionSubInfoColor,
+            subscriptionSubInfoButtonText: input.subscriptionSubInfoButtonText,
+            subscriptionSubInfoButtonLink: input.subscriptionSubInfoButtonLink,
+            subscriptionSubExpireEnabled: input.subscriptionSubExpireEnabled,
+            subscriptionSubExpireButtonLink:
+              input.subscriptionSubExpireButtonLink,
+            subscriptionFallbackUrlTemplate:
+              input.subscriptionFallbackUrlTemplate,
+            subscriptionColorProfile: input.subscriptionColorProfile,
           },
         });
         if (input.inboundIds) {
@@ -406,6 +441,17 @@ export class PlansService {
       subscriptionAnnounce: plan.subscriptionAnnounce,
       subscriptionSupportUrl: plan.subscriptionSupportUrl,
       subscriptionWebPageUrl: plan.subscriptionWebPageUrl,
+      happProviderId: plan.happProviderId,
+      subscriptionSubInfoText: plan.subscriptionSubInfoText,
+      subscriptionSubInfoColor: parseSubInfoColor(
+        plan.subscriptionSubInfoColor,
+      ),
+      subscriptionSubInfoButtonText: plan.subscriptionSubInfoButtonText,
+      subscriptionSubInfoButtonLink: plan.subscriptionSubInfoButtonLink,
+      subscriptionSubExpireEnabled: plan.subscriptionSubExpireEnabled,
+      subscriptionSubExpireButtonLink: plan.subscriptionSubExpireButtonLink,
+      subscriptionFallbackUrlTemplate: plan.subscriptionFallbackUrlTemplate,
+      subscriptionColorProfile: plan.subscriptionColorProfile,
       inboundIds: plan.planInbounds.map((item) => item.inboundId),
       userCount: plan._count.users,
       createdAt: plan.createdAt.toISOString(),

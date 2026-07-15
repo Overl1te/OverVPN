@@ -71,6 +71,24 @@ class CreatePlanDto {
   subscriptionSupportUrl?: string | null;
   @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
   subscriptionWebPageUrl?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 128 })
+  happProviderId?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  subscriptionSubInfoText?: string | null;
+  @ApiPropertyOptional({ enum: ['red', 'blue', 'green'], nullable: true })
+  subscriptionSubInfoColor?: 'red' | 'blue' | 'green' | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 25 })
+  subscriptionSubInfoButtonText?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionSubInfoButtonLink?: string | null;
+  @ApiPropertyOptional()
+  subscriptionSubExpireEnabled?: boolean;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionSubExpireButtonLink?: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionFallbackUrlTemplate?: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  subscriptionColorProfile?: string | null;
 }
 
 class UpdatePlanDto extends PartialType(CreatePlanDto) {}
@@ -104,6 +122,24 @@ class PlanDto implements PlanResult {
   subscriptionSupportUrl!: string | null;
   @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
   subscriptionWebPageUrl!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 128 })
+  happProviderId!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 500 })
+  subscriptionSubInfoText!: string | null;
+  @ApiPropertyOptional({ enum: ['red', 'blue', 'green'], nullable: true })
+  subscriptionSubInfoColor!: 'red' | 'blue' | 'green' | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 25 })
+  subscriptionSubInfoButtonText!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionSubInfoButtonLink!: string | null;
+  @ApiProperty()
+  subscriptionSubExpireEnabled!: boolean;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionSubExpireButtonLink!: string | null;
+  @ApiPropertyOptional({ nullable: true, maxLength: 2048 })
+  subscriptionFallbackUrlTemplate!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  subscriptionColorProfile!: string | null;
   @ApiProperty({ type: [String], format: 'uuid' })
   inboundIds!: string[];
   @ApiProperty()

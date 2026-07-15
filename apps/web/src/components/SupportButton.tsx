@@ -1,5 +1,5 @@
 import { HeartOutlined } from '@ant-design/icons';
-import { Button, Tooltip } from 'antd';
+import { Tooltip } from 'antd';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -42,19 +42,23 @@ export function SupportButton({ collapsed }: { collapsed: boolean }) {
   }, []);
 
   return (
-    <div className="support-dock" {...{ [SUPPORT_MANIFEST.marker]: SUPPORT_MANIFEST.id }}>
+    <div
+      className={`support-dock${collapsed ? ' support-dock--collapsed' : ''}`}
+      {...{ [SUPPORT_MANIFEST.marker]: SUPPORT_MANIFEST.id }}
+    >
       <Tooltip title={t('support.tooltip')} placement="right">
-        <Button
-          type="link"
+        <a
           className="support-button"
-          icon={<HeartOutlined />}
           href={SUPPORT_MANIFEST.url}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={t('support.label')}
         >
-          {collapsed ? null : t('support.label')}
-        </Button>
+          <span className="support-button__icon" aria-hidden>
+            <HeartOutlined />
+          </span>
+          {collapsed ? null : <span className="support-button__label">{t('support.label')}</span>}
+        </a>
       </Tooltip>
     </div>
   );

@@ -6,6 +6,8 @@ export const DEFAULT_ENDPOINT_DISPLAY_NAME_TEMPLATE = `{identity} - {tag}`;
 export const SUBSCRIPTION_TITLE_MAX_LENGTH = 200;
 export const ENDPOINT_DISPLAY_NAME_MAX_LENGTH = 200;
 export const SUBSCRIPTION_ANNOUNCE_MAX_LENGTH = 500;
+export const SUBSCRIPTION_SUB_INFO_TEXT_MAX_LENGTH = 200;
+export const SUBSCRIPTION_FALLBACK_URL_MAX_LENGTH = 2048;
 
 const TEMPLATE_TOKEN = /\{([a-zA-Z][a-zA-Z0-9]*)\}/g;
 
@@ -24,6 +26,8 @@ export type SubscriptionBrandingContext = {
   identity: string;
   planName?: string | null;
   traffic?: SubscriptionTrafficContext;
+  token?: string | null;
+  subscriptionUrl?: string | null;
 };
 
 export type EndpointDisplayNameContext = SubscriptionBrandingContext & {
@@ -94,6 +98,8 @@ export function buildSubscriptionTemplateVars(
     expire: expireAt ? expireAt.toISOString().slice(0, 10).split('-').reverse().join('.') : '',
     expireDays,
     trafficBar: formatTrafficBar(used, limit),
+    token: context.token ?? '',
+    subscriptionUrl: context.subscriptionUrl ?? '',
   };
 }
 
@@ -169,6 +175,32 @@ export function renderSubscriptionAnnounce(
   }
   const rendered = renderSubscriptionTemplate(template, buildSubscriptionTemplateVars(context), {
     maxLength: SUBSCRIPTION_ANNOUNCE_MAX_LENGTH,
+  });
+  return rendered.length > 0 ? rendered : null;
+}
+
+export function renderSubscriptionSubInfoText(
+  template: string | null | undefined,
+  context: SubscriptionBrandingContext,
+): string | null {
+  if (template === null || template === undefined || template.trim() === '') {
+    return null;
+  }
+  const rendered = renderSubscriptionTemplate(template, buildSubscriptionTemplateVars(context), {
+    maxLength: SUBSCRIPTION_SUB_INFO_TEXT_MAX_LENGTH,
+  });
+  return rendered.length > 0 ? rendered : null;
+}
+
+export function renderSubscriptionFallbackUrl(
+  template: string | null | undefined,
+  context: SubscriptionBrandingContext,
+): string | null {
+  if (template === null || template === undefined || template.trim() === '') {
+    return null;
+  }
+  const rendered = renderSubscriptionTemplate(template, buildSubscriptionTemplateVars(context), {
+    maxLength: SUBSCRIPTION_FALLBACK_URL_MAX_LENGTH,
   });
   return rendered.length > 0 ? rendered : null;
 }

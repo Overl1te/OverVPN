@@ -5,7 +5,11 @@ import {
   buildSubscriptionUrl,
   formatBytes,
   formatBytesPerSecond,
+  formatDuration,
+  remainingBytes,
+  sumByteCounts,
   truncateMiddle,
+  usagePercent,
 } from './format';
 
 describe('formatBytes', () => {
@@ -25,6 +29,41 @@ describe('formatBytes', () => {
 describe('formatBytesPerSecond', () => {
   it('appends /s', () => {
     assert.equal(formatBytesPerSecond('2048'), '2.00 KiB/s');
+  });
+});
+
+describe('sumByteCounts', () => {
+  it('sums upload and download', () => {
+    assert.equal(sumByteCounts('100', '50'), '150');
+    assert.equal(sumByteCounts(null, '50'), '50');
+  });
+});
+
+describe('usagePercent', () => {
+  it('returns null without a limit', () => {
+    assert.equal(usagePercent('100', null), null);
+  });
+
+  it('computes percent with one decimal of precision', () => {
+    assert.equal(usagePercent('50', '100'), 50);
+    assert.equal(usagePercent('1', '3'), 33.3);
+    assert.equal(usagePercent('100', '100'), 100);
+    assert.equal(usagePercent('200', '100'), 100);
+  });
+});
+
+describe('remainingBytes', () => {
+  it('returns remaining or zero when over quota', () => {
+    assert.equal(remainingBytes('40', '100'), '60');
+    assert.equal(remainingBytes('150', '100'), '0');
+    assert.equal(remainingBytes('40', null), null);
+  });
+});
+
+describe('formatDuration', () => {
+  it('formats durations', () => {
+    assert.equal(formatDuration('2026-01-01T00:00:00.000Z', '2026-01-01T01:30:05.000Z'), '1h 30m');
+    assert.equal(formatDuration('2026-01-01T00:00:00.000Z', '2026-01-01T00:02:05.000Z'), '2m 5s');
   });
 });
 

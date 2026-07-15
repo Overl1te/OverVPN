@@ -5,6 +5,8 @@ import {
   formatTrafficBar,
   renderEndpointDisplayName,
   renderSubscriptionAnnounce,
+  renderSubscriptionFallbackUrl,
+  renderSubscriptionSubInfoText,
   renderSubscriptionTitle,
   uniquifyDisplayNames,
 } from '../dist/subscription-templates.js';
@@ -63,6 +65,39 @@ describe('subscription-templates', () => {
     );
     assert.equal(
       renderSubscriptionAnnounce('  ', {
+        username: 'alice',
+        identity: 'alice-id',
+      }),
+      null,
+    );
+  });
+
+  it('renders sub-info text and fallback URL templates', () => {
+    assert.equal(
+      renderSubscriptionSubInfoText('Осталось дней: {expireDays}', {
+        username: 'alice',
+        identity: 'alice-id',
+        traffic: {
+          uploadBytes: 0n,
+          downloadBytes: 0n,
+          limitBytes: null,
+          expireAt: new Date('2027-01-30T00:00:00.000Z'),
+          now: new Date('2027-01-19T00:00:00.000Z'),
+        },
+      }),
+      'Осталось дней: 11',
+    );
+    assert.equal(
+      renderSubscriptionFallbackUrl('https://backup.example.com/api/sub/{token}', {
+        username: 'alice',
+        identity: 'alice-id',
+        token: 'tok123',
+        subscriptionUrl: 'https://primary.example.com/api/sub/tok123',
+      }),
+      'https://backup.example.com/api/sub/tok123',
+    );
+    assert.equal(
+      renderSubscriptionFallbackUrl(null, {
         username: 'alice',
         identity: 'alice-id',
       }),

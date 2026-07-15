@@ -1,6 +1,8 @@
 import {
   Alert,
   Button,
+  Checkbox,
+  Collapse,
   Form,
   Input,
   InputNumber,
@@ -40,6 +42,15 @@ type PlanFormValues = {
   subscriptionAnnounce?: string | null;
   subscriptionSupportUrl?: string | null;
   subscriptionWebPageUrl?: string | null;
+  happProviderId?: string | null;
+  subscriptionSubInfoText?: string | null;
+  subscriptionSubInfoColor?: 'red' | 'blue' | 'green' | null;
+  subscriptionSubInfoButtonText?: string | null;
+  subscriptionSubInfoButtonLink?: string | null;
+  subscriptionSubExpireEnabled?: boolean;
+  subscriptionSubExpireButtonLink?: string | null;
+  subscriptionFallbackUrlTemplate?: string | null;
+  subscriptionColorProfile?: string | null;
 };
 
 function bytesToGiB(bytes: string | null | undefined): number | null {
@@ -125,6 +136,15 @@ export function PlansPage() {
         subscriptionAnnounce: values.subscriptionAnnounce || null,
         subscriptionSupportUrl: values.subscriptionSupportUrl || null,
         subscriptionWebPageUrl: values.subscriptionWebPageUrl || null,
+        happProviderId: values.happProviderId || null,
+        subscriptionSubInfoText: values.subscriptionSubInfoText || null,
+        subscriptionSubInfoColor: values.subscriptionSubInfoColor || null,
+        subscriptionSubInfoButtonText: values.subscriptionSubInfoButtonText || null,
+        subscriptionSubInfoButtonLink: values.subscriptionSubInfoButtonLink || null,
+        subscriptionSubExpireEnabled: values.subscriptionSubExpireEnabled ?? false,
+        subscriptionSubExpireButtonLink: values.subscriptionSubExpireButtonLink || null,
+        subscriptionFallbackUrlTemplate: values.subscriptionFallbackUrlTemplate || null,
+        subscriptionColorProfile: values.subscriptionColorProfile || null,
       };
       if (editingId) {
         return updatePlan(editingId, payload as never);
@@ -163,7 +183,11 @@ export function PlansPage() {
               onClick={() => {
                 setEditingId(null);
                 form.resetFields();
-                form.setFieldsValue({ defaultResetStrategy: 'NO_RESET', inboundIds: [] });
+                form.setFieldsValue({
+                  defaultResetStrategy: 'NO_RESET',
+                  inboundIds: [],
+                  subscriptionSubExpireEnabled: false,
+                });
                 setModalOpen(true);
               }}
             >
@@ -227,6 +251,15 @@ export function PlansPage() {
                       subscriptionAnnounce: row.subscriptionAnnounce,
                       subscriptionSupportUrl: row.subscriptionSupportUrl,
                       subscriptionWebPageUrl: row.subscriptionWebPageUrl,
+                      happProviderId: row.happProviderId,
+                      subscriptionSubInfoText: row.subscriptionSubInfoText,
+                      subscriptionSubInfoColor: row.subscriptionSubInfoColor,
+                      subscriptionSubInfoButtonText: row.subscriptionSubInfoButtonText,
+                      subscriptionSubInfoButtonLink: row.subscriptionSubInfoButtonLink,
+                      subscriptionSubExpireEnabled: row.subscriptionSubExpireEnabled,
+                      subscriptionSubExpireButtonLink: row.subscriptionSubExpireButtonLink,
+                      subscriptionFallbackUrlTemplate: row.subscriptionFallbackUrlTemplate,
+                      subscriptionColorProfile: row.subscriptionColorProfile,
                     });
                     setModalOpen(true);
                   }}
@@ -263,7 +296,7 @@ export function PlansPage() {
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
         confirmLoading={saveMutation.isPending}
-        width={640}
+        width={720}
       >
         <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label={t('plans.name')} rules={[{ required: true }]}>
@@ -342,34 +375,125 @@ export function PlansPage() {
               }
             />
           ) : null}
-          <Form.Item
-            name="subscriptionTitleTemplate"
-            label={t('plans.subscriptionTitleTemplate')}
-            extra={t('plans.subscriptionTitleTemplateHint')}
-          >
-            <Input placeholder="{product} - {username}" maxLength={200} />
-          </Form.Item>
-          <Form.Item
-            name="subscriptionAnnounce"
-            label={t('plans.subscriptionAnnounce')}
-            extra={t('plans.subscriptionAnnounceHint')}
-          >
-            <Input.TextArea rows={2} maxLength={500} showCount />
-          </Form.Item>
-          <Form.Item
-            name="subscriptionSupportUrl"
-            label={t('plans.subscriptionSupportUrl')}
-            extra={t('plans.subscriptionSupportUrlHint')}
-          >
-            <Input placeholder="https://t.me/your_support" maxLength={2048} />
-          </Form.Item>
-          <Form.Item
-            name="subscriptionWebPageUrl"
-            label={t('plans.subscriptionWebPageUrl')}
-            extra={t('plans.subscriptionWebPageUrlHint')}
-          >
-            <Input placeholder="https://example.com/info" maxLength={2048} />
-          </Form.Item>
+          <Collapse
+            style={{ marginBottom: 8 }}
+            items={[
+              {
+                key: 'subscription',
+                label: t('plans.subscriptionBranding'),
+                children: (
+                  <>
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                      message={t('plans.happProviderHint')}
+                    />
+                    <Form.Item
+                      name="subscriptionTitleTemplate"
+                      label={t('plans.subscriptionTitleTemplate')}
+                      extra={t('plans.subscriptionTitleTemplateHint')}
+                    >
+                      <Input placeholder="{product} - {username}" maxLength={200} />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionAnnounce"
+                      label={t('plans.subscriptionAnnounce')}
+                      extra={t('plans.subscriptionAnnounceHint')}
+                    >
+                      <Input.TextArea rows={2} maxLength={500} showCount />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSupportUrl"
+                      label={t('plans.subscriptionSupportUrl')}
+                      extra={t('plans.subscriptionSupportUrlHint')}
+                    >
+                      <Input placeholder="https://t.me/your_support" maxLength={2048} />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionWebPageUrl"
+                      label={t('plans.subscriptionWebPageUrl')}
+                      extra={t('plans.subscriptionWebPageUrlHint')}
+                    >
+                      <Input placeholder="https://example.com/info" maxLength={2048} />
+                    </Form.Item>
+                    <Form.Item
+                      name="happProviderId"
+                      label={t('plans.happProviderId')}
+                      extra={t('plans.happProviderIdHint')}
+                    >
+                      <Input maxLength={128} />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSubInfoText"
+                      label={t('plans.subscriptionSubInfoText')}
+                      extra={t('plans.subscriptionSubInfoTextHint')}
+                    >
+                      <Input.TextArea rows={2} maxLength={500} showCount />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSubInfoColor"
+                      label={t('plans.subscriptionSubInfoColor')}
+                    >
+                      <Select
+                        allowClear
+                        options={[
+                          { value: 'blue', label: t('plans.subInfoColor.blue') },
+                          { value: 'green', label: t('plans.subInfoColor.green') },
+                          { value: 'red', label: t('plans.subInfoColor.red') },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSubInfoButtonText"
+                      label={t('plans.subscriptionSubInfoButtonText')}
+                      extra={t('plans.subscriptionSubInfoButtonTextHint')}
+                    >
+                      <Input maxLength={25} showCount />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSubInfoButtonLink"
+                      label={t('plans.subscriptionSubInfoButtonLink')}
+                      extra={t('plans.subscriptionSubInfoButtonLinkHint')}
+                    >
+                      <Input placeholder="https://t.me/your_bot" maxLength={2048} />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSubExpireEnabled"
+                      valuePropName="checked"
+                      extra={t('plans.subscriptionSubExpireEnabledHint')}
+                    >
+                      <Checkbox>{t('plans.subscriptionSubExpireEnabled')}</Checkbox>
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionSubExpireButtonLink"
+                      label={t('plans.subscriptionSubExpireButtonLink')}
+                      extra={t('plans.subscriptionSubExpireButtonLinkHint')}
+                    >
+                      <Input placeholder="https://t.me/your_bot" maxLength={2048} />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionFallbackUrlTemplate"
+                      label={t('plans.subscriptionFallbackUrlTemplate')}
+                      extra={t('plans.subscriptionFallbackUrlTemplateHint')}
+                    >
+                      <Input
+                        placeholder="https://backup.example.com/api/sub/{token}"
+                        maxLength={2048}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="subscriptionColorProfile"
+                      label={t('plans.subscriptionColorProfile')}
+                      extra={t('plans.subscriptionColorProfileHint')}
+                    >
+                      <Input.TextArea rows={4} maxLength={65536} showCount />
+                    </Form.Item>
+                  </>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Modal>
     </div>

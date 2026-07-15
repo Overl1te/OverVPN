@@ -4,6 +4,7 @@ import type { AppEnvironment } from '../config/environment';
 import { CoreProvider } from '../core/core-provider';
 import { RedisDistributedLock } from '../core/distributed-lock';
 import { PrismaService } from '../infrastructure/infrastructure.module';
+import { parseNonnegativeInt64 } from './traffic-accounting';
 import { WorkerHealthService } from './worker-health.service';
 
 const LOCK_KEY = 'overvpn:workers:online-collector:lock';
@@ -163,6 +164,7 @@ export class OnlineSessionCollectorService {
                   client.connectedAt.getTime() <= snapshot.capturedAt.getTime()
                     ? client.connectedAt
                     : snapshot.capturedAt;
+                const traffic = sessionTrafficFromClient(client);
                 await tx.onlineSession.upsert({
                   where: { sessionKey: client.connectionId },
                   create: {
@@ -172,6 +174,8 @@ export class OnlineSessionCollectorService {
                     inboundId,
                     ipAddress,
                     deviceId,
+                    uploadBytes: traffic.uploadBytes,
+                    downloadBytes: traffic.downloadBytes,
                     connectedAt,
                     lastSeenAt: snapshot.capturedAt,
                     disconnectedAt: null,
@@ -182,6 +186,7 @@ export class OnlineSessionCollectorService {
                     inboundId,
                     ipAddress,
                     deviceId,
+                    ...trafficUpdateFields(traffic),
                     lastSeenAt: snapshot.capturedAt,
                     disconnectedAt: null,
                   },
@@ -262,4 +267,40 @@ export class OnlineSessionCollectorService {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Parse core connection counters; null when the engine did not report them. */
+export function sessionTrafficFromClient(client: {
+  uploadBytes: string | null;
+  downloadBytes: string | null;
+}): { uploadBytes: bigint | null; downloadBytes: bigint | null } {
+  return {
+    uploadBytes: parseSessionBytes(client.uploadBytes),
+    downloadBytes: parseSessionBytes(client.downloadBytes),
+  };
+}
+
+/**
+ * Only overwrite stored counters when the snapshot reported a value.
+ * Avoids wiping known bytes with null on partial/xray snapshots.
+ */
+export function trafficUpdateFields(traffic: {
+  uploadBytes: bigint | null;
+  downloadBytes: bigint | null;
+}): { uploadBytes?: bigint; downloadBytes?: bigint } {
+  return {
+    ...(traffic.uploadBytes !== null
+      ? { uploadBytes: traffic.uploadBytes }
+      : {}),
+    ...(traffic.downloadBytes !== null
+      ? { downloadBytes: traffic.downloadBytes }
+      : {}),
+  };
+}
+
+function parseSessionBytes(value: string | null): bigint | null {
+  if (value == null || value === '') {
+    return null;
+  }
+  return parseNonnegativeInt64(value);
 }

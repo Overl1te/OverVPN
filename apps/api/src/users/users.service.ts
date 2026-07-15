@@ -753,8 +753,11 @@ export class UsersService {
       id: string;
       sessionKey: string;
       inboundId: string;
+      inboundTag: string;
       ipAddress: string | null;
       deviceId: string | null;
+      uploadBytes: string | null;
+      downloadBytes: string | null;
       connectedAt: string;
       lastSeenAt: string;
       disconnectedAt: string | null;
@@ -763,6 +766,7 @@ export class UsersService {
     await this.requireUser(id);
     const sessions = await this.prisma.onlineSession.findMany({
       where: { userId: id },
+      include: { inbound: { select: { tag: true } } },
       orderBy: [{ lastSeenAt: 'desc' }, { id: 'desc' }],
       take: 50,
     });
@@ -770,8 +774,11 @@ export class UsersService {
       id: session.id,
       sessionKey: session.sessionKey,
       inboundId: session.inboundId,
+      inboundTag: session.inbound.tag,
       ipAddress: session.ipAddress,
       deviceId: session.deviceId,
+      uploadBytes: session.uploadBytes?.toString() ?? null,
+      downloadBytes: session.downloadBytes?.toString() ?? null,
       connectedAt: session.connectedAt.toISOString(),
       lastSeenAt: session.lastSeenAt.toISOString(),
       disconnectedAt: session.disconnectedAt?.toISOString() ?? null,

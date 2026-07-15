@@ -33,6 +33,15 @@ describe('SubscriptionsController', () => {
     announce: null,
     supportUrl: null,
     profileWebPageUrl: null,
+    happProviderId: null,
+    subInfoText: null,
+    subInfoColor: null,
+    subInfoButtonText: null,
+    subInfoButtonLink: null,
+    subExpireEnabled: false,
+    subExpireButtonLink: null,
+    fallbackUrl: null,
+    colorProfile: null,
     subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
     formats: ['sing-box', 'links', 'clash'],
     formatUrls: {
@@ -117,7 +126,9 @@ describe('SubscriptionsController', () => {
       .get(`/api/sub/${TOKEN}?format=links`)
       .expect(200);
 
-    expect(response.text).toBe('hysteria2://usable-link\n');
+    expect(response.text).toContain('#profile-title:');
+    expect(response.text).toContain('#subscription-userinfo:');
+    expect(response.text).toContain('hysteria2://usable-link');
     expect(response.headers['content-type']).toMatch(
       /^text\/plain; charset=utf-8/,
     );
@@ -134,6 +145,46 @@ describe('SubscriptionsController', () => {
       'overvpn-alice.txt',
     );
     expect(builder.render).toHaveBeenCalledWith('links', profile);
+  });
+
+  it('emits Happ advanced headers and body meta when configured', async () => {
+    const branded: typeof info = {
+      ...info,
+      happProviderId: 'provider-abc',
+      subInfoText: 'Telegram-бот',
+      subInfoColor: 'blue',
+      subInfoButtonText: 'Telegram-бот',
+      subInfoButtonLink: 'https://t.me/example',
+      subExpireEnabled: true,
+      subExpireButtonLink: 'https://t.me/renew',
+      fallbackUrl: `https://backup.example.com/api/sub/${TOKEN}`,
+      colorProfile: '{"buttonColor":"#9377FFFF"}',
+      announce: 'Custom note',
+      supportUrl: 'https://t.me/support',
+      profileWebPageUrl: 'https://example.com/info',
+    };
+    service.profile.mockResolvedValueOnce({
+      kind: 'ready',
+      info: branded,
+      profile,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/api/sub/${TOKEN}?format=links`)
+      .expect(200);
+
+    expect(response.headers.providerid).toBe('provider-abc');
+    expect(response.headers['sub-info-text']).toBe(
+      `base64:${Buffer.from('Telegram-бот').toString('base64')}`,
+    );
+    expect(response.headers['sub-info-color']).toBe('blue');
+    expect(response.headers['sub-expire']).toBe('1');
+    expect(response.headers['fallback-url']).toBe(
+      `https://backup.example.com/api/sub/${TOKEN}`,
+    );
+    expect(response.text).toContain('#providerid provider-abc');
+    expect(response.text).toContain('#sub-expire: 1');
+    expect(response.text).toContain('hysteria2://usable-link');
   });
 
   it('returns secret-free status information with subscription headers', async () => {

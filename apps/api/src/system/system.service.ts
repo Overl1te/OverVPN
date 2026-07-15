@@ -51,6 +51,20 @@ export class SystemService {
     const where: Prisma.OnlineSessionWhereInput = {
       ...(query.userId ? { userId: query.userId } : {}),
       ...(query.inboundId ? { inboundId: query.inboundId } : {}),
+      ...(query.username
+        ? {
+            user: {
+              username: { contains: query.username, mode: 'insensitive' },
+            },
+          }
+        : {}),
+      ...(query.inboundTag
+        ? {
+            inbound: {
+              tag: { contains: query.inboundTag, mode: 'insensitive' },
+            },
+          }
+        : {}),
       ...(query.ip
         ? { ipAddress: { contains: query.ip, mode: 'insensitive' } }
         : {}),
@@ -83,6 +97,8 @@ export class SystemService {
         inboundTag: session.inbound.tag,
         ipAddress: session.ipAddress,
         deviceId: session.deviceId,
+        uploadBytes: session.uploadBytes?.toString() ?? null,
+        downloadBytes: session.downloadBytes?.toString() ?? null,
         connectedAt: session.connectedAt.toISOString(),
         lastSeenAt: session.lastSeenAt.toISOString(),
         disconnectedAt: session.disconnectedAt?.toISOString() ?? null,
