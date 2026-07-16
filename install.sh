@@ -292,7 +292,7 @@ cli_t() {
       dns_prompt_hint) printf '%s' "Если записи уже созданы — Enter (Y). Пропуск (s) часто ломает TLS." ;;
       prompt_dns_ready) printf '%s' "Проверить DNS сейчас? [Y/s]" ;;
       dns_skip) printf '%s' "Проверка DNS пропущена. Без верных A-записей сертификаты не выпустятся." ;;
-      dns_wait_ok) printf '%s' "ОК — проверим DNS и продолжим." ;;
+      dns_wait_ok) printf '%s' "ОК — проверяем DNS сейчас…" ;;
       prompt_start_now) printf '%s' "Начать установку? [Y/n]" ;;
       aborted) printf '%s' "Отменено." ;;
       no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай." ;;
@@ -485,7 +485,7 @@ cli_t() {
       dns_prompt_hint) printf '%s' "If records are already created — press Enter (Y). Skipping (s) usually breaks TLS." ;;
       prompt_dns_ready) printf '%s' "Check DNS now? [Y/s]" ;;
       dns_skip) printf '%s' "DNS check skipped. If records do not point here yet, certificate issuance will fail." ;;
-      dns_wait_ok) printf '%s' "OK — will verify DNS, then continue." ;;
+      dns_wait_ok) printf '%s' "OK — verifying DNS now…" ;;
       prompt_start_now) printf '%s' "Start installation? [Y/n]" ;;
       aborted) printf '%s' "Aborted." ;;
       no_more_prompts) printf '%s' "No more prompts. You can go drink tea." ;;
@@ -768,6 +768,7 @@ prompt_install_dns_screen() {
     case "$choice" in
       s|skip)
         CFG_SKIP_DNS="true"
+        CFG_DNS_HANDLED="true"
         colorized_echo yellow "$(cli_t dns_skip)"
         sleep 1
         return
@@ -775,6 +776,9 @@ prompt_install_dns_screen() {
       y|yes|"")
         CFG_SKIP_DNS="false"
         colorized_echo green "$(cli_t dns_wait_ok)"
+        echo
+        wait_for_dns "$ip" "${hosts[@]}"
+        CFG_DNS_HANDLED="true"
         sleep 1
         return
         ;;
@@ -806,7 +810,7 @@ prompt_install_confirm() {
       if [[ "$CFG_SKIP_DNS" == "true" ]]; then
         draw_box_line " DNS:          skip" "$w"
       else
-        draw_box_line " DNS:          verify" "$w"
+        draw_box_line " DNS:          ok" "$w"
       fi
     else
       draw_box_line " $(cli_t summary_mode_ip "$DEFAULT_WEB_PORT")" "$w"
@@ -885,6 +889,7 @@ prompt_install_endpoints() {
   CFG_EMAIL=""
   CFG_MODE="ip"
   CFG_SKIP_DNS="false"
+  CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="${CFG_MTPROXY_ENABLED:-true}"
 
   prompt_wizard_language
@@ -2216,7 +2221,7 @@ Config (domains, nginx, certificates):
   ${APP_NAME} config apply
 
 Install wizard (console screens):
-  language → install mode → domains/email → DNS → MTProxy → confirm
+  language → install mode → domains/email → DNS (wait or skip) → MTProxy → confirm
   Then runs unattended (packages, Docker, images, Nginx/TLS).
 
 Options:
@@ -2254,6 +2259,7 @@ cmd_install() {
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
   local flag_mtproxy=""
   CFG_SKIP_DNS="false"
+  CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="true"
 
   while [[ $# -gt 0 ]]; do
@@ -2332,7 +2338,9 @@ cmd_install() {
   ip="$(public_ip)"
   local -a dns_hosts=()
 
-  if [[ "$CFG_MODE" == "domain" && "$with_nginx" == "true" ]]; then
+  # Interactive wizard already waited (or skipped) on the DNS screen.
+  # Non-interactive --base-domain installs still wait here unless --skip-dns.
+  if [[ "$CFG_MODE" == "domain" && "$with_nginx" == "true" && "${CFG_DNS_HANDLED:-false}" != "true" ]]; then
     mapfile -t dns_hosts < <(unique_hosts "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
     wait_for_dns "$ip" "${dns_hosts[@]}"
   fi
