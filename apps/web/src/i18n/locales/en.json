@@ -373,7 +373,7 @@
     "needsApply": "Needs apply",
     "confirmDisable": "Disable this inbound?",
     "confirmEnable": "Enable this inbound?",
-    "confirmDelete": "Permanently delete this inbound and its assignments?",
+    "confirmDelete": "Permanently delete this inbound, its assignments, and related session/traffic history?",
     "confirmRemoveAssignment": "Remove this assignment?",
     "confirmRotateCred": "Rotate assignment credentials?",
     "addAssignment": "Assign user",

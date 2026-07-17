@@ -8,6 +8,7 @@ import type { InboundProtocol } from '@overvpn/shared/constants';
 import type { InboundResult } from '@overvpn/shared/schemas';
 import {
   addAssignment,
+  deleteInbound,
   disableInbound,
   enableInbound,
   listAssignments,
@@ -197,7 +198,8 @@ export function InboundsListPage() {
   const queryClient = useQueryClient();
   const onError = useApiErrorHandler();
   const { message: messageApi } = AntApp.useApp();
-  const { canMutate } = useAuth();
+  const { admin, canMutate } = useAuth();
+  const isOwner = admin?.role === 'OWNER';
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -213,6 +215,16 @@ export function InboundsListPage() {
       enabled ? enableInbound(id) : disableInbound(id),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      notifyCoreApply(result.apply, { t, messageApi, navigate });
+    },
+    onError: onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteInbound,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      void queryClient.invalidateQueries({ queryKey: ['plans'] });
       notifyCoreApply(result.apply, { t, messageApi, navigate });
     },
     onError: onError,
@@ -329,6 +341,16 @@ export function InboundsListPage() {
                   >
                     <Button size="small">
                       {row.settings.enabled ? t('app.disable') : t('app.enable')}
+                    </Button>
+                  </Popconfirm>
+                ) : null}
+                {isOwner ? (
+                  <Popconfirm
+                    title={t('inbounds.confirmDelete')}
+                    onConfirm={() => deleteMutation.mutate(row.id)}
+                  >
+                    <Button size="small" danger loading={deleteMutation.isPending}>
+                      {t('app.delete')}
                     </Button>
                   </Popconfirm>
                 ) : null}

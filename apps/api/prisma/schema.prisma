@@ -341,7 +341,7 @@ model UsageDaily {
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
   user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  inbound       Inbound? @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+  inbound       Inbound? @relation(fields: [inboundId], references: [id], onDelete: SetNull)
 
   @@unique([userId, day, scopeKey])
   @@index([day])
@@ -398,7 +398,7 @@ model TrafficCheckpoint {
   observedAt    DateTime                @db.Timestamptz(3)
   createdAt     DateTime                @default(now()) @db.Timestamptz(3)
   user          User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  inbound       Inbound                 @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+  inbound       Inbound                 @relation(fields: [inboundId], references: [id], onDelete: Cascade)
 
   @@index([userId, observedAt])
   @@index([inboundId, observedAt])
@@ -422,7 +422,7 @@ model OnlineSession {
   createdAt      DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
   user           User       @relation(fields: [userId], references: [id], onDelete: Restrict)
-  inbound        Inbound    @relation(fields: [inboundId], references: [id], onDelete: Restrict)
+  inbound        Inbound    @relation(fields: [inboundId], references: [id], onDelete: Cascade)
 
   @@index([userId, disconnectedAt, lastSeenAt])
   @@index([inboundId, disconnectedAt, lastSeenAt])

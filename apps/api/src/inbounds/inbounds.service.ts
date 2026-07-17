@@ -482,6 +482,14 @@ export class InboundsService {
     try {
       const tag = await this.prisma.$transaction(async (tx) => {
         const before = await this.requireInbound(id, tx);
+        // History rows used Restrict FKs; clear/null them so delete always works.
+        // PlanInbound + UserInboundAssignment already cascade from schema.
+        await tx.onlineSession.deleteMany({ where: { inboundId: id } });
+        await tx.trafficCheckpoint.deleteMany({ where: { inboundId: id } });
+        await tx.usageDaily.updateMany({
+          where: { inboundId: id },
+          data: { inboundId: null },
+        });
         await tx.inbound.delete({ where: { id } });
         await this.bumpDesiredRevision(tx, before.engine);
         await this.audit.record(

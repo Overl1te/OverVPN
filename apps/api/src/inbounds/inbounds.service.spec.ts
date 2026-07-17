@@ -232,3 +232,100 @@ describe('InboundsService VLESS Reality create', () => {
     }
   });
 });
+
+describe('InboundsService remove', () => {
+  const actor: AuthenticatedAdmin = {
+    id: 'a0f6395d-0739-473d-b0e5-3f9bdc69a173',
+    username: 'admin',
+    role: 'OWNER',
+    locale: 'en',
+    active: true,
+    totpEnabled: false,
+    lastLoginAt: null,
+  };
+  const metadata: RequestMetadata = {
+    requestId: '01ae5a83-68fc-4376-94e9-4a8abfa2aa4e',
+    ipAddress: '127.0.0.1',
+    userAgent: 'jest',
+  };
+
+  it('clears history rows then deletes the inbound', async () => {
+    const inboundId = '443f67c0-f935-44d1-a9c1-b00dbd5d3f09';
+    const inbound = {
+      id: inboundId,
+      tag: 'hy2-main',
+      engine: 'SING_BOX',
+      protocol: 'HYSTERIA2',
+      listenHost: '0.0.0.0',
+      listenPort: 443,
+      publicHost: 'vpn.example.com',
+      publicPort: 443,
+      enabled: true,
+      displayNameTemplate: null,
+      config: {},
+      secretDataEncrypted: null,
+      revision: 1,
+      needsApply: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      disabledAt: null,
+      _count: { userAssignments: 0 },
+    };
+    const onlineSession = { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const trafficCheckpoint = { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const usageDaily = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const inboundDelete = jest.fn().mockResolvedValue(inbound);
+    const coreState = {
+      upsert: jest.fn().mockResolvedValue({}),
+    };
+    const audit = {
+      record: jest.fn().mockResolvedValue(undefined),
+      recordFailureSafely: jest.fn().mockResolvedValue(undefined),
+    };
+    const coreApply = {
+      apply: jest.fn().mockResolvedValue({ status: 'SUCCEEDED' }),
+    };
+    const prisma = {
+      $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          inbound: {
+            findUnique: jest.fn().mockResolvedValue(inbound),
+            delete: inboundDelete,
+          },
+          onlineSession,
+          trafficCheckpoint,
+          usageDaily,
+          coreState,
+        }),
+      ),
+    };
+
+    const service = new InboundsService(
+      prisma as unknown as PrismaService,
+      {
+        encrypt: jest.fn(),
+        decrypt: jest.fn(),
+      } as unknown as SecretEncryptionService,
+      audit as unknown as AuditService,
+      coreApply as unknown as CoreApplyService,
+      { run: jest.fn() } as never,
+      testConfig(),
+    );
+
+    const result = await service.remove(inboundId, actor, metadata);
+
+    expect(onlineSession.deleteMany).toHaveBeenCalledWith({
+      where: { inboundId },
+    });
+    expect(trafficCheckpoint.deleteMany).toHaveBeenCalledWith({
+      where: { inboundId },
+    });
+    expect(usageDaily.updateMany).toHaveBeenCalledWith({
+      where: { inboundId },
+      data: { inboundId: null },
+    });
+    expect(inboundDelete).toHaveBeenCalledWith({ where: { id: inboundId } });
+    expect(result.inbound).toBeNull();
+    expect(coreApply.apply).toHaveBeenCalled();
+  });
+});
