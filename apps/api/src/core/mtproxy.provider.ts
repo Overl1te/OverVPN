@@ -403,9 +403,7 @@ export class MtproxyProvider extends EngineProvider {
               connectedAt: null,
               lastSeenAt: parseCapturedAt(snapshot.capturedAt),
               uploadBytes: null,
-              downloadBytes: String(
-                Math.max(0, Math.trunc(user.totalOctets)),
-              ),
+              downloadBytes: String(Math.max(0, Math.trunc(user.totalOctets))),
             });
           }
         }
