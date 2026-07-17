@@ -1913,8 +1913,15 @@ $(nginx_proxy_headers "$proto")
     }
 "
     else
-      # VPN public host: lightweight decoy page (not the admin panel)
-      conf+="
+      # VPN public host: browsers → landing. VPN clients use other ports (not Nginx :80/:443).
+      if [[ -n "$base_domain" ]]; then
+        conf+="
+    location / {
+        return 301 ${proto}://${base_domain}/;
+    }
+"
+      else
+        conf+="
     root ${LANDING_DIR};
     location = / {
         try_files /vpn.html =404;
@@ -1926,6 +1933,7 @@ $(nginx_proxy_headers "$proto")
         return 404;
     }
 "
+      fi
     fi
 
     conf+="}

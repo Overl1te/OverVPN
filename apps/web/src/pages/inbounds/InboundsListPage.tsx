@@ -225,6 +225,7 @@ export function InboundsListPage() {
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
       void queryClient.invalidateQueries({ queryKey: ['plans'] });
+      void queryClient.invalidateQueries({ queryKey: ['setup'] });
       notifyCoreApply(result.apply, { t, messageApi, navigate });
     },
     onError: onError,

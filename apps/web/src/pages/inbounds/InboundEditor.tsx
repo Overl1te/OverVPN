@@ -977,10 +977,12 @@ export function InboundEditor({
   open,
   inbound,
   onClose,
+  onSaved,
 }: {
   open: boolean;
   inbound: InboundResult | null;
   onClose: () => void;
+  onSaved?: (inbound: InboundResult) => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -1137,6 +1139,10 @@ export function InboundEditor({
     },
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      void queryClient.invalidateQueries({ queryKey: ['setup'] });
+      if (result.inbound) {
+        onSaved?.(result.inbound);
+      }
       const { ok } = notifyCoreApply(result.apply, {
         t,
         messageApi,

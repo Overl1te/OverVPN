@@ -1,21 +1,26 @@
 import {
   Alert,
+  Button,
   Card,
   Col,
   DatePicker,
   Progress,
   Row,
+  Space,
   Statistic,
   Table,
   Tag,
   Typography,
 } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Column } from '@ant-design/charts';
 import { getDashboard, getHostStats, getSystemHealth, getUpdateStatus } from '@/api/system';
 import { PageHeader } from '@/components/PageHeader';
+import { useSetupProgress, type SetupStepId } from '@/hooks/useSetupProgress';
 import { formatBytes, formatBytesPerSecond } from '@/utils/format';
 import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
@@ -38,6 +43,7 @@ function memoryPercent(used: string | undefined, total: string | undefined): num
 
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
+  const setup = useSetupProgress();
   const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(29, 'day').startOf('day'),
     dayjs().startOf('day'),
@@ -88,9 +94,85 @@ export function DashboardPage() {
   const ramPercent = memoryPercent(host?.memory.usedBytes, host?.memory.totalBytes);
   const isRu = i18n.language.startsWith('ru');
 
+  const stepMeta: Record<
+    SetupStepId,
+    { title: string; cta: string; to: string }
+  > = {
+    inbound: {
+      title: t('setup.stepInbound'),
+      cta: t('setup.createInbound'),
+      to: '/inbounds',
+    },
+    plan: {
+      title: t('setup.stepPlan'),
+      cta: t('setup.createPlan'),
+      to: '/plans',
+    },
+    user: {
+      title: t('setup.stepUser'),
+      cta: t('setup.createUser'),
+      to: '/users/new',
+    },
+  };
+
   return (
     <div>
       <PageHeader title={t('dashboard.title')} />
+      {setup.shouldShowChecklist ? (
+        <Card size="small" style={{ marginBottom: 12 }}>
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+                alignItems: 'center',
+              }}
+            >
+              <div>
+                <Typography.Title level={5} style={{ margin: 0 }}>
+                  {t('setup.checklistTitle')}
+                </Typography.Title>
+                <Typography.Text type="secondary">{t('setup.checklistSubtitle')}</Typography.Text>
+              </div>
+              <Space wrap>
+                <Progress
+                  type="circle"
+                  size={48}
+                  percent={Math.round((setup.doneCount / setup.totalSteps) * 100)}
+                  format={() => `${setup.doneCount}/${setup.totalSteps}`}
+                />
+                <Link to="/setup">
+                  <Button type="primary">{t('setup.openWizard')}</Button>
+                </Link>
+              </Space>
+            </div>
+            {setup.steps.map((step) => {
+              const meta = stepMeta[step.id];
+              return (
+                <div key={step.id} className="setup-checklist-item">
+                  <Space>
+                    {step.done ? (
+                      <CheckCircleOutlined style={{ color: '#0f766e' }} />
+                    ) : (
+                      <CloseCircleOutlined style={{ color: '#94a3b8' }} />
+                    )}
+                    <Typography.Text delete={step.done}>{meta.title}</Typography.Text>
+                  </Space>
+                  {!step.done ? (
+                    <Link to={meta.to}>
+                      <Button size="small">{meta.cta}</Button>
+                    </Link>
+                  ) : (
+                    <Tag color="success">{t('setup.done')}</Tag>
+                  )}
+                </div>
+              );
+            })}
+          </Space>
+        </Card>
+      ) : null}
       {update?.updateAvailable ? (
         <Alert
           style={{ marginBottom: 12 }}

@@ -5,15 +5,17 @@ import { useTranslation } from 'react-i18next';
 type Props = {
   value: string;
   label?: string;
-  size?: 'small' | 'middle';
+  size?: 'small' | 'middle' | 'large';
+  type?: 'default' | 'primary' | 'dashed' | 'link' | 'text';
 };
 
-export function CopyButton({ value, label, size = 'small' }: Props) {
+export function CopyButton({ value, label, size = 'small', type = 'default' }: Props) {
   const { t } = useTranslation();
   const { message: messageApi } = AntApp.useApp();
 
   return (
     <Button
+      type={type}
       size={size}
       icon={<CopyOutlined />}
       onClick={async () => {

@@ -85,6 +85,7 @@ export function UsersListPage() {
 
   const invalidateUsers = () => {
     void queryClient.invalidateQueries({ queryKey: ['users'] });
+    void queryClient.invalidateQueries({ queryKey: ['setup'] });
   };
 
   const bulkMutation = useMutation({

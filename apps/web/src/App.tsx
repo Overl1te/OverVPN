@@ -11,6 +11,7 @@ import { ConfigPage } from '@/pages/ConfigPage';
 import { AuditPage } from '@/pages/AuditPage';
 import { SystemPage } from '@/pages/SystemPage';
 import { BackupsPage } from '@/pages/BackupsPage';
+import { SetupPage } from '@/pages/SetupPage';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<AdminLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="setup" element={<SetupPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="users" element={<UsersListPage />} />
         <Route path="users/:id" element={<UserDetailPage />} />
