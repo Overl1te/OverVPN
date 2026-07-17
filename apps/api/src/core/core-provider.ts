@@ -87,6 +87,8 @@ export interface DesiredAssignment {
   credentialName: string;
   credentialVersion: number;
   credential: AssignmentCredential;
+  /** Telemt `[access.user_max_unique_ips]` — from deviceLimit, else ipLimit. */
+  maxUniqueIps?: number | null;
 }
 
 interface DesiredInboundBase {

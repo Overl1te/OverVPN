@@ -73,6 +73,9 @@ x-api-environment: &api-environment
   MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
   MTPROXY_HEARTBEAT_PATH: /var/lib/overvpn/mtproxy-reload/heartbeat
   MTPROXY_HEARTBEAT_MAX_AGE_SECONDS: ${MTPROXY_HEARTBEAT_MAX_AGE_SECONDS:-15}
+  MTPROXY_RUNTIME_STATS_PATH: /var/lib/overvpn/mtproxy-reload/runtime-stats.json
+  MTPROXY_RUNTIME_STATS_MAX_AGE_SECONDS: ${MTPROXY_RUNTIME_STATS_MAX_AGE_SECONDS:-30}
+  MTPROXY_API_PORT_BASE: ${MTPROXY_API_PORT_BASE:-19000}
   MTPROXY_PORT_MIN: ${MTPROXY_PORT_MIN:-10001}
   MTPROXY_PORT_MAX: ${MTPROXY_PORT_MAX:-10016}
   MTPROXY_PROCESS_TIMEOUT_MS: ${MTPROXY_PROCESS_TIMEOUT_MS:-15000}
@@ -322,7 +325,10 @@ services:
       MTPROXY_RELOAD_ACK_PATH: /var/lib/overvpn/mtproxy-reload/ack
       MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
       MTPROXY_HEARTBEAT_PATH: /var/lib/overvpn/mtproxy-reload/heartbeat
+      MTPROXY_RUNTIME_STATS_PATH: /var/lib/overvpn/mtproxy-reload/runtime-stats.json
       MTPROXY_WORK_DIR: /var/lib/mtproxy-work
+      MTPROXY_USE_MIDDLE_PROXY: ${MTPROXY_USE_MIDDLE_PROXY:-true}
+      MTPROXY_STATS_POLL_SECONDS: ${MTPROXY_STATS_POLL_SECONDS:-5}
       TELEMT_BIN: /usr/local/bin/telemt
     depends_on:
       core-mtproxy-config-init:

@@ -129,6 +129,8 @@ export class CoreStateLoader {
                     identity: true,
                     username: true,
                     revision: true,
+                    deviceLimit: true,
+                    ipLimit: true,
                   },
                 },
               },
@@ -166,6 +168,10 @@ export class CoreStateLoader {
           assignment.id,
           assignment.credentialEncrypted,
           inbound.protocol,
+        ),
+        maxUniqueIps: resolveMaxUniqueIps(
+          assignment.user.deviceLimit,
+          assignment.user.ipLimit,
         ),
       }));
       const base = {
@@ -429,4 +435,18 @@ export class CoreStateLoader {
       );
     }
   }
+}
+
+/** Prefer deviceLimit; fall back to ipLimit. Null/non-positive → no Telemt cap. */
+function resolveMaxUniqueIps(
+  deviceLimit: number | null | undefined,
+  ipLimit: number | null | undefined,
+): number | null {
+  if (typeof deviceLimit === 'number' && deviceLimit > 0) {
+    return deviceLimit;
+  }
+  if (typeof ipLimit === 'number' && ipLimit > 0) {
+    return ipLimit;
+  }
+  return null;
 }

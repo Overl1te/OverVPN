@@ -20,6 +20,8 @@ ENV TELEMT_BIN=/usr/local/bin/telemt \
     MTPROXY_RELOAD_ACK_PATH=/var/lib/overvpn/mtproxy-reload/ack \
     MTPROXY_PID_PATH=/var/lib/overvpn/mtproxy-reload/mtproxy.pid \
     MTPROXY_HEARTBEAT_PATH=/var/lib/overvpn/mtproxy-reload/heartbeat \
+    MTPROXY_RUNTIME_STATS_PATH=/var/lib/overvpn/mtproxy-reload/runtime-stats.json \
+    MTPROXY_USE_MIDDLE_PROXY=true \
     MTPROXY_WORK_DIR=/var/lib/mtproxy-work
 
 USER overvpn

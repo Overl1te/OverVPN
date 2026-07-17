@@ -382,6 +382,24 @@ export const environmentSchema = z
       .min(250)
       .max(60_000)
       .default(5_000),
+    /** Loopback Telemt control API base port (listenPort - PORT_MIN + base). */
+    MTPROXY_API_PORT_BASE: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(19_000),
+    /** Supervisor writes Telemt online/traffic snapshot here for the API. */
+    MTPROXY_RUNTIME_STATS_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/mtproxy-reload/runtime-stats.json'),
+    MTPROXY_RUNTIME_STATS_MAX_AGE_SECONDS: z.coerce
+      .number()
+      .min(1)
+      .max(300)
+      .default(30),
     /** Published UDP port for Hysteria2 (compose → host). */
     SING_BOX_UDP_PORT: z.coerce.number().int().min(1).max(65_535).default(443),
     /** Published TCP port for VLESS Reality (compose → host). */

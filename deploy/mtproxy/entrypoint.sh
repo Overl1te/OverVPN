@@ -6,9 +6,11 @@ export MTPROXY_RELOAD_REQUEST_PATH="${MTPROXY_RELOAD_REQUEST_PATH:-/var/lib/over
 export MTPROXY_RELOAD_ACK_PATH="${MTPROXY_RELOAD_ACK_PATH:-/var/lib/overvpn/mtproxy-reload/ack}"
 export MTPROXY_PID_PATH="${MTPROXY_PID_PATH:-/var/lib/overvpn/mtproxy-reload/mtproxy.pid}"
 export MTPROXY_HEARTBEAT_PATH="${MTPROXY_HEARTBEAT_PATH:-/var/lib/overvpn/mtproxy-reload/heartbeat}"
+export MTPROXY_RUNTIME_STATS_PATH="${MTPROXY_RUNTIME_STATS_PATH:-/var/lib/overvpn/mtproxy-reload/runtime-stats.json}"
+export MTPROXY_USE_MIDDLE_PROXY="${MTPROXY_USE_MIDDLE_PROXY:-true}"
 export MTPROXY_WORK_DIR="${MTPROXY_WORK_DIR:-/var/lib/mtproxy-work}"
 export TELEMT_BIN="${TELEMT_BIN:-/usr/local/bin/telemt}"
 
-mkdir -p "$(dirname "$MTPROXY_PID_PATH")" "$(dirname "$MTPROXY_HEARTBEAT_PATH")" "$MTPROXY_WORK_DIR"
+mkdir -p "$(dirname "$MTPROXY_PID_PATH")" "$(dirname "$MTPROXY_HEARTBEAT_PATH")" "$(dirname "$MTPROXY_RUNTIME_STATS_PATH")" "$MTPROXY_WORK_DIR"
 
 exec python3 /opt/overvpn-mtproxy/supervisor.py

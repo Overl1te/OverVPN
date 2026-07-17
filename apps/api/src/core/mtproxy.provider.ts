@@ -18,12 +18,39 @@ import {
   type DesiredMtproxyInbound,
   EngineProvider,
   type JsonObject,
+  type OnlineClient,
   type OnlineClientsResult,
   type AssignmentCredential,
   type RenderedCoreConfig,
+  type TrafficCounter,
   type TrafficSnapshotResult,
 } from './core-provider';
 import { localizeCoreHealthError } from './core-user-messages';
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+interface RuntimeStatsUser {
+  username: string;
+  currentConnections: number;
+  totalOctets: number;
+  activeIps: string[];
+}
+
+interface RuntimeStatsInbound {
+  tag: string;
+  listenPort?: number | null;
+  apiPort?: number | null;
+  users: RuntimeStatsUser[];
+  warning?: string;
+}
+
+interface RuntimeStatsSnapshot {
+  version: number;
+  capturedAt: string;
+  useMiddleProxy?: boolean;
+  inbounds: RuntimeStatsInbound[];
+}
 
 @Injectable()
 export class MtproxyProvider extends EngineProvider {
@@ -34,6 +61,10 @@ export class MtproxyProvider extends EngineProvider {
   private readonly healthTimeoutMs: number;
   private readonly heartbeatPath: string;
   private readonly heartbeatMaxAgeSeconds: number;
+  private readonly runtimeStatsPath: string;
+  private readonly runtimeStatsMaxAgeSeconds: number;
+  private readonly portMin: number;
+  private readonly apiPortBase: number;
 
   constructor(
     config: ConfigService<AppEnvironment, true>,
@@ -55,6 +86,15 @@ export class MtproxyProvider extends EngineProvider {
         infer: true,
       },
     );
+    this.runtimeStatsPath = config.get('MTPROXY_RUNTIME_STATS_PATH', {
+      infer: true,
+    });
+    this.runtimeStatsMaxAgeSeconds = config.get(
+      'MTPROXY_RUNTIME_STATS_MAX_AGE_SECONDS',
+      { infer: true },
+    );
+    this.portMin = config.get('MTPROXY_PORT_MIN', { infer: true });
+    this.apiPortBase = config.get('MTPROXY_API_PORT_BASE', { infer: true });
   }
 
   renderConfig(state: CoreDesiredState): RenderedCoreConfig {
@@ -272,25 +312,118 @@ export class MtproxyProvider extends EngineProvider {
     }
   }
 
-  getTrafficSnapshot(): Promise<TrafficSnapshotResult> {
-    return Promise.resolve({
-      supported: false,
-      capturedAt: new Date(),
-      error: {
-        code: 'UNSUPPORTED',
-        message: 'MTProxy traffic accounting is not supported',
-        messageRu: 'Учёт трафика MTProxy не поддерживается',
-      },
-    });
+  async getTrafficSnapshot(): Promise<TrafficSnapshotResult> {
+    const capturedAt = new Date();
+    try {
+      const snapshot = await this.readRuntimeStats();
+      if (!snapshot) {
+        return {
+          supported: false,
+          capturedAt,
+          error: {
+            code: 'UNAVAILABLE',
+            message: 'MTProxy runtime stats are not available yet',
+            messageRu: 'Статистика MTProxy пока недоступна',
+          },
+        };
+      }
+      const counters: TrafficCounter[] = [];
+      for (const inbound of snapshot.inbounds) {
+        for (const user of inbound.users) {
+          if (!uuidPattern.test(user.username)) {
+            continue;
+          }
+          // Telemt exposes a single bidirectional octet counter.
+          counters.push({
+            engine: 'MTPROXY',
+            scope: 'user',
+            key: user.username.toLowerCase(),
+            uplinkBytes: '0',
+            downlinkBytes: String(Math.max(0, Math.trunc(user.totalOctets))),
+          });
+        }
+      }
+      return {
+        supported: true,
+        capturedAt: parseCapturedAt(snapshot.capturedAt) ?? capturedAt,
+        counters,
+      };
+    } catch (error: unknown) {
+      return {
+        supported: false,
+        capturedAt,
+        error: {
+          code: 'QUERY_FAILED',
+          message: `MTProxy traffic query failed: ${errorMessage(error)}`,
+          messageRu: `Ошибка запроса трафика MTProxy: ${errorMessage(error)}`,
+        },
+      };
+    }
   }
 
-  getOnlineClients(): Promise<OnlineClientsResult> {
-    return Promise.resolve({
-      capturedAt: new Date(),
-      clients: [],
-      partial: false,
-      warnings: [],
-    });
+  async getOnlineClients(): Promise<OnlineClientsResult> {
+    const capturedAt = new Date();
+    try {
+      const snapshot = await this.readRuntimeStats();
+      if (!snapshot) {
+        return {
+          capturedAt,
+          clients: [],
+          partial: true,
+          warnings: ['MTProxy runtime stats are not available yet'],
+        };
+      }
+      const clients: OnlineClient[] = [];
+      const warnings: string[] = [];
+      for (const inbound of snapshot.inbounds) {
+        if (inbound.warning) {
+          warnings.push(`${inbound.tag}: ${inbound.warning}`);
+        }
+        for (const user of inbound.users) {
+          if (user.currentConnections <= 0) {
+            continue;
+          }
+          const panelUserId = uuidPattern.test(user.username)
+            ? user.username.toLowerCase()
+            : null;
+          const ips =
+            user.activeIps.length > 0
+              ? user.activeIps
+              : [null as string | null];
+          for (const ip of ips) {
+            clients.push({
+              engine: 'MTPROXY',
+              connectionId: `mtproxy:${inbound.tag}:${user.username}:${ip ?? 'unknown'}`,
+              panelUserId,
+              userName: user.username,
+              inboundTag: inbound.tag,
+              ipAddress: ip,
+              device: null,
+              network: 'tcp',
+              connectedAt: null,
+              lastSeenAt: parseCapturedAt(snapshot.capturedAt),
+              uploadBytes: null,
+              downloadBytes: String(
+                Math.max(0, Math.trunc(user.totalOctets)),
+              ),
+            });
+          }
+        }
+      }
+      return {
+        capturedAt: parseCapturedAt(snapshot.capturedAt) ?? capturedAt,
+        clients,
+        partial: warnings.length > 0,
+        warnings,
+      };
+    } catch (error: unknown) {
+      return {
+        capturedAt,
+        clients: [],
+        partial: true,
+        warnings: [`MTProxy online query failed: ${errorMessage(error)}`],
+      };
+    }
   }
 
   private renderInbound(
@@ -300,19 +433,120 @@ export class MtproxyProvider extends EngineProvider {
     const users = inbound.assignments.map((assignment) => {
       const secret = passwordFrom(assignment.credential);
       secretValues.add(secret);
-      return {
+      const user: JsonObject = {
         name: assignment.credentialName || assignment.userId,
         secret,
       };
+      if (
+        typeof assignment.maxUniqueIps === 'number' &&
+        assignment.maxUniqueIps > 0
+      ) {
+        user.maxUniqueIps = assignment.maxUniqueIps;
+      }
+      return user;
     });
     return {
       id: inbound.id,
       tag: inbound.tag,
       listenHost: inbound.listenHost,
       listenPort: inbound.listenPort,
+      apiPort: this.apiPortForListenPort(inbound.listenPort),
       secretMode: inbound.config.secretMode,
       tlsDomain: inbound.config.tlsDomain,
       users,
+    };
+  }
+
+  private apiPortForListenPort(listenPort: number): number {
+    const offset = listenPort - this.portMin;
+    const apiPort = this.apiPortBase + offset;
+    if (apiPort < 1 || apiPort > 65_535) {
+      throw new Error(
+        `MTProxy API port ${apiPort} derived from listen port ${listenPort} is out of range`,
+      );
+    }
+    return apiPort;
+  }
+
+  private async readRuntimeStats(): Promise<RuntimeStatsSnapshot | null> {
+    let raw: Buffer;
+    try {
+      raw = await this.fileSystem.read(this.runtimeStatsPath);
+    } catch {
+      return null;
+    }
+    const parsed = JSON.parse(raw.toString('utf8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    const root = parsed as Record<string, unknown>;
+    if (root.version !== 1 || !Array.isArray(root.inbounds)) {
+      return null;
+    }
+    const capturedAt =
+      typeof root.capturedAt === 'string' ? root.capturedAt : '';
+    const captured = parseCapturedAt(capturedAt);
+    if (captured) {
+      const ageSeconds = (Date.now() - captured.getTime()) / 1000;
+      if (ageSeconds > this.runtimeStatsMaxAgeSeconds) {
+        return null;
+      }
+    }
+    const inbounds: RuntimeStatsInbound[] = [];
+    for (const entry of root.inbounds) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue;
+      }
+      const inbound = entry as Record<string, unknown>;
+      const tag = typeof inbound.tag === 'string' ? inbound.tag : '';
+      if (!tag) {
+        continue;
+      }
+      const usersRaw = Array.isArray(inbound.users) ? inbound.users : [];
+      const users: RuntimeStatsUser[] = [];
+      for (const userEntry of usersRaw) {
+        if (
+          !userEntry ||
+          typeof userEntry !== 'object' ||
+          Array.isArray(userEntry)
+        ) {
+          continue;
+        }
+        const user = userEntry as Record<string, unknown>;
+        const username =
+          typeof user.username === 'string' ? user.username.trim() : '';
+        if (!username) {
+          continue;
+        }
+        users.push({
+          username,
+          currentConnections: nonnegativeInt(user.currentConnections),
+          totalOctets: nonnegativeInt(user.totalOctets),
+          activeIps: Array.isArray(user.activeIps)
+            ? user.activeIps.filter(
+                (ip): ip is string => typeof ip === 'string' && ip.length > 0,
+              )
+            : [],
+        });
+      }
+      inbounds.push({
+        tag,
+        listenPort:
+          typeof inbound.listenPort === 'number' ? inbound.listenPort : null,
+        apiPort: typeof inbound.apiPort === 'number' ? inbound.apiPort : null,
+        users,
+        warning:
+          typeof inbound.warning === 'string' ? inbound.warning : undefined,
+      });
+    }
+    return {
+      version: 1,
+      capturedAt,
+      useMiddleProxy:
+        typeof root.useMiddleProxy === 'boolean'
+          ? root.useMiddleProxy
+          : undefined,
+      inbounds,
     };
   }
 
@@ -374,4 +608,22 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function nonnegativeInt(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return Number.parseInt(value, 10);
+  }
+  return 0;
+}
+
+function parseCapturedAt(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : new Date(parsed);
 }
