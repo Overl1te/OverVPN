@@ -117,6 +117,7 @@ def write_inbound_config(inbound: dict[str, Any], target: Path) -> None:
     # Avoid binding [::] — many VPS images have IPv6 disabled and Telemt exits on fail.
     listen_host = str(inbound.get("listenHost") or "0.0.0.0")
     listen_port = int(inbound["listenPort"])
+    data_path = str(target.parent / f"{SAFE_TAG.sub('_', str(inbound.get('tag') or 'inbound'))}-data")
     censorship = (
         f"""[censorship]
 tls_domain = {toml_string(tls_domain)}
@@ -135,15 +136,25 @@ mask = false
 fast_mode = true
 use_middle_proxy = false
 log_level = "normal"
+data_path = {toml_string(data_path)}
 
 [general.modes]
 classic = {classic}
 secure = {secure}
 tls = {tls}
 
+[network]
+ipv4 = true
+ipv6 = false
+prefer = 4
+stun_use = false
+
 [server]
 port = {listen_port}
 listen_addr_ipv4 = {toml_string(listen_host)}
+
+[server.api]
+enabled = false
 
 [[server.listeners]]
 ip = {toml_string(listen_host)}
@@ -199,12 +210,19 @@ def start_children() -> None:
             continue
         conf_path = WORK_DIR / f"{tag}.toml"
         write_inbound_config(inbound, conf_path)
+        data_dir = WORK_DIR / f"{tag}-data"
         front_dir = WORK_DIR / f"{tag}-tlsfront"
+        data_dir.mkdir(parents=True, exist_ok=True)
         front_dir.mkdir(parents=True, exist_ok=True)
         log_path = WORK_DIR / f"{tag}.log"
         log_file = open(log_path, "ab", buffering=0)
         proc = subprocess.Popen(
-            [str(TELEMT_BIN), str(conf_path)],
+            [
+                str(TELEMT_BIN),
+                "--data-path",
+                str(data_dir),
+                str(conf_path),
+            ],
             cwd=str(WORK_DIR),
             stdout=log_file,
             stderr=subprocess.STDOUT,

@@ -64,10 +64,12 @@ export class MtproxyProvider extends EngineProvider {
       );
     }
     const secretValues = new Set<string>();
+    // Telemt rejects configs with zero users (`No users configured` → exit 1).
+    // Keep empty inbounds out of the runtime config until someone is assigned.
     const inbounds = [...state.inbounds]
       .filter(
         (inbound): inbound is DesiredMtproxyInbound =>
-          inbound.protocol === 'MTPROXY',
+          inbound.protocol === 'MTPROXY' && inbound.assignments.length > 0,
       )
       .sort(compareByTagAndId)
       .map((inbound) => this.renderInbound(inbound, secretValues));
