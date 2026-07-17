@@ -186,9 +186,12 @@ ui_press_enter() {
 }
 
 # Arrow-key menu primitives (raw TTY; falls back to typed ui_choice)
+# Result is stored in UI_SELECT_RESULT — never capture ui_select_menu via $()
+# (that would redirect stdout and hide the TUI / break [[ -t 1 ]]).
 UI_TTY_SAVED=""
 UI_TTY_RAW=0
 UI_MENU_HEADER=""
+UI_SELECT_RESULT=""
 
 ui_tty_save() {
   UI_TTY_SAVED=""
@@ -217,7 +220,9 @@ ui_tty_enter_raw() {
 }
 
 ui_arrows_available() {
-  [[ -t 0 && -t 1 ]] && command -v stty >/dev/null 2>&1
+  # Only stdin must be a TTY. Do not test stdout: callers must not wrap
+  # ui_select_menu in $(), but even then -t 1 would falsely fail.
+  [[ -t 0 ]] && command -v stty >/dev/null 2>&1
 }
 
 # Prints: up|down|enter|esc|digit|letter|…
@@ -253,14 +258,16 @@ ui_read_key() {
 }
 
 # Typed (non-arrow) fallback used when TTY raw mode is unavailable.
-# Expects items[] / selected / count in caller scope via nameref-style args.
+# Sets UI_SELECT_RESULT.
 ui_select_menu_typed() {
   local selected="$1"
   shift
   local -a items=("$@")
   local count=${#items[@]}
   local w key i val label
+  local default_hint
 
+  UI_SELECT_RESULT=""
   w="$(tui_term_width)"
   if [[ -n "${UI_MENU_HEADER:-}" ]] && declare -F "${UI_MENU_HEADER}" >/dev/null 2>&1; then
     clear_screen
@@ -272,23 +279,32 @@ ui_select_menu_typed() {
   done
   draw_box_empty "$w"
   draw_box_bottom "$w"
-  key="$(ui_choice "$(cli_t ui_choice_label)" "$((selected + 1))")"
+  default_hint="$((selected + 1))"
+  key="$(ui_choice "$(cli_t ui_choice_label)" "$default_hint")"
   key="$(printf '%s' "$key" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
   if [[ "$key" =~ ^[0-9]+$ ]]; then
+    # Prefer match by option value (e.g. main menu "0" = exit)
+    for i in "${!items[@]}"; do
+      val="${items[$i]%%|*}"
+      if [[ "$val" == "$key" ]]; then
+        UI_SELECT_RESULT="$val"
+        return 0
+      fi
+    done
     i=$((key - 1))
     if [[ "$i" -ge 0 && "$i" -lt "$count" ]]; then
-      printf '%s' "${items[$i]%%|*}"
+      UI_SELECT_RESULT="${items[$i]%%|*}"
       return 0
     fi
   fi
   for i in "${!items[@]}"; do
     val="${items[$i]%%|*}"
     if [[ "$val" == "$key" ]]; then
-      printf '%s' "$val"
+      UI_SELECT_RESULT="$val"
       return 0
     fi
   done
-  printf '%s' "${items[$selected]%%|*}"
+  UI_SELECT_RESULT="${items[$selected]%%|*}"
   return 0
 }
 
@@ -305,7 +321,7 @@ ui_menu_alias_match() {
 
 # ui_select_menu <default_index> "value|label" "value|label" ...
 # Optional: set UI_MENU_HEADER to a function name drawn after clear_screen each redraw.
-# Prints selected value to stdout.
+# Sets UI_SELECT_RESULT to the selected value. Do NOT wrap in $().
 ui_select_menu() {
   local selected="${1:-0}"
   shift
@@ -313,6 +329,7 @@ ui_select_menu() {
   local count=${#items[@]}
   local w key i val label prefix lower
 
+  UI_SELECT_RESULT=""
   if [[ "$count" -eq 0 ]]; then
     return 1
   fi
@@ -373,7 +390,7 @@ ui_select_menu() {
       enter)
         ui_tty_restore
         trap - EXIT INT TERM
-        printf '%s' "${items[$selected]%%|*}"
+        UI_SELECT_RESULT="${items[$selected]%%|*}"
         return 0
         ;;
       esc) ;;
@@ -383,7 +400,7 @@ ui_select_menu() {
           if [[ "$val" == "$key" ]]; then
             ui_tty_restore
             trap - EXIT INT TERM
-            printf '%s' "$val"
+            UI_SELECT_RESULT="$val"
             return 0
           fi
         done
@@ -392,7 +409,7 @@ ui_select_menu() {
           if [[ "$i" -ge 0 && "$i" -lt "$count" ]]; then
             ui_tty_restore
             trap - EXIT INT TERM
-            printf '%s' "${items[$i]%%|*}"
+            UI_SELECT_RESULT="${items[$i]%%|*}"
             return 0
           fi
         fi
@@ -404,7 +421,7 @@ ui_select_menu() {
           if ui_menu_alias_match "$val" "$lower"; then
             ui_tty_restore
             trap - EXIT INT TERM
-            printf '%s' "$val"
+            UI_SELECT_RESULT="$val"
             return 0
           fi
         done
@@ -420,13 +437,12 @@ ui_confirm() {
   local yes_label="${2:-$(cli_t opt_yes)}"
   local no_label="${3:-$(cli_t opt_no)}"
   local idx=0
-  local choice
   default="$(printf '%s' "$default" | tr '[:upper:]' '[:lower:]')"
   if [[ "$default" == "n" || "$default" == "no" ]]; then
     idx=1
   fi
-  choice="$(ui_select_menu "$idx" "yes|${yes_label}" "no|${no_label}")"
-  [[ "$choice" == "yes" ]]
+  ui_select_menu "$idx" "yes|${yes_label}" "no|${no_label}"
+  [[ "$UI_SELECT_RESULT" == "yes" ]]
 }
 
 colorized_echo() {
@@ -911,7 +927,8 @@ prompt_wizard_language() {
     draw_box_empty "$w"
   }
   UI_MENU_HEADER=_prompt_wizard_language_header
-  choice="$(ui_select_menu 0 "en|$(cli_t lang_opt_en)" "ru|$(cli_t lang_opt_ru)")"
+  ui_select_menu 0 "en|$(cli_t lang_opt_en)" "ru|$(cli_t lang_opt_ru)"
+  choice="$UI_SELECT_RESULT"
   unset UI_MENU_HEADER
   case "$choice" in
     ru)
@@ -940,9 +957,10 @@ prompt_install_mode() {
     draw_box_empty "$w"
   }
   UI_MENU_HEADER=_prompt_install_mode_header
-  choice="$(ui_select_menu 0 \
+  ui_select_menu 0 \
     "domain|$(cli_t mode_opt_domain)" \
-    "ip|$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")")"
+    "ip|$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")"
+  choice="$UI_SELECT_RESULT"
   unset UI_MENU_HEADER
   case "$choice" in
     ip) CFG_MODE="ip" ;;
@@ -1009,9 +1027,10 @@ prompt_install_dns_screen() {
     draw_box_empty "$w"
   }
   UI_MENU_HEADER=_prompt_install_dns_header
-  choice="$(ui_select_menu 0 \
+  ui_select_menu 0 \
     "check|$(cli_t dns_opt_check)" \
-    "skip|$(cli_t dns_opt_skip)")"
+    "skip|$(cli_t dns_opt_skip)"
+  choice="$UI_SELECT_RESULT"
   unset UI_MENU_HEADER
   case "$choice" in
     skip)
@@ -1070,9 +1089,10 @@ prompt_install_confirm() {
     draw_box_empty "$w"
   }
   UI_MENU_HEADER=_prompt_install_confirm_header
-  choice="$(ui_select_menu 0 \
+  ui_select_menu 0 \
     "yes|${TUI_GREEN}$(cli_t confirm_opt_yes)${TUI_NC}" \
-    "no|${TUI_RED}$(cli_t confirm_opt_no)${TUI_NC}")"
+    "no|${TUI_RED}$(cli_t confirm_opt_no)${TUI_NC}"
+  choice="$UI_SELECT_RESULT"
   unset UI_MENU_HEADER
   case "$choice" in
     no)
@@ -1104,9 +1124,10 @@ prompt_install_mtproxy() {
     draw_box_empty "$w"
   }
   UI_MENU_HEADER=_prompt_install_mtproxy_header
-  choice="$(ui_select_menu 0 \
+  ui_select_menu 0 \
     "yes|$(cli_t mtproxy_opt_yes)" \
-    "no|$(cli_t mtproxy_opt_no)")"
+    "no|$(cli_t mtproxy_opt_no)"
+  choice="$UI_SELECT_RESULT"
   unset UI_MENU_HEADER
   case "$choice" in
     no) CFG_MTPROXY_ENABLED="false" ;;
@@ -3026,10 +3047,11 @@ show_update_submenu() {
   }
   while true; do
     UI_MENU_HEADER=_show_update_submenu_header
-    choice="$(ui_select_menu 2 \
+    ui_select_menu 2 \
       "1|$(cli_t menu_update_check)" \
       "2|$(cli_t menu_update_apply)" \
-      "0|$(cli_t menu_update_back)")"
+      "0|$(cli_t menu_update_back)"
+    choice="$UI_SELECT_RESULT"
     unset UI_MENU_HEADER
     case "$choice" in
       1)
@@ -3077,7 +3099,7 @@ show_main_menu() {
 
   while true; do
     UI_MENU_HEADER=_show_main_menu_header
-    choice="$(ui_select_menu 8 \
+    ui_select_menu 8 \
       "1|$(cli_t menu_status)" \
       "2|$(cli_t menu_info)" \
       "3|$(cli_t menu_logs)" \
@@ -3086,7 +3108,8 @@ show_main_menu() {
       "6|$(cli_t menu_edit)" \
       "7|$(cli_t menu_nginx)" \
       "8|${TUI_RED}$(cli_t menu_uninstall)${TUI_NC}" \
-      "0|$(cli_t menu_exit)")"
+      "0|$(cli_t menu_exit)"
+    choice="$UI_SELECT_RESULT"
     unset UI_MENU_HEADER
     case "$choice" in
       1) menu_run_action cmd_status ;;
