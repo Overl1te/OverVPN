@@ -518,9 +518,9 @@ Workflow: `.github/workflows/ci.yml`.
 
 ### Jobs
 
-| Job       | Когда                                                         | Что делает                                                           |
-| --------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `verify`  | PR + push + dispatch                                          | install → prisma generate → format → lint → typecheck → test → build |
+| Job       | Когда                                                       | Что делает                                                           |
+| --------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| `verify`  | PR + push + dispatch                                        | install → prisma generate → format → lint → typecheck → test → build |
 | `publish` | push в `main` / тег `v*` / `workflow_dispatch` после verify | build+push api/web в GHCR                                            |
 
 Оба job’а бегут на labels:
