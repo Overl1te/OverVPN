@@ -25,11 +25,19 @@ ACK_PATH = Path(
 PID_PATH = Path(
     os.environ.get("MTPROXY_PID_PATH", "/var/lib/overvpn/mtproxy-reload/mtproxy.pid")
 )
+HEARTBEAT_PATH = Path(
+    os.environ.get(
+        "MTPROXY_HEARTBEAT_PATH", "/var/lib/overvpn/mtproxy-reload/heartbeat"
+    )
+)
 WORK_DIR = Path(os.environ.get("MTPROXY_WORK_DIR", "/var/lib/mtproxy-work"))
 TELEMT_BIN = Path(os.environ.get("TELEMT_BIN", "/usr/local/bin/telemt"))
 POLL_SECONDS = float(os.environ.get("MTPROXY_RELOAD_POLL_SECONDS", "0.2"))
 SETTLE_SECONDS = float(os.environ.get("MTPROXY_RELOAD_SETTLE_SECONDS", "1"))
 DEFAULT_TLS_DOMAIN = os.environ.get("MTPROXY_DEFAULT_TLS_DOMAIN", "duckduckgo.com")
+HEARTBEAT_MAX_AGE_SECONDS = float(
+    os.environ.get("MTPROXY_HEARTBEAT_MAX_AGE_SECONDS", "15")
+)
 
 SAFE_TAG = re.compile(r"[^A-Za-z0-9._-]+")
 children: list[subprocess.Popen[Any]] = []
@@ -43,6 +51,12 @@ def log(message: str) -> None:
 def write_pid() -> None:
     PID_PATH.parent.mkdir(parents=True, exist_ok=True)
     PID_PATH.write_text(f"{os.getpid()}\n", encoding="utf-8")
+
+
+def write_heartbeat() -> None:
+    """Shared-volume liveness for the API (separate PID namespace — cannot use kill -0)."""
+    HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    HEARTBEAT_PATH.write_text(f"{time.time():.3f}\n", encoding="utf-8")
 
 
 def stop_children() -> None:
@@ -198,6 +212,7 @@ def handle_signal(signum: int, _frame: Any) -> None:
     stop_children()
     try:
         PID_PATH.unlink(missing_ok=True)
+        HEARTBEAT_PATH.unlink(missing_ok=True)
     except OSError:
         pass
     sys.exit(0)
@@ -228,10 +243,12 @@ def main() -> None:
         pass
 
     write_pid()
+    write_heartbeat()
     start_children()
     last_request_id = ""
 
     while not stopping:
+        write_heartbeat()
         for proc in list(children):
             if proc.poll() is not None:
                 log(f"child pid={proc.pid} exited with {proc.returncode}")
@@ -261,6 +278,7 @@ def main() -> None:
                     message = "invalid-hash"
                 write_ack(request_id, request_hash, status, message)
                 last_request_id = request_id
+                write_heartbeat()
         time.sleep(POLL_SECONDS)
 
 

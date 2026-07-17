@@ -3,11 +3,7 @@ import { dirname, join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment';
-import {
-  CoreFileSystem,
-  MtproxyReloadHandshakeAdapter,
-  ProcessAdapter,
-} from './core-adapters';
+import { CoreFileSystem, MtproxyReloadHandshakeAdapter } from './core-adapters';
 import {
   canonicalizeJson,
   redactJson,
@@ -36,11 +32,11 @@ export class MtproxyProvider extends EngineProvider {
   private readonly configPath: string;
   private readonly lastKnownGoodPath: string;
   private readonly healthTimeoutMs: number;
-  private readonly pidPath: string;
+  private readonly heartbeatPath: string;
+  private readonly heartbeatMaxAgeSeconds: number;
 
   constructor(
     config: ConfigService<AppEnvironment, true>,
-    private readonly processAdapter: ProcessAdapter,
     private readonly fileSystem: CoreFileSystem,
     private readonly reloadHandshake: MtproxyReloadHandshakeAdapter,
   ) {
@@ -52,7 +48,13 @@ export class MtproxyProvider extends EngineProvider {
     this.healthTimeoutMs = config.get('MTPROXY_HEALTH_TIMEOUT_MS', {
       infer: true,
     });
-    this.pidPath = config.get('MTPROXY_PID_PATH', { infer: true });
+    this.heartbeatPath = config.get('MTPROXY_HEARTBEAT_PATH', { infer: true });
+    this.heartbeatMaxAgeSeconds = config.get(
+      'MTPROXY_HEARTBEAT_MAX_AGE_SECONDS',
+      {
+        infer: true,
+      },
+    );
   }
 
   renderConfig(state: CoreDesiredState): RenderedCoreConfig {
@@ -316,17 +318,13 @@ export class MtproxyProvider extends EngineProvider {
     const deadline = Date.now() + this.healthTimeoutMs;
     while (Date.now() < deadline) {
       try {
-        const pidRaw = (await this.fileSystem.read(this.pidPath))
+        const raw = (await this.fileSystem.read(this.heartbeatPath))
           .toString('utf8')
           .trim();
-        const pid = Number.parseInt(pidRaw, 10);
-        if (Number.isFinite(pid) && pid > 0) {
-          const result = await this.processAdapter.run(
-            'kill',
-            ['-0', String(pid)],
-            2_000,
-          );
-          if (result.exitCode === 0 && !result.timedOut) {
+        const epochSeconds = Number.parseFloat(raw);
+        if (Number.isFinite(epochSeconds) && epochSeconds > 0) {
+          const ageSeconds = Date.now() / 1000 - epochSeconds;
+          if (ageSeconds >= 0 && ageSeconds <= this.heartbeatMaxAgeSeconds) {
             return;
           }
         }

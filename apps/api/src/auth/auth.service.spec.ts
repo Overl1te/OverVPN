@@ -74,6 +74,8 @@ const environment: AppEnvironment = {
   MTPROXY_RELOAD_REQUEST_PATH: '/tmp/mtproxy/reload/request',
   MTPROXY_RELOAD_ACK_PATH: '/tmp/mtproxy/reload/ack',
   MTPROXY_PID_PATH: '/tmp/mtproxy/reload/mtproxy.pid',
+  MTPROXY_HEARTBEAT_PATH: '/tmp/mtproxy/reload/heartbeat',
+  MTPROXY_HEARTBEAT_MAX_AGE_SECONDS: 15,
   MTPROXY_PORT_MIN: 10_001,
   MTPROXY_PORT_MAX: 10_016,
   MTPROXY_PROCESS_TIMEOUT_MS: 15_000,

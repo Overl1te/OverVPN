@@ -19,6 +19,7 @@ ENV TELEMT_BIN=/usr/local/bin/telemt \
     MTPROXY_RELOAD_REQUEST_PATH=/var/lib/overvpn/mtproxy-reload/request \
     MTPROXY_RELOAD_ACK_PATH=/var/lib/overvpn/mtproxy-reload/ack \
     MTPROXY_PID_PATH=/var/lib/overvpn/mtproxy-reload/mtproxy.pid \
+    MTPROXY_HEARTBEAT_PATH=/var/lib/overvpn/mtproxy-reload/heartbeat \
     MTPROXY_WORK_DIR=/var/lib/mtproxy-work
 
 USER overvpn

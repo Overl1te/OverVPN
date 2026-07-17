@@ -339,6 +339,17 @@ export const environmentSchema = z
       .trim()
       .min(1)
       .default('/var/lib/overvpn/mtproxy-reload/mtproxy.pid'),
+    /** Shared-volume heartbeat written by core-mtproxy (API cannot kill -0 across PID namespaces). */
+    MTPROXY_HEARTBEAT_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/mtproxy-reload/heartbeat'),
+    MTPROXY_HEARTBEAT_MAX_AGE_SECONDS: z.coerce
+      .number()
+      .min(1)
+      .max(300)
+      .default(15),
     /** First published TCP port for MTProxy (compose range start). */
     MTPROXY_PORT_MIN: z.coerce
       .number()
