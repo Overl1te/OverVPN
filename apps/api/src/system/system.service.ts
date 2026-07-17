@@ -299,9 +299,7 @@ export class SystemService {
   async engines(): Promise<SystemEngines> {
     const core = await this.core.health();
     const engineHealth: Partial<Record<CoreEngine, CoreHealthResult>> =
-      'engines' in core && core.engines
-        ? (core.engines as Partial<Record<CoreEngine, CoreHealthResult>>)
-        : {};
+      'engines' in core && core.engines ? core.engines : {};
     const engines: SystemEngineStatus[] = CORE_ENGINES.map((engine) => {
       const enabled = this.isEngineEnabled(engine);
       const health = engineHealth[engine];
