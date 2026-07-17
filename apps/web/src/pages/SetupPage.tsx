@@ -1,15 +1,4 @@
-import {
-  Alert,
-  Button,
-  Card,
-  Form,
-  Input,
-  Progress,
-  Select,
-  Space,
-  Steps,
-  Typography,
-} from 'antd';
+import { Alert, Button, Card, Form, Input, Progress, Select, Space, Steps, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
@@ -280,11 +269,7 @@ export function SetupPage() {
               layout="vertical"
               onFinish={(values) => userMutation.mutate(values)}
             >
-              <Form.Item
-                name="username"
-                label={t('users.username')}
-                rules={[{ required: true }]}
-              >
+              <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
                 <Input autoComplete="off" />
               </Form.Item>
               <Form.Item
@@ -342,7 +327,11 @@ export function SetupPage() {
                 </Space>
               </>
             ) : null}
-            <Button type="primary" size="large" onClick={() => navigate('/dashboard', { replace: true })}>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => navigate('/dashboard', { replace: true })}
+            >
               {t('setup.goToPanel')}
             </Button>
           </Card>

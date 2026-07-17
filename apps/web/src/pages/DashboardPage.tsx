@@ -94,10 +94,7 @@ export function DashboardPage() {
   const ramPercent = memoryPercent(host?.memory.usedBytes, host?.memory.totalBytes);
   const isRu = i18n.language.startsWith('ru');
 
-  const stepMeta: Record<
-    SetupStepId,
-    { title: string; cta: string; to: string }
-  > = {
+  const stepMeta: Record<SetupStepId, { title: string; cta: string; to: string }> = {
     inbound: {
       title: t('setup.stepInbound'),
       cta: t('setup.createInbound'),

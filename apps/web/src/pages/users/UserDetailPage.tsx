@@ -345,12 +345,7 @@ export function UserDetailPage() {
   if (isNew) {
     return (
       <div>
-        <PageHeader
-          title={t('users.create')}
-          extra={
-            <Link to="/users">{t('app.back')}</Link>
-          }
-        />
+        <PageHeader title={t('users.create')} extra={<Link to="/users">{t('app.back')}</Link>} />
         <Card size="small" style={{ maxWidth: 520 }}>
           {profileForm}
         </Card>
@@ -590,7 +585,10 @@ export function UserDetailPage() {
                       </div>
                       {usageQuery.data ? (
                         <>
-                          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                          <Typography.Text
+                            type="secondary"
+                            style={{ display: 'block', marginBottom: 8 }}
+                          >
                             {t('users.periodUsage', {
                               total: formatBytes(usageQuery.data.periodTotalBytes),
                               upload: formatBytes(usageQuery.data.periodUploadBytes),

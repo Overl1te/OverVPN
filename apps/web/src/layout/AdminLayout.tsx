@@ -90,11 +90,7 @@ export function AdminLayout() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (
-    setup.shouldShowWizard &&
-    !isSetupRoute &&
-    !setup.isLoading
-  ) {
+  if (setup.shouldShowWizard && !isSetupRoute && !setup.isLoading) {
     return <Navigate to="/setup" replace />;
   }
 
