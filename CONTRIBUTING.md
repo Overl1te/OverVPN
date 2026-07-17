@@ -334,7 +334,7 @@ pnpm migrate         # deploy (прод / CI / compose migrate job)
 pnpm prisma:generate
 ```
 
-Не правь SQL миграции вручную после merge в `master`, если нет крайней необходимости — ломает историю на чужих инсталлах.
+Не правь SQL миграции вручную после merge в `main`, если нет крайней необходимости — ломает историю на чужих инсталлах.
 
 ---
 
@@ -521,7 +521,7 @@ Workflow: `.github/workflows/ci.yml`.
 | Job       | Когда                                                         | Что делает                                                           |
 | --------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `verify`  | PR + push + dispatch                                          | install → prisma generate → format → lint → typecheck → test → build |
-| `publish` | push в `master` / тег `v*` / `workflow_dispatch` после verify | build+push api/web в GHCR                                            |
+| `publish` | push в `main` / тег `v*` / `workflow_dispatch` после verify | build+push api/web в GHCR                                            |
 
 Оба job’а бегут на labels:
 

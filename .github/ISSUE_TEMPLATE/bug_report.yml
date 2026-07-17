@@ -56,7 +56,7 @@ body:
     attributes:
       label: Версия / коммит
       description: Тег релиза, образ GHCR или `git rev-parse --short HEAD`
-      placeholder: master @ abc1234
+      placeholder: main @ abc1234
     validations:
       required: false
   - type: textarea
