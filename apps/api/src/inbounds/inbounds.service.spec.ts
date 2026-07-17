@@ -314,7 +314,7 @@ describe('InboundsService remove', () => {
       } as unknown as SecretEncryptionService,
       audit as unknown as AuditService,
       coreApply as unknown as CoreApplyService,
-      { run: jest.fn() } as never,
+      { run: jest.fn() },
       testConfig(),
     );
 
