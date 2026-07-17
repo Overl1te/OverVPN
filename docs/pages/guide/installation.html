@@ -43,10 +43,10 @@
 </div>
 
 <h2>Быстрая установка</h2>
-<pre><code class="language-shell">sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install  # установка из GHCR</code></pre>
+<pre><code class="language-shell">curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install  # установка из GHCR</code></pre>
 
 <p>Локальная сборка образов на машине:</p>
-<pre><code class="language-shell">sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build  # сборка образов на сервере</code></pre>
+<pre><code class="language-shell">curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install --build  # сборка образов на сервере</code></pre>
 
 <h2>Мастер установки</h2>
 <p>

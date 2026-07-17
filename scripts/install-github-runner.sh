@@ -2,7 +2,7 @@
 # Install a GitHub Actions self-hosted runner for OverVPN builds.
 #
 # Usage (on the build machine, as root):
-#   curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/scripts/install-github-runner.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/scripts/install-github-runner.sh | sudo bash
 #   # or from a clone:
 #   sudo ./scripts/install-github-runner.sh
 #

@@ -80,7 +80,7 @@ describe('UpdateCheckerService', () => {
         WORKER_LOCK_TTL_MS: 60_000,
         OVERVPN_GIT_SHA: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         UPDATE_CHECK_REPO: 'Overl1te/OverVPN',
-        UPDATE_CHECK_REF: 'master',
+        UPDATE_CHECK_REF: 'main',
         UPDATE_CHECK_TIMEOUT_MS: 5_000,
       }),
     );
@@ -113,7 +113,7 @@ describe('UpdateCheckerService', () => {
         UPDATE_CHECK_ENABLED: true,
         WORKER_LOCK_TTL_MS: 60_000,
         UPDATE_CHECK_REPO: 'Overl1te/OverVPN',
-        UPDATE_CHECK_REF: 'master',
+        UPDATE_CHECK_REF: 'main',
         UPDATE_CHECK_TIMEOUT_MS: 5_000,
       }),
     );
@@ -136,7 +136,7 @@ describe('UpdateCheckerService', () => {
         WORKER_LOCK_TTL_MS: 60_000,
         OVERVPN_GIT_SHA: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         UPDATE_CHECK_REPO: 'Overl1te/OverVPN',
-        UPDATE_CHECK_REF: 'master',
+        UPDATE_CHECK_REF: 'main',
         UPDATE_CHECK_TIMEOUT_MS: 5_000,
       }),
     );

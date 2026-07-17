@@ -558,7 +558,7 @@ export const environmentSchema = z
         'UPDATE_CHECK_REPO must be owner/name',
       )
       .default('Overl1te/OverVPN'),
-    UPDATE_CHECK_REF: z.string().trim().min(1).max(256).default('master'),
+    UPDATE_CHECK_REF: z.string().trim().min(1).max(256).default('main'),
     UPDATE_CHECK_TIMEOUT_MS: z.coerce
       .number()
       .int()

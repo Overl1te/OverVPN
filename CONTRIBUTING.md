@@ -537,7 +537,7 @@ self-hosted, linux, x64, overvpn
 # токен: GitHub → Settings → Actions → Runners → New self-hosted runner
 # или: gh api -X POST repos/Overl1te/OverVPN/actions/runners/registration-token --jq .token
 
-sudo RUNNER_TOKEN=XXXX bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/scripts/install-github-runner.sh)"
+sudo RUNNER_TOKEN=XXXX bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/scripts/install-github-runner.sh)"
 ```
 
 Скрипт ставит Docker (если нет), пользователя `github-runner`, раннер в `/opt/actions-runner`, systemd и доступ к Docker.

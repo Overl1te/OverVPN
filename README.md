@@ -9,7 +9,7 @@
 [CI](https://github.com/Overl1te/OverVPN/actions/workflows/ci.yml)
 [Docs](https://github.com/Overl1te/OverVPN/actions/workflows/docs.yml)
 [Stars](https://github.com/Overl1te/OverVPN/stargazers)
-[Last commit](https://github.com/Overl1te/OverVPN/commits/master)
+[Last commit](https://github.com/Overl1te/OverVPN/commits/main)
 Node.js
 Docker
 [License](LICENSE)
@@ -65,13 +65,13 @@ OverVPN — **однонодовая** панель для выдачи дост
 По умолчанию тянет **готовые образы из GHCR** — без долгой сборки на сервере:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
+curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install
 ```
 
 Локальная сборка образов на машине:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install --build
+curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install --build
 ```
 
 **Флаги установщика**

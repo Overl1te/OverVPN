@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # OverVPN installer & management CLI (Marzban-style).
-# Usage:
-#   sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ install
+# Usage (script is too large for bash -c "$(curl …)" — MAX_ARG_STRLEN ~128KiB):
+#   curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install
 #   overvpn up|down|restart|status|logs|update|uninstall|info|edit|bootstrap
 
 set -euo pipefail
@@ -28,7 +28,7 @@ VPN_CERT_CONTAINER_PATH="/var/lib/sing-box-certs/${VPN_CERT_NAME}"
 VPN_KEY_CONTAINER_PATH="/var/lib/sing-box-certs/${VPN_KEY_NAME}"
 REPO_URL="${OVERVPN_REPO_URL:-https://github.com/Overl1te/OverVPN.git}"
 REPO_RAW_BASE="${OVERVPN_RAW_BASE:-https://raw.githubusercontent.com/Overl1te/OverVPN}"
-DEFAULT_BRANCH="${OVERVPN_BRANCH:-master}"
+DEFAULT_BRANCH="${OVERVPN_BRANCH:-main}"
 DEFAULT_WEB_PORT="8000"
 DEFAULT_IMAGE_TAG="${OVERVPN_IMAGE_TAG:-latest}"
 GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
@@ -684,7 +684,7 @@ cli_t() {
       partial_install_cleaning) printf '%s' "Удаляем незавершённую установку…" ;;
       partial_aborted) printf '%s' "Ок, ничего не трогаем. Чтобы снести вручную: overvpn uninstall  (или тот же one-liner с @ uninstall)." ;;
       install_failed_recover) printf '%s' "Установка оборвалась, но файлы уже есть. Не сносите сервер — просто запустите установщик снова: он предложит подчистить и продолжить." ;;
-      recover_uninstall_hint) printf '%s' 'Или сразу снести: sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ uninstall' ;;
+      recover_uninstall_hint) printf '%s' 'Или сразу снести: curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ uninstall' ;;
       invalid_port) printf 'Некорректный --port: %s' "$1" ;;
       noninteractive_start) printf '%s' "Получены неинтерактивные флаги. Начинаем установку…" ;;
       creating_owner) printf '%s' "Создаём учётную запись владельца…" ;;
@@ -902,7 +902,7 @@ cli_t() {
       partial_install_cleaning) printf '%s' "Removing incomplete install..." ;;
       partial_aborted) printf '%s' "Left as-is. To remove manually: overvpn uninstall  (or the same one-liner with @ uninstall)." ;;
       install_failed_recover) printf '%s' "Install aborted, but files already exist. Do not wipe the server — re-run the installer; it will offer to clean up and continue." ;;
-      recover_uninstall_hint) printf '%s' 'Or wipe now: sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/master/install.sh)" @ uninstall' ;;
+      recover_uninstall_hint) printf '%s' 'Or wipe now: curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ uninstall' ;;
       invalid_port) printf 'Invalid --port: %s' "$1" ;;
       noninteractive_start) printf '%s' "Non-interactive flags received. Starting install…" ;;
       creating_owner) printf '%s' "Creating owner account..." ;;
@@ -3218,7 +3218,8 @@ cmd_update() {
 }
 
 install_oneliner() {
-  printf 'sudo bash -c "$(curl -fsSL %s/%s/install.sh)" @ install' "$REPO_RAW_BASE" "$DEFAULT_BRANCH"
+  printf 'curl -fsSL %s/%s/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install' \
+    "$REPO_RAW_BASE" "$DEFAULT_BRANCH"
 }
 
 cmd_uninstall() {
