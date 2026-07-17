@@ -8,6 +8,8 @@ import type {
   ShadowsocksInboundSettings,
   TrojanInboundPublicConfig,
   TrojanInboundSettings,
+  TrojanTlsInboundPublicConfig,
+  TrojanTlsInboundSettings,
   VlessGrpcTlsInboundSettings,
   VlessGrpcTlsPublicConfig,
   VlessRealityInboundPublicConfig,
@@ -16,16 +18,20 @@ import type {
   VlessTcpTlsPublicConfig,
   VlessXhttpTlsInboundSettings,
   VlessXhttpTlsPublicConfig,
+  WireguardInboundPublicConfig,
+  WireguardInboundSettings,
 } from '@overvpn/shared/schemas';
 import {
   hysteria2InboundPublicConfigSchema,
   mtproxyInboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
+  trojanTlsInboundPublicConfigSchema,
   vlessGrpcTlsPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
   vlessTcpTlsPublicConfigSchema,
   vlessXhttpTlsPublicConfigSchema,
+  wireguardInboundPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import type { ProcessAdapter } from '../core/core-adapters';
 import type {
@@ -35,6 +41,7 @@ import type {
   TrojanInboundSecrets,
   VlessRealityInboundSecrets,
   VlessXhttpTlsInboundSecrets,
+  WireguardInboundSecrets,
 } from '../core/core-provider';
 import {
   buildHysteria2Storage,
@@ -45,7 +52,12 @@ import {
   buildShadowsocksStorage,
   type ShadowsocksStorage,
 } from './shadowsocks-domain';
-import { buildTrojanStorage, type TrojanStorage } from './trojan-domain';
+import {
+  buildTrojanStorage,
+  buildTrojanTlsStorage,
+  type TrojanStorage,
+  type TrojanTlsStorage,
+} from './trojan-domain';
 import {
   buildVlessGrpcTlsStorage,
   type VlessGrpcTlsStorage,
@@ -63,6 +75,10 @@ import {
   buildVlessXhttpTlsStorage,
   type VlessXhttpTlsStorage,
 } from './vless-xhttp-tls-domain';
+import {
+  buildWireguardStorage,
+  type WireguardStorage,
+} from './wireguard-domain';
 
 export type InboundStorage =
   | { protocol: 'HYSTERIA2'; storage: Hysteria2Storage }
@@ -72,6 +88,9 @@ export type InboundStorage =
   | { protocol: 'VLESS_TCP_TLS'; storage: VlessTcpTlsStorage }
   | { protocol: 'TROJAN'; storage: TrojanStorage }
   | { protocol: 'SHADOWSOCKS'; storage: ShadowsocksStorage }
+  | { protocol: 'TROJAN_TLS'; storage: TrojanTlsStorage }
+  | { protocol: 'SHADOWSOCKS_XRAY'; storage: ShadowsocksStorage }
+  | { protocol: 'WIREGUARD' | 'WIREGUARD_XRAY'; storage: WireguardStorage }
   | { protocol: 'MTPROXY'; storage: MtproxyStorage };
 
 export type InboundPublicConfig =
@@ -82,6 +101,8 @@ export type InboundPublicConfig =
   | VlessTcpTlsPublicConfig
   | TrojanInboundPublicConfig
   | ShadowsocksInboundPublicConfig
+  | TrojanTlsInboundPublicConfig
+  | WireguardInboundPublicConfig
   | MtproxyInboundPublicConfig;
 
 export type InboundSecretBundle =
@@ -90,6 +111,7 @@ export type InboundSecretBundle =
   | VlessXhttpTlsInboundSecrets
   | TrojanInboundSecrets
   | ShadowsocksInboundSecrets
+  | WireguardInboundSecrets
   | MtproxyInboundSecrets;
 
 export async function buildInboundStorage(
@@ -102,6 +124,8 @@ export async function buildInboundStorage(
     | VlessTcpTlsInboundSettings
     | TrojanInboundSettings
     | ShadowsocksInboundSettings
+    | TrojanTlsInboundSettings
+    | WireguardInboundSettings
     | MtproxyInboundSettings,
   previous: InboundStorage | undefined,
   deps: {
@@ -179,17 +203,42 @@ export async function buildInboundStorage(
       ),
     };
   }
+  if (protocol === 'TROJAN_TLS') {
+    return {
+      protocol,
+      storage: buildTrojanTlsStorage(
+        settings as TrojanTlsInboundSettings,
+        previous?.protocol === 'TROJAN_TLS' ? previous.storage : undefined,
+      ),
+    };
+  }
+  if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+    return {
+      protocol,
+      storage: buildWireguardStorage(
+        settings as WireguardInboundSettings,
+        previous?.protocol === protocol ? previous.storage : undefined,
+      ),
+    };
+  }
   if (protocol === 'MTPROXY') {
     return {
       protocol,
       storage: buildMtproxyStorage(settings as MtproxyInboundSettings),
     };
   }
+  if (
+    protocol === 'SHADOWSOCKS_XRAY' &&
+    (settings as ShadowsocksInboundSettings).method !==
+      '2022-blake3-aes-256-gcm'
+  ) {
+    throw new Error('SHADOWSOCKS_XRAY requires 2022-blake3-aes-256-gcm');
+  }
   return {
-    protocol: 'SHADOWSOCKS',
+    protocol,
     storage: buildShadowsocksStorage(
       settings as ShadowsocksInboundSettings,
-      previous?.protocol === 'SHADOWSOCKS' ? previous.storage : undefined,
+      previous?.protocol === protocol ? previous.storage : undefined,
     ),
   };
 }
@@ -210,6 +259,18 @@ export function parseTrojanPublicConfig(
   config: unknown,
 ): TrojanInboundPublicConfig {
   return trojanInboundPublicConfigSchema.parse(config);
+}
+
+export function parseTrojanTlsPublicConfig(
+  config: unknown,
+): TrojanTlsInboundPublicConfig {
+  return trojanTlsInboundPublicConfigSchema.parse(config);
+}
+
+export function parseWireguardPublicConfig(
+  config: unknown,
+): WireguardInboundPublicConfig {
+  return wireguardInboundPublicConfigSchema.parse(config);
 }
 
 export function parseVlessXhttpTlsPublicConfig(
@@ -264,6 +325,12 @@ export function parseInboundPublicConfig(
   if (protocol === 'TROJAN') {
     return parseTrojanPublicConfig(config);
   }
+  if (protocol === 'TROJAN_TLS') {
+    return parseTrojanTlsPublicConfig(config);
+  }
+  if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+    return parseWireguardPublicConfig(config);
+  }
   if (protocol === 'MTPROXY') {
     return parseMtproxyPublicConfig(config);
   }
@@ -282,6 +349,24 @@ export function storageFromInbound(
       storage: {
         publicConfig: publicConfig as Hysteria2InboundPublicConfig,
         secrets: secrets,
+      },
+    };
+  }
+  if (protocol === 'TROJAN_TLS') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as TrojanTlsInboundPublicConfig,
+        secrets,
+      },
+    };
+  }
+  if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as WireguardInboundPublicConfig,
+        secrets: secrets as WireguardInboundSecrets,
       },
     };
   }
@@ -340,7 +425,7 @@ export function storageFromInbound(
     };
   }
   return {
-    protocol: 'SHADOWSOCKS',
+    protocol,
     storage: {
       publicConfig: publicConfig as ShadowsocksInboundPublicConfig,
       secrets: secrets as ShadowsocksInboundSecrets,
@@ -401,9 +486,19 @@ export function isInboundSecretBundle(
   if (
     protocol === 'VLESS_XHTTP_TLS' ||
     protocol === 'VLESS_GRPC_TLS' ||
-    protocol === 'VLESS_TCP_TLS'
+    protocol === 'VLESS_TCP_TLS' ||
+    protocol === 'TROJAN_TLS'
   ) {
     return isXrayFilesTlsSecrets(value);
+  }
+  if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+    return (
+      keys.size <= 3 &&
+      keys.has('privateKey') &&
+      keys.has('publicKey') &&
+      typeof value.privateKey === 'string' &&
+      typeof value.publicKey === 'string'
+    );
   }
   if (protocol === 'TROJAN') {
     return [...keys].every(

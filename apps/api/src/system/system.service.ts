@@ -1,15 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CoreEngine } from '@overvpn/shared/constants';
 import type {
   GlobalUsage,
   OnlineSessionListQuery,
   OnlineSessionListResponse,
   SystemDashboard,
+  SystemEngines,
+  SystemEngineStatus,
   SystemHealth,
   SystemHostStats,
   UsageDateRangeQuery,
 } from '@overvpn/shared/schemas';
+import {
+  CORE_ENGINES,
+  INBOUND_PROTOCOLS,
+  PROTOCOL_ENGINE_MAP,
+  publishedListenPortForProtocol,
+  publishedTransportForProtocol,
+  type CoreEngine,
+} from '@overvpn/shared';
 import { localizeThroughputReason } from '../core/core-user-messages';
 import type { AppEnvironment } from '../config/environment';
 import {
@@ -25,9 +34,33 @@ import {
 } from '../workers/worker-health.service';
 import { HostMetricsService } from './host-metrics.service';
 
+const ENABLE_CORE_COMMAND: Record<CoreEngine, string> = {
+  SING_BOX: 'overvpn enable-core singbox',
+  XRAY: 'overvpn enable-core xray',
+  MTPROXY: 'overvpn enable-core mtproxy',
+};
+
 @Injectable()
 export class SystemService {
   private readonly sessionTimeoutMs: number;
+  private readonly singBoxEnabled: boolean;
+  private readonly xrayEnabled: boolean;
+  private readonly mtproxyEnabled: boolean;
+  private readonly publishedPorts: {
+    singBoxUdpPort: number;
+    singBoxTcpPort: number;
+    singBoxTrojanPort: number;
+    singBoxSsPort: number;
+    singBoxWgPort: number;
+    xrayListenPort: number;
+    xrayGrpcPort: number;
+    xrayTcpTlsPort: number;
+    xrayTrojanPort: number;
+    xraySsPort: number;
+    xrayWgPort: number;
+    mtproxyPortMin: number;
+    mtproxyPortMax: number;
+  };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -39,6 +72,24 @@ export class SystemService {
     this.sessionTimeoutMs = config.get('ONLINE_SESSION_TIMEOUT_MS', {
       infer: true,
     });
+    this.singBoxEnabled = config.get('SING_BOX_ENABLED', { infer: true });
+    this.xrayEnabled = config.get('XRAY_ENABLED', { infer: true });
+    this.mtproxyEnabled = config.get('MTPROXY_ENABLED', { infer: true });
+    this.publishedPorts = {
+      singBoxUdpPort: config.get('SING_BOX_UDP_PORT', { infer: true }),
+      singBoxTcpPort: config.get('SING_BOX_TCP_PORT', { infer: true }),
+      singBoxTrojanPort: config.get('SING_BOX_TROJAN_PORT', { infer: true }),
+      singBoxSsPort: config.get('SING_BOX_SS_PORT', { infer: true }),
+      singBoxWgPort: config.get('SING_BOX_WG_PORT', { infer: true }),
+      xrayListenPort: config.get('XRAY_LISTEN_PORT', { infer: true }),
+      xrayGrpcPort: config.get('XRAY_GRPC_PORT', { infer: true }),
+      xrayTcpTlsPort: config.get('XRAY_TCP_TLS_PORT', { infer: true }),
+      xrayTrojanPort: config.get('XRAY_TROJAN_PORT', { infer: true }),
+      xraySsPort: config.get('XRAY_SS_PORT', { infer: true }),
+      xrayWgPort: config.get('XRAY_WG_PORT', { infer: true }),
+      mtproxyPortMin: config.get('MTPROXY_PORT_MIN', { infer: true }),
+      mtproxyPortMax: config.get('MTPROXY_PORT_MAX', { infer: true }),
+    };
   }
 
   hostStats(): SystemHostStats {
@@ -243,6 +294,50 @@ export class SystemService {
       core: toCoreHealthPayload(core),
       workers,
     };
+  }
+
+  async engines(): Promise<SystemEngines> {
+    const core = await this.core.health();
+    const engineHealth: Partial<Record<CoreEngine, CoreHealthResult>> =
+      'engines' in core && core.engines
+        ? (core.engines as Partial<Record<CoreEngine, CoreHealthResult>>)
+        : {};
+    const engines: SystemEngineStatus[] = CORE_ENGINES.map((engine) => {
+      const enabled = this.isEngineEnabled(engine);
+      const health = engineHealth[engine];
+      const protocols = INBOUND_PROTOCOLS.filter(
+        (protocol) => PROTOCOL_ENGINE_MAP[protocol] === engine,
+      );
+      return {
+        engine,
+        enabled,
+        running: enabled && Boolean(health),
+        healthy: enabled ? (health?.healthy ?? false) : null,
+        version: health?.version ?? null,
+        protocols: [...protocols],
+        publishedPorts: protocols.map((protocol) => ({
+          protocol,
+          port: publishedListenPortForProtocol(protocol, this.publishedPorts),
+          transport: publishedTransportForProtocol(protocol),
+        })),
+        enableCommand: ENABLE_CORE_COMMAND[engine],
+      };
+    });
+    return {
+      checkedAt: new Date().toISOString(),
+      engines,
+    };
+  }
+
+  private isEngineEnabled(engine: CoreEngine): boolean {
+    switch (engine) {
+      case 'SING_BOX':
+        return this.singBoxEnabled;
+      case 'XRAY':
+        return this.xrayEnabled;
+      case 'MTPROXY':
+        return this.mtproxyEnabled;
+    }
   }
 }
 

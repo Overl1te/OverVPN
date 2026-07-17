@@ -94,9 +94,16 @@ describe('SettingsService', () => {
     expect(initial.readOnly.singBoxTcpPort).toBe(4443);
     expect(initial.readOnly.singBoxTrojanPort).toBe(8444);
     expect(initial.readOnly.singBoxSsPort).toBe(8445);
+    expect(initial.readOnly.singBoxWgPort).toBe(51820);
     expect(initial.readOnly.xrayListenPort).toBe(9443);
     expect(initial.readOnly.xrayGrpcPort).toBe(9446);
     expect(initial.readOnly.xrayTcpTlsPort).toBe(9447);
+    expect(initial.readOnly.xrayTrojanPort).toBe(9448);
+    expect(initial.readOnly.xraySsPort).toBe(9449);
+    expect(initial.readOnly.xrayWgPort).toBe(51821);
+    expect(initial.readOnly.singBoxEnabled).toBe(true);
+    expect(initial.readOnly.xrayEnabled).toBe(true);
+    expect(initial.readOnly.mtproxyEnabled).toBe(true);
     expect(initial.readOnly.tlsCertificatePath).toBeNull();
     expect(initial.readOnly.tlsKeyPath).toBeNull();
     expect(initial).not.toHaveProperty('telegramBotToken');
@@ -163,11 +170,18 @@ function testConfig(): ConfigService<AppEnvironment, true> {
     SING_BOX_TCP_PORT: 4443,
     SING_BOX_TROJAN_PORT: 8444,
     SING_BOX_SS_PORT: 8445,
+    SING_BOX_WG_PORT: 51820,
     XRAY_LISTEN_PORT: 9443,
     XRAY_GRPC_PORT: 9446,
     XRAY_TCP_TLS_PORT: 9447,
+    XRAY_TROJAN_PORT: 9448,
+    XRAY_SS_PORT: 9449,
+    XRAY_WG_PORT: 51821,
     MTPROXY_PORT_MIN: 10001,
     MTPROXY_PORT_MAX: 10016,
+    SING_BOX_ENABLED: true,
+    XRAY_ENABLED: true,
+    MTPROXY_ENABLED: true,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   };

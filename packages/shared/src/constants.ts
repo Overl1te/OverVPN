@@ -42,9 +42,13 @@ export const INBOUND_PROTOCOLS = [
   'VLESS_REALITY',
   'TROJAN',
   'SHADOWSOCKS',
+  'WIREGUARD',
   'VLESS_XHTTP_TLS',
   'VLESS_GRPC_TLS',
   'VLESS_TCP_TLS',
+  'TROJAN_TLS',
+  'SHADOWSOCKS_XRAY',
+  'WIREGUARD_XRAY',
   'MTPROXY',
 ] as const;
 export type InboundProtocol = (typeof INBOUND_PROTOCOLS)[number];
@@ -57,9 +61,13 @@ export const PROTOCOL_ENGINE_MAP = {
   VLESS_REALITY: 'SING_BOX',
   TROJAN: 'SING_BOX',
   SHADOWSOCKS: 'SING_BOX',
+  WIREGUARD: 'SING_BOX',
   VLESS_XHTTP_TLS: 'XRAY',
   VLESS_GRPC_TLS: 'XRAY',
   VLESS_TCP_TLS: 'XRAY',
+  TROJAN_TLS: 'XRAY',
+  SHADOWSOCKS_XRAY: 'XRAY',
+  WIREGUARD_XRAY: 'XRAY',
   MTPROXY: 'MTPROXY',
 } as const satisfies Record<InboundProtocol, CoreEngine>;
 
@@ -74,7 +82,11 @@ export const PROTOCOL_DISPLAY_LABELS = {
   VLESS_GRPC_TLS: 'gRPC',
   VLESS_TCP_TLS: 'TCP TLS',
   TROJAN: 'Trojan',
+  TROJAN_TLS: 'Trojan TLS',
   SHADOWSOCKS: 'Shadowsocks',
+  SHADOWSOCKS_XRAY: 'Shadowsocks',
+  WIREGUARD: 'WireGuard',
+  WIREGUARD_XRAY: 'WireGuard',
   MTPROXY: 'MTProxy',
 } as const satisfies Record<InboundProtocol, string>;
 

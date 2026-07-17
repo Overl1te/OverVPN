@@ -3,11 +3,13 @@ import type {
   Hysteria2InboundSettings,
   MtproxyInboundSettings,
   ShadowsocksInboundSettings,
+  TrojanTlsInboundSettings,
   TrojanInboundSettings,
   VlessGrpcTlsInboundSettings,
   VlessRealityInboundSettings,
   VlessTcpTlsInboundSettings,
   VlessXhttpTlsInboundSettings,
+  WireguardInboundSettings,
 } from './schemas.js';
 
 export type InboundDefaultsContext = {
@@ -22,12 +24,20 @@ export type InboundDefaultsContext = {
   singBoxTrojanPort?: number;
   /** Published sing-box Shadowsocks TCP port (compose SING_BOX_SS_PORT). */
   singBoxSsPort?: number;
+  /** Published sing-box WireGuard UDP port. */
+  singBoxWgPort?: number;
   /** Published Xray TCP listen port (compose XRAY_LISTEN_PORT) — VLESS xHTTP TLS. */
   xrayListenPort?: number;
   /** Published Xray gRPC TLS port (compose XRAY_GRPC_PORT). */
   xrayGrpcPort?: number;
   /** Published Xray TCP TLS port (compose XRAY_TCP_TLS_PORT). */
   xrayTcpTlsPort?: number;
+  /** Published Xray Trojan TLS TCP port. */
+  xrayTrojanPort?: number;
+  /** Published Xray Shadowsocks TCP/UDP port. */
+  xraySsPort?: number;
+  /** Published Xray WireGuard UDP port. */
+  xrayWgPort?: number;
   /** First published MTProxy TCP port (compose MTPROXY_PORT_MIN). */
   mtproxyPortMin?: number;
   /** Last published MTProxy TCP port (compose MTPROXY_PORT_MAX). */
@@ -51,6 +61,7 @@ const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>([
   'VLESS_XHTTP_TLS',
   'VLESS_GRPC_TLS',
   'VLESS_TCP_TLS',
+  'TROJAN_TLS',
 ]);
 
 export type PublishedPortContext = Pick<
@@ -59,9 +70,13 @@ export type PublishedPortContext = Pick<
   | 'singBoxTcpPort'
   | 'singBoxTrojanPort'
   | 'singBoxSsPort'
+  | 'singBoxWgPort'
   | 'xrayListenPort'
   | 'xrayGrpcPort'
   | 'xrayTcpTlsPort'
+  | 'xrayTrojanPort'
+  | 'xraySsPort'
+  | 'xrayWgPort'
   | 'mtproxyPortMin'
   | 'mtproxyPortMax'
 >;
@@ -80,12 +95,20 @@ export function publishedListenPortForProtocol(
       return context.singBoxTrojanPort ?? 8444;
     case 'SHADOWSOCKS':
       return context.singBoxSsPort ?? 8445;
+    case 'WIREGUARD':
+      return context.singBoxWgPort ?? 51_820;
     case 'VLESS_XHTTP_TLS':
       return context.xrayListenPort ?? 8443;
     case 'VLESS_GRPC_TLS':
       return context.xrayGrpcPort ?? 8446;
     case 'VLESS_TCP_TLS':
       return context.xrayTcpTlsPort ?? 8447;
+    case 'TROJAN_TLS':
+      return context.xrayTrojanPort ?? 8448;
+    case 'SHADOWSOCKS_XRAY':
+      return context.xraySsPort ?? 8449;
+    case 'WIREGUARD_XRAY':
+      return context.xrayWgPort ?? 51_821;
     case 'MTPROXY':
       return context.mtproxyPortMin ?? 10_001;
   }
@@ -108,7 +131,11 @@ export function isPublishedMtproxyPort(listenPort: number, context: PublishedPor
 export function publishedTransportForProtocol(
   protocol: InboundProtocol,
 ): InboundPublishedTransport {
-  return protocol === 'HYSTERIA2' ? 'udp' : 'tcp';
+  return protocol === 'HYSTERIA2' ||
+    protocol === 'WIREGUARD' ||
+    protocol === 'WIREGUARD_XRAY'
+    ? 'udp'
+    : 'tcp';
 }
 
 type AcmeTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'ACME' }>;
@@ -225,7 +252,9 @@ export function buildDefaultInboundSettings(
   | VlessGrpcTlsInboundSettings
   | VlessTcpTlsInboundSettings
   | TrojanInboundSettings
+  | TrojanTlsInboundSettings
   | ShadowsocksInboundSettings
+  | WireguardInboundSettings
   | MtproxyInboundSettings {
   const publicHost = overrides?.publicHost ?? context.publicHost;
   const common = listenFields(protocol, { ...context, publicHost }, overrides);
@@ -274,9 +303,17 @@ export function buildDefaultInboundSettings(
         fallback: null,
       };
     case 'SHADOWSOCKS':
+    case 'SHADOWSOCKS_XRAY':
       return {
         ...common,
         method: '2022-blake3-aes-256-gcm',
+      };
+    case 'WIREGUARD':
+    case 'WIREGUARD_XRAY':
+      return {
+        ...common,
+        address: '10.66.0.1/24',
+        mtu: 1420,
       };
     case 'VLESS_XHTTP_TLS': {
       const paths = requireXrayFilesTlsPaths(protocol, context);
@@ -317,6 +354,19 @@ export function buildDefaultInboundSettings(
           certificatePath: paths.certificatePath,
           keyPath: paths.keyPath,
         },
+      };
+    }
+    case 'TROJAN_TLS': {
+      const paths = requireXrayFilesTlsPaths(protocol, context);
+      return {
+        ...common,
+        tls: {
+          mode: 'FILES',
+          sni: publicHost,
+          certificatePath: paths.certificatePath,
+          keyPath: paths.keyPath,
+        },
+        fallback: null,
       };
     }
     case 'MTPROXY':

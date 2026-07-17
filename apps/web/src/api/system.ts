@@ -1,6 +1,7 @@
 import type {
   GlobalUsage,
   SystemDashboard,
+  SystemEngines,
   SystemHealth,
   SystemHostStats,
   SystemUpdateStatus,
@@ -18,6 +19,10 @@ export function getDashboard(
 
 export function getSystemHealth(): Promise<SystemHealth> {
   return apiRequest<SystemHealth>('/admin/system/health');
+}
+
+export function getSystemEngines(): Promise<SystemEngines> {
+  return apiRequest<SystemEngines>('/admin/system/engines');
 }
 
 export function getHostStats(): Promise<SystemHostStats> {

@@ -2,10 +2,13 @@ import { randomBytes } from 'node:crypto';
 import type {
   TrojanInboundPublicConfig,
   TrojanInboundSettings,
+  TrojanTlsInboundPublicConfig,
+  TrojanTlsInboundSettings,
 } from '@overvpn/shared/schemas';
 import type {
   PasswordCredential,
   TrojanInboundSecrets,
+  TrojanTlsInboundSecrets,
 } from '../core/core-provider';
 import {
   formatUriHost,
@@ -16,6 +19,11 @@ import {
 export interface TrojanStorage {
   publicConfig: TrojanInboundPublicConfig;
   secrets: TrojanInboundSecrets;
+}
+
+export interface TrojanTlsStorage {
+  publicConfig: TrojanTlsInboundPublicConfig;
+  secrets: TrojanTlsInboundSecrets;
 }
 
 export function generateTrojanPassword(): string {
@@ -124,6 +132,44 @@ export function buildTrojanStorage(
         : null,
     },
     secrets,
+  };
+}
+
+export function buildTrojanTlsStorage(
+  settings: TrojanTlsInboundSettings,
+  previous?: TrojanTlsStorage,
+): TrojanTlsStorage {
+  const usesPaths = Boolean(
+    settings.tls.certificatePath && settings.tls.keyPath,
+  );
+  const certificatePem = usesPaths
+    ? undefined
+    : (settings.tls.certificatePem ?? previous?.secrets.certificatePem);
+  const privateKeyPem = usesPaths
+    ? undefined
+    : (settings.tls.privateKeyPem ?? previous?.secrets.privateKeyPem);
+  return {
+    publicConfig: {
+      tls: {
+        mode: 'FILES',
+        sni: settings.tls.sni,
+        certificatePath: settings.tls.certificatePath ?? null,
+        keyPath: settings.tls.keyPath ?? null,
+        certificatePemPresent: Boolean(certificatePem),
+        privateKeyPemPresent: Boolean(privateKeyPem),
+      },
+      fallback: settings.fallback
+        ? {
+            server: settings.fallback.server,
+            serverPort: settings.fallback.serverPort,
+          }
+        : null,
+    },
+    secrets: {
+      version: 1,
+      ...(certificatePem ? { certificatePem } : {}),
+      ...(privateKeyPem ? { privateKeyPem } : {}),
+    },
   };
 }
 

@@ -5,10 +5,12 @@ import {
   mtproxyInboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
+  trojanTlsInboundPublicConfigSchema,
   vlessGrpcTlsPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
   vlessTcpTlsPublicConfigSchema,
   vlessXhttpTlsPublicConfigSchema,
+  wireguardInboundPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import { z } from 'zod';
 import { SecretEncryptionService } from '../auth/auth-crypto';
@@ -21,10 +23,13 @@ import type {
   MtproxyInboundSecrets,
   ShadowsocksInboundSecrets,
   TrojanInboundSecrets,
+  TrojanTlsInboundSecrets,
   VlessGrpcTlsInboundSecrets,
   VlessRealityInboundSecrets,
   VlessTcpTlsInboundSecrets,
   VlessXhttpTlsInboundSecrets,
+  WireguardCredential,
+  WireguardInboundSecrets,
 } from './core-provider';
 import { coreStateId } from './core-ids';
 
@@ -80,6 +85,14 @@ const shadowsocksSecretsSchema = z
   })
   .strict();
 
+const wireguardSecretsSchema = z
+  .object({
+    version: z.literal(1),
+    privateKey: z.string().min(1),
+    publicKey: z.string().min(1),
+  })
+  .strict();
+
 const mtproxySecretsSchema = z
   .object({
     version: z.literal(1),
@@ -97,6 +110,15 @@ const vlessCredentialSchema = z
   .object({
     version: z.literal(1),
     uuid: z.string().uuid(),
+  })
+  .strict();
+
+const wireguardCredentialSchema = z
+  .object({
+    version: z.literal(1),
+    privateKey: z.string().min(1),
+    publicKey: z.string().min(1),
+    address: z.string().min(1),
   })
   .strict();
 
@@ -257,6 +279,18 @@ export class CoreStateLoader {
         });
         continue;
       }
+      if (inbound.protocol === 'TROJAN_TLS') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'TROJAN_TLS',
+          config: trojanTlsInboundPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptTrojanTlsSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+        });
+        continue;
+      }
       if (inbound.protocol === 'SHADOWSOCKS') {
         desiredInbounds.push({
           ...base,
@@ -266,6 +300,36 @@ export class CoreStateLoader {
             inbound.id,
             inbound.secretDataEncrypted,
           ),
+        });
+        continue;
+      }
+      if (inbound.protocol === 'SHADOWSOCKS_XRAY') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'SHADOWSOCKS_XRAY',
+          config: shadowsocksInboundPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptShadowsocksSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+        });
+        continue;
+      }
+      if (
+        inbound.protocol === 'WIREGUARD' ||
+        inbound.protocol === 'WIREGUARD_XRAY'
+      ) {
+        desiredInbounds.push({
+          ...base,
+          protocol: inbound.protocol,
+          config: wireguardInboundPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptWireguardSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+          assignments: assignments as Array<
+            (typeof assignments)[number] & { credential: WireguardCredential }
+          >,
         });
         continue;
       }
@@ -339,6 +403,29 @@ export class CoreStateLoader {
     }
     try {
       return trojanSecretsSchema.parse(
+        JSON.parse(this.encryption.decrypt(encrypted)) as unknown,
+      );
+    } catch {
+      throw new Error(`Inbound ${inboundId} has unreadable encrypted secrets`);
+    }
+  }
+
+  private decryptTrojanTlsSecrets(
+    inboundId: string,
+    encrypted: string | null,
+  ): TrojanTlsInboundSecrets {
+    return this.decryptVlessXhttpTlsSecrets(inboundId, encrypted);
+  }
+
+  private decryptWireguardSecrets(
+    inboundId: string,
+    encrypted: string | null,
+  ): WireguardInboundSecrets {
+    if (!encrypted) {
+      throw new Error(`Inbound ${inboundId} is missing WireGuard secrets`);
+    }
+    try {
+      return wireguardSecretsSchema.parse(
         JSON.parse(this.encryption.decrypt(encrypted)) as unknown,
       );
     } catch {
@@ -427,6 +514,9 @@ export class CoreStateLoader {
         protocol === 'VLESS_TCP_TLS'
       ) {
         return vlessCredentialSchema.parse(parsed);
+      }
+      if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+        return wireguardCredentialSchema.parse(parsed);
       }
       return passwordCredentialSchema.parse(parsed);
     } catch {

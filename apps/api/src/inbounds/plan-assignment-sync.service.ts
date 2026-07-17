@@ -8,11 +8,15 @@ import { coreStateId } from '../core/core-ids';
 import type { AssignmentCredential } from '../core/core-provider';
 import type { Inbound, Prisma } from '../generated/prisma/client';
 import { createCredential } from './hysteria2-domain';
-import { parseShadowsocksPublicConfig } from './inbound-storage';
+import {
+  parseShadowsocksPublicConfig,
+  parseWireguardPublicConfig,
+} from './inbound-storage';
 import { createMtproxyCredential } from './mtproxy-domain';
 import { createShadowsocksCredential } from './shadowsocks-domain';
 import { createTrojanCredential } from './trojan-domain';
 import { createVlessCredential } from './vless-reality-domain';
+import { createWireguardCredential } from './wireguard-domain';
 
 /**
  * Keeps user↔inbound assignments aligned with a plan's inbound list.
@@ -141,12 +145,23 @@ export class PlanAssignmentSyncService {
     ) {
       return createVlessCredential();
     }
-    if (inbound.protocol === 'TROJAN') {
+    if (inbound.protocol === 'TROJAN' || inbound.protocol === 'TROJAN_TLS') {
       return createTrojanCredential();
     }
-    if (inbound.protocol === 'SHADOWSOCKS') {
+    if (
+      inbound.protocol === 'SHADOWSOCKS' ||
+      inbound.protocol === 'SHADOWSOCKS_XRAY'
+    ) {
       const publicConfig = parseShadowsocksPublicConfig(inbound.config);
       return createShadowsocksCredential(publicConfig.method);
+    }
+    if (
+      inbound.protocol === 'WIREGUARD' ||
+      inbound.protocol === 'WIREGUARD_XRAY'
+    ) {
+      return createWireguardCredential(
+        parseWireguardPublicConfig(inbound.config).address,
+      );
     }
     if (inbound.protocol === 'MTPROXY') {
       return createMtproxyCredential();

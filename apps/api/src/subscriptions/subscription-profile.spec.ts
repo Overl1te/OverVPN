@@ -3,12 +3,16 @@ import type { SecretEncryptionService } from '../auth/auth-crypto';
 import {
   Hysteria2SubscriptionAdapter,
   ShadowsocksSubscriptionAdapter,
+  ShadowsocksXraySubscriptionAdapter,
   SubscriptionProfileBuilder,
   TrojanSubscriptionAdapter,
+  TrojanTlsSubscriptionAdapter,
   VlessGrpcTlsSubscriptionAdapter,
   VlessRealitySubscriptionAdapter,
   VlessTcpTlsSubscriptionAdapter,
   VlessXhttpTlsSubscriptionAdapter,
+  WireguardSubscriptionAdapter,
+  WireguardXraySubscriptionAdapter,
   renderClashProfile,
   renderLinkList,
   renderSingBoxProfile,
@@ -25,7 +29,11 @@ function createBuilder(
     new VlessGrpcTlsSubscriptionAdapter(encryption),
     new VlessTcpTlsSubscriptionAdapter(encryption),
     new TrojanSubscriptionAdapter(encryption),
+    new TrojanTlsSubscriptionAdapter(encryption),
     new ShadowsocksSubscriptionAdapter(encryption),
+    new ShadowsocksXraySubscriptionAdapter(encryption),
+    new WireguardSubscriptionAdapter(encryption),
+    new WireguardXraySubscriptionAdapter(encryption),
   );
 }
 

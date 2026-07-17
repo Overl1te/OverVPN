@@ -568,6 +568,36 @@ export const systemHealthSchema = z
   .strict();
 export type SystemHealth = z.infer<typeof systemHealthSchema>;
 
+export const systemEngineStatusSchema = z
+  .object({
+    engine: z.enum(CORE_ENGINES),
+    enabled: z.boolean(),
+    running: z.boolean(),
+    healthy: z.boolean().nullable(),
+    version: z.string().nullable(),
+    protocols: z.array(inboundProtocolSchema),
+    publishedPorts: z.array(
+      z
+        .object({
+          protocol: inboundProtocolSchema,
+          port: z.number().int().min(1).max(65_535),
+          transport: z.enum(['tcp', 'udp']),
+        })
+        .strict(),
+    ),
+    enableCommand: z.string().min(1),
+  })
+  .strict();
+export type SystemEngineStatus = z.infer<typeof systemEngineStatusSchema>;
+
+export const systemEnginesSchema = z
+  .object({
+    checkedAt: isoDateTimeSchema,
+    engines: z.array(systemEngineStatusSchema),
+  })
+  .strict();
+export type SystemEngines = z.infer<typeof systemEnginesSchema>;
+
 /** Host device stats for the admin overview (CPU / RAM / NIC), Marzban-style. */
 export const systemHostStatsSchema = z
   .object({
@@ -1236,6 +1266,15 @@ export const trojanInboundSettingsSchema = z
   });
 export type TrojanInboundSettings = z.infer<typeof trojanInboundSettingsSchema>;
 
+export const trojanTlsInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    tls: vlessXhttpTlsFilesInputSchema,
+    fallback: trojanFallbackInputSchema,
+  })
+  .strict();
+export type TrojanTlsInboundSettings = z.infer<typeof trojanTlsInboundSettingsSchema>;
+
 export const shadowsocksMethodSchema = z.enum([
   '2022-blake3-aes-128-gcm',
   '2022-blake3-aes-256-gcm',
@@ -1317,6 +1356,44 @@ export const shadowsocksInboundSettingsSchema = z
     }
   });
 export type ShadowsocksInboundSettings = z.infer<typeof shadowsocksInboundSettingsSchema>;
+export const shadowsocksXrayInboundSettingsSchema =
+  shadowsocksInboundSettingsSchema.safeExtend({
+    method: z.literal('2022-blake3-aes-256-gcm'),
+  });
+
+const wireguardKeySchema = z
+  .string()
+  .min(43)
+  .max(44)
+  .regex(/^[A-Za-z0-9+/_-]{43}=?$/, 'Expected a base64 WireGuard key');
+
+const wireguardAddressSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^(?:10|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\/(?:[8-9]|[12]\d|3[0-2])$/,
+    'Expected a private IPv4 CIDR',
+  );
+
+export const wireguardInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    address: wireguardAddressSchema.default('10.66.0.1/24'),
+    mtu: z.number().int().min(576).max(9_000).optional().default(1_420),
+    privateKey: wireguardKeySchema.optional(),
+    publicKey: wireguardKeySchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.privateKey === undefined) !== (value.publicKey === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['publicKey'],
+        message: 'privateKey and publicKey must both be supplied or both omitted',
+      });
+    }
+  });
+export type WireguardInboundSettings = z.infer<typeof wireguardInboundSettingsSchema>;
 
 export const mtproxySecretModeSchema = z.enum(['CLASSIC', 'SECURE', 'TLS']);
 export type MtproxySecretMode = z.infer<typeof mtproxySecretModeSchema>;
@@ -1407,6 +1484,38 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
   z
     .object({
       tag: singBoxTagSchema,
+      protocol: z.literal('WIREGUARD'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: wireguardInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
+      protocol: z.literal('TROJAN_TLS'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: trojanTlsInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
+      protocol: z.literal('SHADOWSOCKS_XRAY'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: shadowsocksXrayInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
+      protocol: z.literal('WIREGUARD_XRAY'),
+      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+      settings: wireguardInboundSettingsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tag: singBoxTagSchema,
       protocol: z.literal('MTPROXY'),
       displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: mtproxyInboundSettingsSchema,
@@ -1428,7 +1537,9 @@ export const updateInboundSchema = z
         vlessGrpcTlsInboundSettingsSchema,
         vlessTcpTlsInboundSettingsSchema,
         trojanInboundSettingsSchema,
+        trojanTlsInboundSettingsSchema,
         shadowsocksInboundSettingsSchema,
+        wireguardInboundSettingsSchema,
         mtproxyInboundSettingsSchema,
       ])
       .optional(),
@@ -1617,6 +1728,20 @@ export const trojanInboundPublicConfigSchema = z
   .strict();
 export type TrojanInboundPublicConfig = z.infer<typeof trojanInboundPublicConfigSchema>;
 
+export const trojanTlsInboundPublicConfigSchema = z
+  .object({
+    tls: vlessFilesTlsPublicSchema,
+    fallback: z
+      .object({
+        server: z.string(),
+        serverPort: z.number().int(),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type TrojanTlsInboundPublicConfig = z.infer<typeof trojanTlsInboundPublicConfigSchema>;
+
 export const shadowsocksInboundPublicConfigSchema = z
   .object({
     method: shadowsocksMethodSchema,
@@ -1624,6 +1749,16 @@ export const shadowsocksInboundPublicConfigSchema = z
   })
   .strict();
 export type ShadowsocksInboundPublicConfig = z.infer<typeof shadowsocksInboundPublicConfigSchema>;
+
+export const wireguardInboundPublicConfigSchema = z
+  .object({
+    address: wireguardAddressSchema,
+    mtu: z.number().int().min(576).max(9_000),
+    privateKeyPresent: z.boolean(),
+    publicKeyPresent: z.boolean(),
+  })
+  .strict();
+export type WireguardInboundPublicConfig = z.infer<typeof wireguardInboundPublicConfigSchema>;
 
 export const mtproxyInboundPublicConfigSchema = z
   .object({
@@ -1701,6 +1836,34 @@ export const inboundResultSchema = z.discriminatedUnion('protocol', [
       ...inboundResultCommonFields,
       protocol: z.literal('SHADOWSOCKS'),
       settings: shadowsocksInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('WIREGUARD'),
+      settings: wireguardInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('TROJAN_TLS'),
+      settings: trojanTlsInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('SHADOWSOCKS_XRAY'),
+      settings: shadowsocksInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('WIREGUARD_XRAY'),
+      settings: wireguardInboundPublicConfigSchema.extend(inboundListenPublicFields),
     })
     .strict(),
   z
@@ -1877,6 +2040,27 @@ export const mtproxyLinkSchema = z
   .strict();
 export type MtproxyLinkResult = z.infer<typeof mtproxyLinkSchema>;
 
+export const trojanTlsLinkSchema = trojanLinkSchema.extend({
+  protocol: z.literal('TROJAN_TLS'),
+});
+export const shadowsocksXrayLinkSchema = shadowsocksLinkSchema.extend({
+  protocol: z.literal('SHADOWSOCKS_XRAY'),
+});
+const wireguardLinkBaseSchema = z
+  .object({
+    assignmentId: idSchema,
+    credentialVersion: z.number().int().positive(),
+    uri: z.string().startsWith('wg://'),
+    generatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export const wireguardLinkSchema = wireguardLinkBaseSchema.extend({
+  protocol: z.literal('WIREGUARD'),
+});
+export const wireguardXrayLinkSchema = wireguardLinkBaseSchema.extend({
+  protocol: z.literal('WIREGUARD_XRAY'),
+});
+
 export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   hysteria2LinkSchema,
   vlessRealityLinkSchema,
@@ -1884,7 +2068,11 @@ export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   vlessGrpcTlsLinkSchema,
   vlessTcpTlsLinkSchema,
   trojanLinkSchema,
+  trojanTlsLinkSchema,
   shadowsocksLinkSchema,
+  shadowsocksXrayLinkSchema,
+  wireguardLinkSchema,
+  wireguardXrayLinkSchema,
   mtproxyLinkSchema,
 ]);
 export type InboundLinkResult = z.infer<typeof inboundLinkSchema>;
@@ -2085,6 +2273,45 @@ export const shadowsocksSubscriptionEndpointSchema = z
   .strict();
 export type ShadowsocksSubscriptionEndpoint = z.infer<typeof shadowsocksSubscriptionEndpointSchema>;
 
+export const trojanTlsSubscriptionEndpointSchema = trojanSubscriptionEndpointSchema.extend({
+  protocol: z.literal('TROJAN_TLS'),
+});
+export type TrojanTlsSubscriptionEndpoint = z.infer<typeof trojanTlsSubscriptionEndpointSchema>;
+
+export const shadowsocksXraySubscriptionEndpointSchema =
+  shadowsocksSubscriptionEndpointSchema.extend({
+    protocol: z.literal('SHADOWSOCKS_XRAY'),
+  });
+export type ShadowsocksXraySubscriptionEndpoint = z.infer<
+  typeof shadowsocksXraySubscriptionEndpointSchema
+>;
+
+const wireguardSubscriptionEndpointBaseSchema = z
+  .object({
+    tag: z.string().min(1).max(128),
+    displayName: z.string().min(1).max(256),
+    server: z.string().min(1).max(255),
+    port: z.number().int().min(1).max(65_535),
+    privateKey: wireguardKeySchema,
+    publicKey: wireguardKeySchema,
+    serverPublicKey: wireguardKeySchema,
+    address: z.string().min(1).max(64),
+    mtu: z.number().int().min(576).max(9_000),
+  })
+  .strict();
+export const wireguardSubscriptionEndpointSchema =
+  wireguardSubscriptionEndpointBaseSchema.extend({
+    protocol: z.literal('WIREGUARD'),
+  });
+export const wireguardXraySubscriptionEndpointSchema =
+  wireguardSubscriptionEndpointBaseSchema.extend({
+    protocol: z.literal('WIREGUARD_XRAY'),
+  });
+export type WireguardSubscriptionEndpoint = z.infer<typeof wireguardSubscriptionEndpointSchema>;
+export type WireguardXraySubscriptionEndpoint = z.infer<
+  typeof wireguardXraySubscriptionEndpointSchema
+>;
+
 export const subscriptionEndpointSchema = z.discriminatedUnion('protocol', [
   hysteria2SubscriptionEndpointSchema,
   vlessRealitySubscriptionEndpointSchema,
@@ -2092,7 +2319,11 @@ export const subscriptionEndpointSchema = z.discriminatedUnion('protocol', [
   vlessGrpcTlsSubscriptionEndpointSchema,
   vlessTcpTlsSubscriptionEndpointSchema,
   trojanSubscriptionEndpointSchema,
+  trojanTlsSubscriptionEndpointSchema,
   shadowsocksSubscriptionEndpointSchema,
+  shadowsocksXraySubscriptionEndpointSchema,
+  wireguardSubscriptionEndpointSchema,
+  wireguardXraySubscriptionEndpointSchema,
 ]);
 export type SubscriptionEndpoint = z.infer<typeof subscriptionEndpointSchema>;
 
@@ -2364,11 +2595,18 @@ export const systemSettingsReadOnlySchema = z
     singBoxTcpPort: z.number().int().min(1).max(65_535),
     singBoxTrojanPort: z.number().int().min(1).max(65_535),
     singBoxSsPort: z.number().int().min(1).max(65_535),
+    singBoxWgPort: z.number().int().min(1).max(65_535),
     xrayListenPort: z.number().int().min(1).max(65_535),
     xrayGrpcPort: z.number().int().min(1).max(65_535),
     xrayTcpTlsPort: z.number().int().min(1).max(65_535),
+    xrayTrojanPort: z.number().int().min(1).max(65_535),
+    xraySsPort: z.number().int().min(1).max(65_535),
+    xrayWgPort: z.number().int().min(1).max(65_535),
     mtproxyPortMin: z.number().int().min(1).max(65_535),
     mtproxyPortMax: z.number().int().min(1).max(65_535),
+    singBoxEnabled: z.boolean(),
+    xrayEnabled: z.boolean(),
+    mtproxyEnabled: z.boolean(),
     tlsCertificatePath: z.string().nullable(),
     tlsKeyPath: z.string().nullable(),
     telegramEnvConfigured: z.boolean(),

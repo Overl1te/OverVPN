@@ -97,6 +97,28 @@ export function SetupPage() {
   }, [setup.isLoading, setup.steps, stepInitialized]);
 
   useEffect(() => {
+    if (!inboundsQuery.isSuccess || current !== 0) {
+      return;
+    }
+    const existing = inboundsQuery.data.items;
+    if (existing.length === 0) {
+      return;
+    }
+    if (!createdInboundId) {
+      setCreatedInboundId(existing[0]!.id);
+    }
+    if (!setup.steps[0]?.done) {
+      setCurrent(1);
+    }
+  }, [
+    createdInboundId,
+    current,
+    inboundsQuery.data,
+    inboundsQuery.isSuccess,
+    setup.steps,
+  ]);
+
+  useEffect(() => {
     if (current === 1) {
       const preferredInbound =
         createdInboundId ??

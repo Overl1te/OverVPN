@@ -51,15 +51,29 @@ class SystemSettingsReadOnlyDto {
   @ApiProperty()
   singBoxSsPort!: number;
   @ApiProperty()
+  singBoxWgPort!: number;
+  @ApiProperty()
   xrayListenPort!: number;
   @ApiProperty()
   xrayGrpcPort!: number;
   @ApiProperty()
   xrayTcpTlsPort!: number;
   @ApiProperty()
+  xrayTrojanPort!: number;
+  @ApiProperty()
+  xraySsPort!: number;
+  @ApiProperty()
+  xrayWgPort!: number;
+  @ApiProperty()
   mtproxyPortMin!: number;
   @ApiProperty()
   mtproxyPortMax!: number;
+  @ApiProperty()
+  singBoxEnabled!: boolean;
+  @ApiProperty()
+  xrayEnabled!: boolean;
+  @ApiProperty()
+  mtproxyEnabled!: boolean;
   @ApiPropertyOptional({ nullable: true })
   tlsCertificatePath!: string | null;
   @ApiPropertyOptional({ nullable: true })

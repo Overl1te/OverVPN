@@ -6,6 +6,7 @@ import {
   isPublishedMtproxyPort,
   mtproxyPublishedPortRange,
   publishedListenPortForProtocol,
+  publishedTransportForProtocol,
   renderEndpointDisplayName,
   type CoreEngine,
   type InboundProtocol,
@@ -37,6 +38,8 @@ import type {
   Hysteria2InboundSecrets,
   PasswordCredential,
   ShadowsocksInboundSecrets,
+  WireguardCredential,
+  WireguardInboundSecrets,
   VlessCredential,
   VlessRealityInboundSecrets,
 } from '../core/core-provider';
@@ -59,10 +62,12 @@ import {
   parseMtproxyPublicConfig,
   parseShadowsocksPublicConfig,
   parseTrojanPublicConfig,
+  parseTrojanTlsPublicConfig,
   parseVlessGrpcTlsPublicConfig,
   parseVlessRealityPublicConfig,
   parseVlessTcpTlsPublicConfig,
   parseVlessXhttpTlsPublicConfig,
+  parseWireguardPublicConfig,
   storageFromInbound,
   type InboundSecretBundle,
   type InboundStorage,
@@ -87,6 +92,10 @@ import { buildVlessGrpcTlsUri } from './vless-grpc-tls-domain';
 import { buildVlessUri, createVlessCredential } from './vless-reality-domain';
 import { buildVlessTcpTlsUri } from './vless-tcp-tls-domain';
 import { buildVlessXhttpTlsUri } from './vless-xhttp-tls-domain';
+import {
+  buildWireguardUri,
+  createWireguardCredential,
+} from './wireguard-domain';
 
 type InboundWithCount = Inbound & {
   _count: { userAssignments: number };
@@ -111,11 +120,17 @@ export class InboundsService {
   private readonly singBoxTcpPort: number;
   private readonly singBoxTrojanPort: number;
   private readonly singBoxSsPort: number;
+  private readonly singBoxWgPort: number;
   private readonly xrayListenPort: number;
   private readonly xrayGrpcPort: number;
   private readonly xrayTcpTlsPort: number;
+  private readonly xrayTrojanPort: number;
+  private readonly xraySsPort: number;
+  private readonly xrayWgPort: number;
   private readonly mtproxyPortMin: number;
   private readonly mtproxyPortMax: number;
+  private readonly singBoxEnabled: boolean;
+  private readonly xrayEnabled: boolean;
   private readonly mtproxyEnabled: boolean;
 
   constructor(
@@ -141,11 +156,17 @@ export class InboundsService {
       infer: true,
     });
     this.singBoxSsPort = config.get('SING_BOX_SS_PORT', { infer: true });
+    this.singBoxWgPort = config.get('SING_BOX_WG_PORT', { infer: true });
     this.xrayListenPort = config.get('XRAY_LISTEN_PORT', { infer: true });
     this.xrayGrpcPort = config.get('XRAY_GRPC_PORT', { infer: true });
     this.xrayTcpTlsPort = config.get('XRAY_TCP_TLS_PORT', { infer: true });
+    this.xrayTrojanPort = config.get('XRAY_TROJAN_PORT', { infer: true });
+    this.xraySsPort = config.get('XRAY_SS_PORT', { infer: true });
+    this.xrayWgPort = config.get('XRAY_WG_PORT', { infer: true });
     this.mtproxyPortMin = config.get('MTPROXY_PORT_MIN', { infer: true });
     this.mtproxyPortMax = config.get('MTPROXY_PORT_MAX', { infer: true });
+    this.singBoxEnabled = config.get('SING_BOX_ENABLED', { infer: true });
+    this.xrayEnabled = config.get('XRAY_ENABLED', { infer: true });
     this.mtproxyEnabled = config.get('MTPROXY_ENABLED', { infer: true });
   }
 
@@ -207,8 +228,8 @@ export class InboundsService {
   ) {
     try {
       const engine = this.resolveEngine(input.protocol);
+      this.assertEngineEnabled(engine);
       if (input.protocol === 'MTPROXY') {
-        this.assertMtproxyEnabled();
         await this.assertMtproxyInboundLimit();
       }
       this.assertListenPortPublished(input.protocol, input.settings.listenPort);
@@ -953,18 +974,45 @@ export class InboundsService {
           label,
         });
         protocol = 'VLESS_TCP_TLS';
-      } else if (inbound.protocol === 'TROJAN') {
-        const publicConfig = parseTrojanPublicConfig(inbound.config);
+      } else if (
+        inbound.protocol === 'TROJAN' ||
+        inbound.protocol === 'TROJAN_TLS'
+      ) {
+        const publicConfig =
+          inbound.protocol === 'TROJAN'
+            ? parseTrojanPublicConfig(inbound.config)
+            : parseTrojanTlsPublicConfig(inbound.config);
         uri = buildTrojanUri({
           password: (credential as PasswordCredential).password,
           host,
           port,
           sni: publicConfig.tls.sni,
-          insecure: publicConfig.tls.clientInsecure,
-          alpn: publicConfig.tls.alpn,
+          insecure:
+            'clientInsecure' in publicConfig.tls
+              ? publicConfig.tls.clientInsecure
+              : false,
+          alpn: 'alpn' in publicConfig.tls ? publicConfig.tls.alpn : [],
           label,
         });
-        protocol = 'TROJAN';
+        protocol = inbound.protocol;
+      } else if (
+        inbound.protocol === 'WIREGUARD' ||
+        inbound.protocol === 'WIREGUARD_XRAY'
+      ) {
+        const publicConfig = parseWireguardPublicConfig(inbound.config);
+        const wgSecrets = secrets as WireguardInboundSecrets;
+        const wgCredential = credential as WireguardCredential;
+        uri = buildWireguardUri({
+          privateKey: wgCredential.privateKey,
+          publicKey: wgCredential.publicKey,
+          serverPublicKey: wgSecrets.publicKey,
+          address: wgCredential.address,
+          host,
+          port,
+          mtu: publicConfig.mtu,
+          label,
+        });
+        protocol = inbound.protocol;
       } else if (inbound.protocol === 'MTPROXY') {
         const publicConfig = parseMtproxyPublicConfig(inbound.config);
         uri = buildMtproxyUri({
@@ -989,7 +1037,7 @@ export class InboundsService {
           port,
           label,
         });
-        protocol = 'SHADOWSOCKS';
+        protocol = inbound.protocol;
       }
 
       await this.audit.record({
@@ -1078,25 +1126,50 @@ export class InboundsService {
       singBoxTcpPort: this.singBoxTcpPort,
       singBoxTrojanPort: this.singBoxTrojanPort,
       singBoxSsPort: this.singBoxSsPort,
+      singBoxWgPort: this.singBoxWgPort,
       xrayListenPort: this.xrayListenPort,
       xrayGrpcPort: this.xrayGrpcPort,
       xrayTcpTlsPort: this.xrayTcpTlsPort,
+      xrayTrojanPort: this.xrayTrojanPort,
+      xraySsPort: this.xraySsPort,
+      xrayWgPort: this.xrayWgPort,
       mtproxyPortMin: this.mtproxyPortMin,
       mtproxyPortMax: this.mtproxyPortMax,
     };
   }
 
-  private assertMtproxyEnabled(): void {
-    if (this.mtproxyEnabled) {
-      return;
+  private assertEngineEnabled(engine: CoreEngine): void {
+    if (engine === 'SING_BOX' && !this.singBoxEnabled) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'sing_box_disabled',
+        message:
+          'sing-box is disabled on this install. Enable it with: overvpn enable-core singbox',
+        messageRu:
+          'sing-box отключён на этой установке. Включите: overvpn enable-core singbox',
+      });
     }
-    throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
-      reason: 'mtproxy_disabled',
-      message:
-        'MTProxy is disabled on this install. Re-run install with MTProxy enabled (COMPOSE_PROFILES=mtproxy, MTPROXY_ENABLED=true).',
-      messageRu:
-        'MTProxy отключён на этой установке. Переустановите с MTProxy (COMPOSE_PROFILES=mtproxy, MTPROXY_ENABLED=true).',
-    });
+    if (engine === 'XRAY' && !this.xrayEnabled) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'xray_disabled',
+        message:
+          'Xray is disabled on this install. Enable it with: overvpn enable-core xray',
+        messageRu:
+          'Xray отключён на этой установке. Включите: overvpn enable-core xray',
+      });
+    }
+    if (engine === 'MTPROXY' && !this.mtproxyEnabled) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'mtproxy_disabled',
+        message:
+          'MTProxy is disabled on this install. Enable it with: overvpn enable-core mtproxy',
+        messageRu:
+          'MTProxy отключён на этой установке. Включите: overvpn enable-core mtproxy',
+      });
+    }
+  }
+
+  private assertMtproxyEnabled(): void {
+    this.assertEngineEnabled('MTPROXY');
   }
 
   private async assertMtproxyInboundLimit(
@@ -1142,11 +1215,11 @@ export class InboundsService {
     if (listenPort === allowedPort) {
       return;
     }
-    const transport = protocol === 'HYSTERIA2' ? 'UDP' : 'TCP';
+    const transport = publishedTransportForProtocol(protocol).toUpperCase();
     throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
       reason: 'inbound_listen_port_not_published',
-      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT / XRAY_GRPC_PORT / XRAY_TCP_TLS_PORT and Compose publish).`,
-      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}), либо измените SING_BOX_UDP_PORT / SING_BOX_TCP_PORT / SING_BOX_TROJAN_PORT / SING_BOX_SS_PORT / XRAY_LISTEN_PORT / XRAY_GRPC_PORT / XRAY_TCP_TLS_PORT и publish в Compose.`,
+      message: `Listen port ${listenPort} is not published for ${protocol}. Use install ${transport} port ${allowedPort} (or change the matching protocol port environment variable and Compose publish).`,
+      messageRu: `Порт ${listenPort} не опубликован для ${protocol}. Используйте порт установки ${allowedPort} (${transport}) либо измените соответствующую переменную порта и publish в Compose.`,
       protocol,
       listenPort,
       allowedPort,
@@ -1219,12 +1292,23 @@ export class InboundsService {
     ) {
       return createVlessCredential(input.uuid);
     }
-    if (inbound.protocol === 'TROJAN') {
+    if (inbound.protocol === 'TROJAN' || inbound.protocol === 'TROJAN_TLS') {
       return createTrojanCredential(input.password);
     }
-    if (inbound.protocol === 'SHADOWSOCKS') {
+    if (
+      inbound.protocol === 'SHADOWSOCKS' ||
+      inbound.protocol === 'SHADOWSOCKS_XRAY'
+    ) {
       const publicConfig = this.parseShadowsocksPublicConfig(inbound);
       return createShadowsocksCredential(publicConfig.method, input.password);
+    }
+    if (
+      inbound.protocol === 'WIREGUARD' ||
+      inbound.protocol === 'WIREGUARD_XRAY'
+    ) {
+      return createWireguardCredential(
+        this.parseWireguardPublicConfig(inbound).address,
+      );
     }
     if (inbound.protocol === 'MTPROXY') {
       return createMtproxyCredential(input.password);
@@ -1237,7 +1321,10 @@ export class InboundsService {
     if (!encrypted) {
       if (
         inbound.protocol === 'VLESS_REALITY' ||
-        inbound.protocol === 'SHADOWSOCKS'
+        inbound.protocol === 'SHADOWSOCKS' ||
+        inbound.protocol === 'SHADOWSOCKS_XRAY' ||
+        inbound.protocol === 'WIREGUARD' ||
+        inbound.protocol === 'WIREGUARD_XRAY'
       ) {
         throw new ApiException(
           'INTERNAL_ERROR',
@@ -1296,6 +1383,19 @@ export class InboundsService {
         }
         return parsed;
       }
+      if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+        if (
+          !('privateKey' in parsed) ||
+          !('publicKey' in parsed) ||
+          !('address' in parsed) ||
+          typeof parsed.privateKey !== 'string' ||
+          typeof parsed.publicKey !== 'string' ||
+          typeof parsed.address !== 'string'
+        ) {
+          throw new Error('Invalid WireGuard credential payload');
+        }
+        return parsed;
+      }
       if (
         !('password' in parsed) ||
         typeof parsed.password !== 'string' ||
@@ -1307,7 +1407,7 @@ export class InboundsService {
       }
       if (protocol === 'HYSTERIA2') {
         normalizeHysteria2Password(parsed.password);
-      } else if (protocol === 'TROJAN') {
+      } else if (protocol === 'TROJAN' || protocol === 'TROJAN_TLS') {
         normalizeTrojanPassword(parsed.password);
       } else if (protocol === 'MTPROXY') {
         normalizeMtproxySecret(parsed.password);
@@ -1461,6 +1561,29 @@ export class InboundsService {
         },
       };
     }
+    if (inbound.protocol === 'TROJAN_TLS') {
+      return {
+        ...common,
+        protocol: 'TROJAN_TLS',
+        settings: {
+          ...this.parseTrojanTlsPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
+    if (
+      inbound.protocol === 'WIREGUARD' ||
+      inbound.protocol === 'WIREGUARD_XRAY'
+    ) {
+      return {
+        ...common,
+        protocol: inbound.protocol,
+        settings: {
+          ...this.parseWireguardPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
     if (inbound.protocol === 'MTPROXY') {
       return {
         ...common,
@@ -1473,7 +1596,7 @@ export class InboundsService {
     }
     return {
       ...common,
-      protocol: 'SHADOWSOCKS',
+      protocol: inbound.protocol,
       settings: {
         ...this.parseShadowsocksPublicConfig(inbound),
         ...listen,
@@ -1506,6 +1629,28 @@ export class InboundsService {
   private parseTrojanPublicConfig(inbound: Inbound) {
     try {
       return parseTrojanPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
+  private parseTrojanTlsPublicConfig(inbound: Inbound) {
+    try {
+      return parseTrojanTlsPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
+  private parseWireguardPublicConfig(inbound: Inbound) {
+    try {
+      return parseWireguardPublicConfig(inbound.config);
     } catch {
       throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
         reason: 'inbound_settings_migration_required',
@@ -1587,6 +1732,15 @@ export class InboundsService {
     }
     if (inbound.protocol === 'TROJAN') {
       return this.parseTrojanPublicConfig(inbound);
+    }
+    if (inbound.protocol === 'TROJAN_TLS') {
+      return this.parseTrojanTlsPublicConfig(inbound);
+    }
+    if (
+      inbound.protocol === 'WIREGUARD' ||
+      inbound.protocol === 'WIREGUARD_XRAY'
+    ) {
+      return this.parseWireguardPublicConfig(inbound);
     }
     if (inbound.protocol === 'MTPROXY') {
       return this.parseMtproxyPublicConfig(inbound);

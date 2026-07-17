@@ -365,6 +365,12 @@ export class SystemController {
     return this.system.healthDetails();
   }
 
+  @Get('engines')
+  @ApiOkResponse({ description: 'Installed data-plane engines and enable hints' })
+  engines() {
+    return this.system.engines();
+  }
+
   @Get('host')
   @ApiOkResponse({ type: SystemHostStatsDto })
   host() {

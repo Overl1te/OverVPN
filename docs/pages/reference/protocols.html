@@ -60,6 +60,20 @@
 </p>
 <pre><code class="language-text">vless://UUID@host:8447?security=tls&amp;type=tcp&amp;flow=xtls-rprx-vision&amp;sni=example.com#LABEL</code></pre>
 
+<h2>Trojan TLS (Xray)</h2>
+<p>Trojan на Xray с FILES TLS. Порт: <code>XRAY_TROJAN_PORT</code> (по умолчанию 8448 / 9448 с Nginx).</p>
+
+<h2>Shadowsocks (Xray)</h2>
+<p>2022-blake3 на Xray. Порт: <code>XRAY_SS_PORT</code> (по умолчанию 8449 / 9449 с Nginx).</p>
+
+<h2>WireGuard</h2>
+<p>
+  UDP-туннель на sing-box (<code>WIREGUARD</code>, порт <code>SING_BOX_WG_PORT</code> = 51820) или Xray
+  (<code>WIREGUARD_XRAY</code>, <code>XRAY_WG_PORT</code> = 51821). Ключи сервера и peer’ов выдаёт
+  панель. В подписке надёжнее клиентский JSON sing-box / Clash; <code>wg://</code> в links —
+  best-effort. Per-user traffic stats могут быть ограничены возможностями ядра.
+</p>
+
 <h2>Выбор протокола</h2>
 <table>
   <thead>
@@ -87,11 +101,15 @@
     </tr>
     <tr>
       <td>Простой TLS TCP</td>
-      <td>VLESS TCP TLS / Trojan</td>
+      <td>VLESS TCP TLS / Trojan / Trojan TLS</td>
     </tr>
     <tr>
       <td>SS-клиенты</td>
-      <td>Shadowsocks 2022</td>
+      <td>Shadowsocks 2022 (sing-box или Xray)</td>
+    </tr>
+    <tr>
+      <td>Нативный туннель</td>
+      <td>WireGuard</td>
     </tr>
   </tbody>
 </table>

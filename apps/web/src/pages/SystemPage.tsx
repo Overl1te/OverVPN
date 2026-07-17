@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { Button, Card, Form, Input, InputNumber, Switch, Table, Tag, message } from 'antd';
+import { Button, Card, Form, Input, InputNumber, Switch, Table, Tag, Typography, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { checkForUpdates, getDashboard, getSystemHealth, getUpdateStatus } from '@/api/system';
+import { checkForUpdates, getDashboard, getSystemEngines, getSystemHealth, getUpdateStatus } from '@/api/system';
 import { getSettings, updateSettings } from '@/api/settings';
 import { useAuth } from '@/auth/AuthContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -21,6 +21,12 @@ export function SystemPage() {
   const healthQuery = useQuery({
     queryKey: ['system-health-detail'],
     queryFn: getSystemHealth,
+    refetchInterval: 15_000,
+  });
+
+  const enginesQuery = useQuery({
+    queryKey: ['system-engines'],
+    queryFn: getSystemEngines,
     refetchInterval: 15_000,
   });
 
@@ -83,6 +89,7 @@ export function SystemPage() {
   });
 
   const health = healthQuery.data;
+  const engines = enginesQuery.data;
   const dashboard = dashboardQuery.data;
   const settings = settingsQuery.data;
   const update = updateQuery.data;
@@ -273,6 +280,89 @@ export function SystemPage() {
             </span>
           </>
         ) : null}
+      </Card>
+
+      <Card
+        size="small"
+        title={t('system.engines')}
+        style={{ marginTop: 12 }}
+        loading={enginesQuery.isLoading}
+      >
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="engine"
+          dataSource={engines?.engines ?? []}
+          columns={[
+            {
+              title: t('system.engineName'),
+              dataIndex: 'engine',
+              render: (engine: string) => t(`enums.coreEngine.${engine}`, { defaultValue: engine }),
+            },
+            {
+              title: t('system.engineEnabled'),
+              dataIndex: 'enabled',
+              render: (enabled: boolean) => (
+                <Tag color={enabled ? 'green' : 'default'}>
+                  {enabled ? t('system.engineOn') : t('system.engineOff')}
+                </Tag>
+              ),
+            },
+            {
+              title: t('system.engineHealth'),
+              key: 'health',
+              render: (_: unknown, row) => {
+                if (!row.enabled) {
+                  return '—';
+                }
+                return (
+                  <Tag color={row.healthy ? 'green' : 'orange'}>
+                    {row.healthy ? t('dashboard.healthy') : t('dashboard.unhealthy')}
+                  </Tag>
+                );
+              },
+            },
+            {
+              title: t('system.engineProtocols'),
+              dataIndex: 'protocols',
+              render: (protocols: string[]) =>
+                protocols
+                  .map((protocol) =>
+                    t(`enums.inboundProtocol.${protocol}`, { defaultValue: protocol }),
+                  )
+                  .join(', '),
+            },
+            {
+              title: t('system.enginePorts'),
+              dataIndex: 'publishedPorts',
+              render: (
+                ports: Array<{ protocol: string; port: number; transport: string }>,
+              ) =>
+                ports
+                  .map((entry) => `${entry.port}/${entry.transport}`)
+                  .join(', '),
+            },
+            {
+              title: t('system.engineEnable'),
+              dataIndex: 'enableCommand',
+              render: (command: string, row) =>
+                row.enabled ? (
+                  '—'
+                ) : (
+                  <Typography.Text
+                    copyable={{ text: command }}
+                    code
+                    style={{ fontSize: 12 }}
+                  >
+                    {command}
+                  </Typography.Text>
+                ),
+            },
+          ]}
+        />
+        <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+          {t('system.enginesHint')}
+        </div>
       </Card>
 
       <Card

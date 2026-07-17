@@ -47,10 +47,13 @@ x-api-environment: &api-environment
   SING_BOX_TCP_PORT: ${SING_BOX_TCP_PORT:-4443}
   SING_BOX_TROJAN_PORT: ${SING_BOX_TROJAN_PORT:-8444}
   SING_BOX_SS_PORT: ${SING_BOX_SS_PORT:-8445}
+  SING_BOX_WG_PORT: ${SING_BOX_WG_PORT:-51820}
   SING_BOX_ACME_HTTP_PORT: ${SING_BOX_ACME_HTTP_PORT:-80}
   SING_BOX_ACME_TLS_PORT: ${SING_BOX_ACME_TLS_PORT:-443}
   VPN_TLS_CERTIFICATE_PATH: ${VPN_TLS_CERTIFICATE_PATH:-}
   VPN_TLS_KEY_PATH: ${VPN_TLS_KEY_PATH:-}
+  SING_BOX_ENABLED: ${SING_BOX_ENABLED:-true}
+  XRAY_ENABLED: ${XRAY_ENABLED:-true}
   XRAY_BINARY_PATH: /usr/local/bin/xray
   XRAY_CONFIG_PATH: /var/lib/xray/config.json
   XRAY_LAST_KNOWN_GOOD_PATH: /var/lib/xray/config.last-known-good.json
@@ -62,6 +65,9 @@ x-api-environment: &api-environment
   XRAY_LISTEN_PORT: ${XRAY_LISTEN_PORT:-8443}
   XRAY_GRPC_PORT: ${XRAY_GRPC_PORT:-8446}
   XRAY_TCP_TLS_PORT: ${XRAY_TCP_TLS_PORT:-8447}
+  XRAY_TROJAN_PORT: ${XRAY_TROJAN_PORT:-8448}
+  XRAY_SS_PORT: ${XRAY_SS_PORT:-8449}
+  XRAY_WG_PORT: ${XRAY_WG_PORT:-51821}
   XRAY_PROCESS_TIMEOUT_MS: ${XRAY_PROCESS_TIMEOUT_MS:-15000}
   XRAY_RELOAD_TIMEOUT_MS: ${XRAY_RELOAD_TIMEOUT_MS:-20000}
   XRAY_HEALTH_TIMEOUT_MS: ${XRAY_HEALTH_TIMEOUT_MS:-5000}
@@ -164,6 +170,7 @@ services:
     <<: *service-security
 
   core-config-init:
+    profiles: ['singbox']
     image: busybox:1.37
     restart: 'no'
     network_mode: none
@@ -181,6 +188,7 @@ services:
     <<: *service-security
 
   core:
+    profiles: ['singbox']
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
@@ -207,6 +215,7 @@ services:
       - '${SING_BOX_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_TCP_PORT:-4443}:${SING_BOX_TCP_PORT:-4443}/tcp'
       - '${SING_BOX_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_TROJAN_PORT:-8444}:${SING_BOX_TROJAN_PORT:-8444}/tcp'
       - '${SING_BOX_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_SS_PORT:-8445}:${SING_BOX_SS_PORT:-8445}/tcp'
+      - '${SING_BOX_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_WG_PORT:-51820}:${SING_BOX_WG_PORT:-51820}/udp'
       - '${SING_BOX_ACME_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_ACME_HTTP_PORT:-80}:${SING_BOX_ACME_HTTP_PORT:-80}/tcp'
       - '${SING_BOX_ACME_BIND_ADDRESS:-0.0.0.0}:${SING_BOX_ACME_TLS_PORT:-443}:${SING_BOX_ACME_TLS_PORT:-443}/tcp'
     expose:
@@ -231,6 +240,7 @@ services:
     <<: *service-security
 
   core-xray-config-init:
+    profiles: ['xray']
     image: busybox:1.37
     restart: 'no'
     network_mode: none
@@ -246,6 +256,7 @@ services:
     <<: *service-security
 
   core-xray:
+    profiles: ['xray']
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
@@ -277,6 +288,9 @@ services:
       - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_LISTEN_PORT:-8443}:${XRAY_LISTEN_PORT:-8443}/tcp'
       - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_GRPC_PORT:-8446}:${XRAY_GRPC_PORT:-8446}/tcp'
       - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_TCP_TLS_PORT:-8447}:${XRAY_TCP_TLS_PORT:-8447}/tcp'
+      - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_TROJAN_PORT:-8448}:${XRAY_TROJAN_PORT:-8448}/tcp'
+      - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_SS_PORT:-8449}:${XRAY_SS_PORT:-8449}/tcp'
+      - '${XRAY_BIND_ADDRESS:-0.0.0.0}:${XRAY_WG_PORT:-51821}:${XRAY_WG_PORT:-51821}/udp'
     expose:
       - '10085'
     cap_drop:
@@ -397,8 +411,10 @@ services:
         condition: service_healthy
       core:
         condition: service_healthy
+        required: false
       core-xray:
         condition: service_healthy
+        required: false
       core-mtproxy:
         condition: service_healthy
         required: false

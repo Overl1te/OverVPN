@@ -93,7 +93,13 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
         mtproxyProvider: MtproxyProvider,
         config: ConfigService<AppEnvironment, true>,
       ): readonly EngineProvider[] => {
-        const providers: EngineProvider[] = [singBoxProvider, xrayProvider];
+        const providers: EngineProvider[] = [];
+        if (config.get('SING_BOX_ENABLED', { infer: true })) {
+          providers.push(singBoxProvider);
+        }
+        if (config.get('XRAY_ENABLED', { infer: true })) {
+          providers.push(xrayProvider);
+        }
         if (config.get('MTPROXY_ENABLED', { infer: true })) {
           providers.push(mtproxyProvider);
         }

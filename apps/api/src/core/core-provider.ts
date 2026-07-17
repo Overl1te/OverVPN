@@ -3,11 +3,13 @@ import type {
   Hysteria2InboundPublicConfig,
   MtproxyInboundPublicConfig,
   ShadowsocksInboundPublicConfig,
+  TrojanTlsInboundPublicConfig,
   TrojanInboundPublicConfig,
   VlessGrpcTlsPublicConfig,
   VlessRealityInboundPublicConfig,
   VlessTcpTlsPublicConfig,
   VlessXhttpTlsPublicConfig,
+  WireguardInboundPublicConfig,
 } from '@overvpn/shared/schemas';
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -43,6 +45,7 @@ export interface VlessXhttpTlsInboundSecrets {
 
 export type VlessGrpcTlsInboundSecrets = VlessXhttpTlsInboundSecrets;
 export type VlessTcpTlsInboundSecrets = VlessXhttpTlsInboundSecrets;
+export type TrojanTlsInboundSecrets = VlessXhttpTlsInboundSecrets;
 
 export interface TrojanInboundSecrets {
   version: 1;
@@ -59,6 +62,12 @@ export interface TrojanInboundSecrets {
 export interface ShadowsocksInboundSecrets {
   version: 1;
   serverPassword: string;
+}
+
+export interface WireguardInboundSecrets {
+  version: 1;
+  privateKey: string;
+  publicKey: string;
 }
 
 export interface MtproxyInboundSecrets {
@@ -78,7 +87,15 @@ export interface VlessCredential {
   uuid: string;
 }
 
-export type AssignmentCredential = PasswordCredential | VlessCredential;
+export interface WireguardCredential {
+  version: 1;
+  privateKey: string;
+  publicKey: string;
+  address: string;
+}
+
+export type AssignmentCredential =
+  PasswordCredential | VlessCredential | WireguardCredential;
 
 export interface DesiredAssignment {
   id: string;
@@ -144,6 +161,25 @@ export interface DesiredShadowsocksInbound extends DesiredInboundBase {
   secrets: ShadowsocksInboundSecrets;
 }
 
+export interface DesiredTrojanTlsInbound extends DesiredInboundBase {
+  protocol: 'TROJAN_TLS';
+  config: TrojanTlsInboundPublicConfig;
+  secrets: TrojanTlsInboundSecrets;
+}
+
+export interface DesiredShadowsocksXrayInbound extends DesiredInboundBase {
+  protocol: 'SHADOWSOCKS_XRAY';
+  config: ShadowsocksInboundPublicConfig;
+  secrets: ShadowsocksInboundSecrets;
+}
+
+export interface DesiredWireguardInbound extends DesiredInboundBase {
+  protocol: 'WIREGUARD' | 'WIREGUARD_XRAY';
+  config: WireguardInboundPublicConfig;
+  secrets: WireguardInboundSecrets;
+  assignments: Array<DesiredAssignment & { credential: WireguardCredential }>;
+}
+
 export interface DesiredMtproxyInbound extends DesiredInboundBase {
   protocol: 'MTPROXY';
   config: MtproxyInboundPublicConfig;
@@ -158,6 +194,9 @@ export type DesiredInbound =
   | DesiredVlessTcpTlsInbound
   | DesiredTrojanInbound
   | DesiredShadowsocksInbound
+  | DesiredTrojanTlsInbound
+  | DesiredShadowsocksXrayInbound
+  | DesiredWireguardInbound
   | DesiredMtproxyInbound;
 
 export interface CoreDesiredState {

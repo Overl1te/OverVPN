@@ -39,6 +39,10 @@ DEFAULT_REDIS_IMAGE="redis:8-alpine"
 BUSYBOX_IMAGE="busybox:1.37"
 CLI_LANG="${OVERVPN_CLI_LANG:-en}"
 
+readonly SINGBOX_PROTOCOLS="HYSTERIA2,VLESS_REALITY,TROJAN,SHADOWSOCKS,WIREGUARD"
+readonly XRAY_PROTOCOLS="VLESS_XHTTP_TLS,VLESS_GRPC_TLS,VLESS_TCP_TLS,TROJAN_TLS,SHADOWSOCKS_XRAY,WIREGUARD_XRAY"
+readonly ALL_PROTOCOLS="${SINGBOX_PROTOCOLS},${XRAY_PROTOCOLS},MTPROXY"
+
 # TUI drawing (MTProxyMax-style console screens)
 readonly BOX_TL='╔' BOX_TR='╗' BOX_BL='╚' BOX_BR='╝'
 readonly BOX_H='═' BOX_V='║' BOX_LT='╠' BOX_RT='╣'
@@ -521,6 +525,24 @@ cli_t() {
       menu_subtitle) printf '%s' "Однонодовая панель · управление" ;;
       server_ip) printf 'IP сервера: %s' "$1" ;;
       answer_all) printf '%s' "Ответьте на все вопросы — дальше установка без участия." ;;
+      depth_title) printf '%s' "Глубина настройки" ;;
+      depth_simple) printf '%s' "Простая (все протоколы, рекомендуемые порты)" ;;
+      depth_detailed) printf '%s' "Подробная (протоколы, порты, ядра)" ;;
+      protocols_title) printf '%s' "Протоколы" ;;
+      protocols_hint) printf '%s' "Выберите хотя бы один протокол. Вопросы сгруппированы по ядрам." ;;
+      select_protocol) printf 'Включить %s?' "$1" ;;
+      no_protocols) printf '%s' "Нужно выбрать хотя бы один протокол." ;;
+      port_preset_title) printf '%s' "Набор портов" ;;
+      port_standard) printf '%s' "Стандартные порты" ;;
+      port_stealth) printf '%s' "Скрытые высокие порты" ;;
+      prompt_protocol_port) printf 'Порт %s' "$1" ;;
+      prompt_default_inbounds) printf '%s' "Создать входящие подключения по умолчанию?" ;;
+      prompt_ufw) printf '%s' "Настроить UFW?" ;;
+      summary_depth) printf 'Настройка:     %s' "$1" ;;
+      summary_protocols) printf 'Протоколы:    %s' "$1" ;;
+      summary_cores) printf 'Ядра:         %s' "$1" ;;
+      summary_ports) printf 'Порты:        %s' "$1" ;;
+      summary_defaults) printf 'Default inbounds: %s' "$1" ;;
       leave_empty_ip) printf 'Режим IP: http://%s:%s (без TLS).' "$1" "$2" ;;
       non_interactive_no_domain) printf '%s' "Неинтерактивный режим: установка без домена." ;;
       prompt_base_domain) printf '%s' "Базовый домен (например example.com)" ;;
@@ -592,6 +614,7 @@ cli_t() {
       menu_update) printf '%s' "Обновление / проверка" ;;
       menu_edit) printf '%s' "Редактировать .env" ;;
       menu_nginx) printf '%s' "Обновить Nginx / сертификаты" ;;
+      menu_cores) printf '%s' "Управление VPN-ядрами" ;;
       menu_uninstall) printf '%s' "Удалить OverVPN" ;;
       menu_exit) printf '%s' "Выход" ;;
       menu_update_check) printf '%s' "Только проверить обновления" ;;
@@ -665,6 +688,7 @@ cli_t() {
       invalid_port) printf 'Некорректный --port: %s' "$1" ;;
       noninteractive_start) printf '%s' "Получены неинтерактивные флаги. Начинаем установку…" ;;
       creating_owner) printf '%s' "Создаём учётную запись владельца…" ;;
+      creating_default_inbounds) printf '%s' "Создаём подключения по умолчанию…" ;;
       not_installed) printf '%s' "OverVPN не установлен." ;;
       started) printf '%s' "OverVPN запущен." ;;
       stopped) printf '%s' "OverVPN остановлен." ;;
@@ -719,6 +743,24 @@ cli_t() {
       menu_subtitle) printf '%s' "Single-node panel · manage" ;;
       server_ip) printf 'Server IP: %s' "$1" ;;
       answer_all) printf '%s' "Answer everything now — after that install runs unattended." ;;
+      depth_title) printf '%s' "Setup depth" ;;
+      depth_simple) printf '%s' "Simple (all protocols, recommended ports)" ;;
+      depth_detailed) printf '%s' "Detailed (protocols, ports, cores)" ;;
+      protocols_title) printf '%s' "Protocols" ;;
+      protocols_hint) printf '%s' "Select at least one protocol. Prompts are grouped by core." ;;
+      select_protocol) printf 'Enable %s?' "$1" ;;
+      no_protocols) printf '%s' "At least one protocol must be selected." ;;
+      port_preset_title) printf '%s' "Port preset" ;;
+      port_standard) printf '%s' "Standard ports" ;;
+      port_stealth) printf '%s' "Stealth high ports" ;;
+      prompt_protocol_port) printf '%s port' "$1" ;;
+      prompt_default_inbounds) printf '%s' "Create default inbounds?" ;;
+      prompt_ufw) printf '%s' "Configure UFW?" ;;
+      summary_depth) printf 'Setup:        %s' "$1" ;;
+      summary_protocols) printf 'Protocols:    %s' "$1" ;;
+      summary_cores) printf 'Cores:        %s' "$1" ;;
+      summary_ports) printf 'Ports:        %s' "$1" ;;
+      summary_defaults) printf 'Default inbounds: %s' "$1" ;;
       leave_empty_ip) printf 'IP mode: http://%s:%s (no TLS).' "$1" "$2" ;;
       non_interactive_no_domain) printf '%s' "Non-interactive mode: installing without domain." ;;
       prompt_base_domain) printf '%s' "Base domain (e.g. example.com)" ;;
@@ -790,6 +832,7 @@ cli_t() {
       menu_update) printf '%s' "Update / check" ;;
       menu_edit) printf '%s' "Edit .env" ;;
       menu_nginx) printf '%s' "Refresh Nginx / certificates" ;;
+      menu_cores) printf '%s' "Manage VPN cores" ;;
       menu_uninstall) printf '%s' "Uninstall OverVPN" ;;
       menu_exit) printf '%s' "Exit" ;;
       menu_update_check) printf '%s' "Check for updates only" ;;
@@ -863,6 +906,7 @@ cli_t() {
       invalid_port) printf 'Invalid --port: %s' "$1" ;;
       noninteractive_start) printf '%s' "Non-interactive flags received. Starting install…" ;;
       creating_owner) printf '%s' "Creating owner account..." ;;
+      creating_default_inbounds) printf '%s' "Creating default inbounds..." ;;
       not_installed) printf '%s' "OverVPN is not installed." ;;
       started) printf '%s' "OverVPN started." ;;
       stopped) printf '%s' "OverVPN stopped." ;;
@@ -939,6 +983,227 @@ prompt_wizard_language() {
       CLI_LANG=en
       ;;
   esac
+}
+
+protocol_engine() {
+  case "$1" in
+    HYSTERIA2|VLESS_REALITY|TROJAN|SHADOWSOCKS|WIREGUARD) printf 'singbox' ;;
+    VLESS_XHTTP_TLS|VLESS_GRPC_TLS|VLESS_TCP_TLS|TROJAN_TLS|SHADOWSOCKS_XRAY|WIREGUARD_XRAY) printf 'xray' ;;
+    MTPROXY) printf 'mtproxy' ;;
+    *) return 1 ;;
+  esac
+}
+
+protocol_port_var() {
+  case "$1" in
+    HYSTERIA2) printf 'CFG_SING_BOX_UDP_PORT' ;;
+    VLESS_REALITY) printf 'CFG_SING_BOX_TCP_PORT' ;;
+    TROJAN) printf 'CFG_SING_BOX_TROJAN_PORT' ;;
+    SHADOWSOCKS) printf 'CFG_SING_BOX_SS_PORT' ;;
+    WIREGUARD) printf 'CFG_SING_BOX_WG_PORT' ;;
+    VLESS_XHTTP_TLS) printf 'CFG_XRAY_LISTEN_PORT' ;;
+    VLESS_GRPC_TLS) printf 'CFG_XRAY_GRPC_PORT' ;;
+    VLESS_TCP_TLS) printf 'CFG_XRAY_TCP_TLS_PORT' ;;
+    TROJAN_TLS) printf 'CFG_XRAY_TROJAN_PORT' ;;
+    SHADOWSOCKS_XRAY) printf 'CFG_XRAY_SS_PORT' ;;
+    WIREGUARD_XRAY) printf 'CFG_XRAY_WG_PORT' ;;
+    MTPROXY) printf 'CFG_MTPROXY_PORT_MIN' ;;
+    *) return 1 ;;
+  esac
+}
+
+protocol_default_port() {
+  local protocol=$1 preset=${2:-standard}
+  if [[ "$preset" == "stealth" ]]; then
+    case "$protocol" in
+      HYSTERIA2) printf '34443' ;; VLESS_REALITY) printf '34444' ;;
+      TROJAN) printf '34445' ;; SHADOWSOCKS) printf '34446' ;;
+      WIREGUARD) printf '38443' ;; VLESS_XHTTP_TLS) printf '35443' ;;
+      VLESS_GRPC_TLS) printf '35444' ;; VLESS_TCP_TLS) printf '35445' ;;
+      TROJAN_TLS) printf '35446' ;; SHADOWSOCKS_XRAY) printf '35447' ;;
+      WIREGUARD_XRAY) printf '39443' ;; MTPROXY) printf '36001' ;;
+    esac
+  else
+    case "$protocol" in
+      HYSTERIA2) printf '443' ;; VLESS_REALITY) printf '4443' ;;
+      TROJAN) printf '8444' ;; SHADOWSOCKS) printf '8445' ;;
+      WIREGUARD) printf '51820' ;; VLESS_XHTTP_TLS) printf '8443' ;;
+      VLESS_GRPC_TLS) printf '8446' ;; VLESS_TCP_TLS) printf '8447' ;;
+      TROJAN_TLS) printf '8448' ;; SHADOWSOCKS_XRAY) printf '8449' ;;
+      WIREGUARD_XRAY) printf '51821' ;; MTPROXY) printf '10001' ;;
+    esac
+  fi
+}
+
+validate_protocol() {
+  local wanted="${1^^}" protocol
+  IFS=',' read -ra _protocols <<<"$ALL_PROTOCOLS"
+  for protocol in "${_protocols[@]}"; do
+    [[ "$wanted" == "$protocol" ]] && { printf '%s' "$protocol"; return 0; }
+  done
+  return 1
+}
+
+normalize_protocol_list() {
+  local raw=$1 item normalized="" valid
+  IFS=',' read -ra _requested <<<"$raw"
+  for item in "${_requested[@]}"; do
+    item="$(printf '%s' "$item" | tr -d '[:space:]')"
+    [[ -z "$item" ]] && continue
+    valid="$(validate_protocol "$item" 2>/dev/null || true)"
+    if [[ -z "$valid" ]]; then
+      colorized_echo red "Unknown protocol: $item" >&2
+      exit 1
+    fi
+    [[ ",$normalized," == *",$valid,"* ]] || normalized="${normalized:+${normalized},}${valid}"
+  done
+  printf '%s' "$normalized"
+}
+
+derive_enabled_cores() {
+  local protocol core cores=""
+  IFS=',' read -ra _selected <<<"${CFG_ENABLED_PROTOCOLS:-}"
+  for protocol in "${_selected[@]}"; do
+    core="$(protocol_engine "$protocol")"
+    [[ ",$cores," == *",$core,"* ]] || cores="${cores:+${cores},}${core}"
+  done
+  CFG_ENABLED_CORES="$cores"
+  CFG_SING_BOX_ENABLED="false"
+  CFG_XRAY_ENABLED="false"
+  CFG_MTPROXY_ENABLED="false"
+  [[ ",$cores," == *,singbox,* ]] && CFG_SING_BOX_ENABLED="true"
+  [[ ",$cores," == *,xray,* ]] && CFG_XRAY_ENABLED="true"
+  [[ ",$cores," == *,mtproxy,* ]] && CFG_MTPROXY_ENABLED="true"
+}
+
+set_protocol_port() {
+  local protocol=$1 value=$2 var
+  if [[ ! "$value" =~ ^[0-9]+$ ]] || ((value < 1 || value > 65535)); then
+    colorized_echo red "$(cli_t invalid_port "$value")"
+    exit 1
+  fi
+  var="$(protocol_port_var "$protocol")"
+  printf -v "$var" '%s' "$value"
+  if [[ "$protocol" == "MTPROXY" ]]; then
+    CFG_MTPROXY_PORT_MAX="$((value + 15))"
+    if ((CFG_MTPROXY_PORT_MAX > 65535)); then
+      colorized_echo red "$(cli_t invalid_port "$value")"
+      exit 1
+    fi
+  fi
+}
+
+initialize_protocol_config() {
+  local protocol var
+  CFG_INSTALL_DEPTH="${CFG_INSTALL_DEPTH:-simple}"
+  CFG_CREATE_DEFAULT_INBOUNDS="${CFG_CREATE_DEFAULT_INBOUNDS:-true}"
+  CFG_ENABLED_PROTOCOLS="${CFG_ENABLED_PROTOCOLS:-$ALL_PROTOCOLS}"
+  for protocol in ${ALL_PROTOCOLS//,/ }; do
+    var="$(protocol_port_var "$protocol")"
+    if [[ -z "${!var:-}" ]]; then
+      printf -v "$var" '%s' "$(protocol_default_port "$protocol" standard)"
+    fi
+  done
+  CFG_MTPROXY_PORT_MAX="${CFG_MTPROXY_PORT_MAX:-10016}"
+  derive_enabled_cores
+}
+
+protocols_for_cores() {
+  local raw=$1 core result=""
+  IFS=',' read -ra _cores <<<"${raw,,}"
+  for core in "${_cores[@]}"; do
+    core="$(printf '%s' "$core" | tr -d '[:space:]')"
+    case "$core" in
+      singbox) result="${result:+${result},}${SINGBOX_PROTOCOLS}" ;;
+      xray) result="${result:+${result},}${XRAY_PROTOCOLS}" ;;
+      mtproxy) result="${result:+${result},}MTPROXY" ;;
+      *) colorized_echo red "Unknown core: $core" >&2; exit 1 ;;
+    esac
+  done
+  printf '%s' "$result"
+}
+
+apply_port_overrides() {
+  local raw=$1 pair key value protocol
+  IFS=',' read -ra _ports <<<"$raw"
+  for pair in "${_ports[@]}"; do
+    if [[ "$pair" != *=* ]]; then
+      colorized_echo red "Invalid --ports entry: $pair (expected PROTOCOL=PORT)"
+      exit 1
+    fi
+    key="${pair%%=*}"
+    value="${pair#*=}"
+    protocol="$(validate_protocol "$key" 2>/dev/null || true)"
+    if [[ -z "$protocol" ]]; then
+      colorized_echo red "Unknown protocol port key: $key"
+      exit 1
+    fi
+    set_protocol_port "$protocol" "$value"
+  done
+}
+
+prompt_install_depth() {
+  [[ "${CFG_DEPTH_SKIP_PROMPT:-false}" == "true" ]] && return
+  UI_MENU_HEADER=""
+  ui_select_menu 0 \
+    "simple|$(cli_t depth_simple)" \
+    "detailed|$(cli_t depth_detailed)"
+  CFG_INSTALL_DEPTH="$UI_SELECT_RESULT"
+}
+
+prompt_detailed_protocols() {
+  local protocol selected="" heading
+  for heading in "SING_BOX:${SINGBOX_PROTOCOLS}" "XRAY:${XRAY_PROTOCOLS}" "MTPROXY:MTPROXY"; do
+    colorized_echo cyan "${heading%%:*}"
+    IFS=',' read -ra _group <<<"${heading#*:}"
+    for protocol in "${_group[@]}"; do
+      if ui_confirm y "$(cli_t select_protocol "${heading%%:*} / $protocol") — $(cli_t opt_yes)" "$(cli_t opt_no)"; then
+        selected="${selected:+${selected},}${protocol}"
+      fi
+    done
+  done
+  if [[ -z "$selected" ]]; then
+    colorized_echo red "$(cli_t no_protocols)"
+    prompt_detailed_protocols
+    return
+  fi
+  CFG_ENABLED_PROTOCOLS="$selected"
+  derive_enabled_cores
+}
+
+prompt_detailed_ports() {
+  local protocol var value
+  ui_select_menu 0 \
+    "standard|$(cli_t port_standard)" \
+    "stealth|$(cli_t port_stealth)"
+  CFG_PORT_PRESET="$UI_SELECT_RESULT"
+  IFS=',' read -ra _selected <<<"$CFG_ENABLED_PROTOCOLS"
+  for protocol in "${_selected[@]}"; do
+    var="$(protocol_port_var "$protocol")"
+    value="$(ui_prompt "$(cli_t prompt_protocol_port "$protocol")" "$(protocol_default_port "$protocol" "$CFG_PORT_PRESET")")"
+    set_protocol_port "$protocol" "$value"
+  done
+  if ui_confirm y "$(cli_t prompt_default_inbounds) — $(cli_t opt_yes)" "$(cli_t opt_no)"; then
+    CFG_CREATE_DEFAULT_INBOUNDS="true"
+  else
+    CFG_CREATE_DEFAULT_INBOUNDS="false"
+  fi
+  if [[ "${CFG_UFW_DECIDED:-false}" != "true" ]]; then
+    if ui_confirm y "$(cli_t prompt_ufw) — $(cli_t opt_yes)" "$(cli_t opt_no)"; then
+      CFG_USE_UFW="true"
+    else
+      CFG_USE_UFW="false"
+    fi
+    CFG_UFW_DECIDED="true"
+  fi
+}
+
+prompt_detailed_install() {
+  if [[ "${CFG_DETAILED_SKIP_PROMPTS:-false}" == "true" ]]; then
+    return
+  fi
+  prompt_detailed_protocols
+  prompt_detailed_ports
 }
 
 prompt_install_mode() {
@@ -1050,6 +1315,24 @@ prompt_install_dns_screen() {
   esac
 }
 
+sync_simple_protocol_config() {
+  CFG_ENABLED_PROTOCOLS="${SINGBOX_PROTOCOLS},${XRAY_PROTOCOLS}"
+  if [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]]; then
+    CFG_ENABLED_PROTOCOLS+=",MTPROXY"
+  fi
+  derive_enabled_cores
+}
+
+selected_ports_summary() {
+  local protocol var result=""
+  IFS=',' read -ra _selected <<<"${CFG_ENABLED_PROTOCOLS:-}"
+  for protocol in "${_selected[@]}"; do
+    var="$(protocol_port_var "$protocol")"
+    result+="${result:+, }${protocol}=${!var}"
+  done
+  printf '%s' "$result"
+}
+
 prompt_install_confirm() {
   local ip=$1
   local choice
@@ -1079,6 +1362,17 @@ prompt_install_confirm() {
     else
       draw_box_line " $(cli_t summary_mode_ip "$DEFAULT_WEB_PORT")" "$w"
       draw_box_line " $(cli_t leave_empty_ip "$ip" "$DEFAULT_WEB_PORT")" "$w"
+    fi
+    draw_box_line " $(cli_t summary_depth "${CFG_INSTALL_DEPTH:-simple}")" "$w"
+    draw_box_line " $(cli_t summary_cores "${CFG_ENABLED_CORES:-singbox,xray,mtproxy}")" "$w"
+    if [[ "${CFG_INSTALL_DEPTH:-simple}" == "detailed" ]]; then
+      local protocol var
+      IFS=',' read -ra _summary_protocols <<<"$CFG_ENABLED_PROTOCOLS"
+      for protocol in "${_summary_protocols[@]}"; do
+        var="$(protocol_port_var "$protocol")"
+        draw_box_line " ${protocol}: ${!var}" "$w"
+      done
+      draw_box_line " $(cli_t summary_defaults "$CFG_CREATE_DEFAULT_INBOUNDS")" "$w"
     fi
     if [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]]; then
       draw_box_line " $(cli_t summary_mtproxy_on)" "$w"
@@ -1150,17 +1444,24 @@ prompt_install_endpoints() {
   CFG_MTPROXY_ENABLED="${CFG_MTPROXY_ENABLED:-true}"
 
   prompt_wizard_language
+  initialize_protocol_config
 
   if [[ ! -t 0 ]]; then
     colorized_echo yellow "$(cli_t non_interactive_no_domain)"
     return
   fi
 
+  prompt_install_depth
   prompt_install_mode "$ip"
 
   if [[ "$CFG_MODE" == "ip" ]]; then
     colorized_echo green "$(cli_t mode_ip_only)"
-    prompt_install_mtproxy
+    if [[ "$CFG_INSTALL_DEPTH" == "detailed" ]]; then
+      prompt_detailed_install
+    else
+      prompt_install_mtproxy
+      sync_simple_protocol_config
+    fi
     prompt_install_confirm "$ip"
     return
   fi
@@ -1184,7 +1485,12 @@ prompt_install_endpoints() {
       colorized_echo yellow "$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")"
       sleep 1
       CFG_MODE="ip"
-      prompt_install_mtproxy
+      if [[ "$CFG_INSTALL_DEPTH" == "detailed" ]]; then
+        prompt_detailed_install
+      else
+        prompt_install_mtproxy
+        sync_simple_protocol_config
+      fi
       prompt_install_confirm "$ip"
       return
     fi
@@ -1202,7 +1508,12 @@ prompt_install_endpoints() {
   local -a dns_hosts=()
   mapfile -t dns_hosts < <(unique_hosts "$CFG_BASE_DOMAIN" "$CFG_PANEL_HOST" "$CFG_SUB_HOST" "$CFG_VPN_HOST")
   prompt_install_dns_screen "$ip" "${dns_hosts[@]}"
-  prompt_install_mtproxy
+  if [[ "$CFG_INSTALL_DEPTH" == "detailed" ]]; then
+    prompt_detailed_install
+  else
+    prompt_install_mtproxy
+    sync_simple_protocol_config
+  fi
   prompt_install_confirm "$ip"
 }
 
@@ -1354,6 +1665,18 @@ assert_mtproxy_image() {
   fi
 }
 
+core_enabled() {
+  local core=$1 key value
+  case "$core" in
+    singbox) key="SING_BOX_ENABLED" ;;
+    xray) key="XRAY_ENABLED" ;;
+    mtproxy) key="MTPROXY_ENABLED" ;;
+    *) return 1 ;;
+  esac
+  value="$(get_env_var "$key" "$ENV_FILE" 2>/dev/null || true)"
+  [[ "${value,,}" == "true" || "$value" == "1" || "${value,,}" == "yes" ]]
+}
+
 compose_up() {
   local do_build=${1:-false}
   local enable_mtproxy="false"
@@ -1374,16 +1697,22 @@ compose_up() {
     colorized_echo blue "$(cli_t pulling_images)"
     # Avoid failing when MTProxy GHCR image is not published yet.
     COMPOSE_PROFILES= compose pull
-    assert_api_image_has_xray "$(api_image_ref)"
+    if core_enabled xray; then
+      assert_api_image_has_xray "$(api_image_ref)"
+    fi
     colorized_echo blue "$(cli_t starting_containers)"
     compose up -d --pull missing
   fi
   # Oneshot init does not re-run on plain `up`; force it so management APIs are present.
   colorized_echo blue "$(cli_t refreshing_core_config)"
-  compose up -d --force-recreate --no-deps core-config-init
-  compose up -d --force-recreate --no-deps core
-  compose up -d --force-recreate --no-deps core-xray-config-init
-  compose up -d --force-recreate --no-deps core-xray
+  if core_enabled singbox; then
+    compose up -d --force-recreate --no-deps core-config-init
+    compose up -d --force-recreate --no-deps core
+  fi
+  if core_enabled xray; then
+    compose up -d --force-recreate --no-deps core-xray-config-init
+    compose up -d --force-recreate --no-deps core-xray
+  fi
   if [[ "$enable_mtproxy" == "true" ]]; then
     compose up -d --force-recreate --no-deps core-mtproxy-config-init
     compose up -d --force-recreate --no-deps core-mtproxy
@@ -1726,11 +2055,21 @@ configure_firewall() {
 
   colorized_echo blue "$(cli_t configuring_ufw)"
   ufw allow OpenSSH >/dev/null 2>&1 || true
-  ufw allow 443/udp >/dev/null 2>&1 || true
-  if mtproxy_enabled; then
-    # Published MTProxy TCP range (compose MTPROXY_PORT_MIN..MAX).
-    ufw allow 10001:10016/tcp >/dev/null 2>&1 || true
-  fi
+  local protocol var port transport
+  local enabled_protocols="${CFG_ENABLED_PROTOCOLS:-$(get_env_var ENABLED_PROTOCOLS "$INSTALL_CONF" 2>/dev/null || true)}"
+  for protocol in ${enabled_protocols//,/ }; do
+    var="$(protocol_port_var "$protocol" 2>/dev/null || true)"
+    [[ -z "$var" ]] && continue
+    port="${!var:-$(get_env_var "${var#CFG_}" "$ENV_FILE" 2>/dev/null || true)}"
+    [[ -z "$port" ]] && continue
+    transport="tcp"
+    case "$protocol" in HYSTERIA2|WIREGUARD|WIREGUARD_XRAY) transport="udp" ;; esac
+    if [[ "$protocol" == "MTPROXY" ]]; then
+      ufw allow "${port}:$(get_env_var MTPROXY_PORT_MAX "$ENV_FILE")/tcp" >/dev/null 2>&1 || true
+    else
+      ufw allow "${port}/${transport}" >/dev/null 2>&1 || true
+    fi
+  done
 
   if [[ "$with_nginx" == "true" ]]; then
     ufw allow 80/tcp >/dev/null 2>&1 || true
@@ -2333,26 +2672,28 @@ generate_env() {
   set_env_var "BOOTSTRAP_ADMIN_USER" "$admin_user"
   set_env_var "BOOTSTRAP_ADMIN_PASSWORD" "$admin_pass"
   set_env_var "SWAGGER_ENABLED" "false"
-  set_env_var "SING_BOX_UDP_PORT" "443"
-  set_env_var "SING_BOX_TCP_PORT" "4443"
-  set_env_var "SING_BOX_TROJAN_PORT" "8444"
-  set_env_var "SING_BOX_SS_PORT" "8445"
-  set_env_var "XRAY_LISTEN_PORT" "8443"
-  set_env_var "XRAY_GRPC_PORT" "8446"
-  set_env_var "XRAY_TCP_TLS_PORT" "8447"
-  if [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]]; then
-    set_env_var "MTPROXY_ENABLED" "true"
-    set_env_var "COMPOSE_PROFILES" "mtproxy"
-    set_env_var "MTPROXY_PORT_MIN" "10001"
-    set_env_var "MTPROXY_PORT_MAX" "10016"
-    set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
-  else
-    set_env_var "MTPROXY_ENABLED" "false"
-    set_env_var "COMPOSE_PROFILES" ""
-    set_env_var "MTPROXY_PORT_MIN" "10001"
-    set_env_var "MTPROXY_PORT_MAX" "10016"
-    set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
-  fi
+  initialize_protocol_config
+  set_env_var "SING_BOX_UDP_PORT" "$CFG_SING_BOX_UDP_PORT"
+  set_env_var "SING_BOX_TCP_PORT" "$CFG_SING_BOX_TCP_PORT"
+  set_env_var "SING_BOX_TROJAN_PORT" "$CFG_SING_BOX_TROJAN_PORT"
+  set_env_var "SING_BOX_SS_PORT" "$CFG_SING_BOX_SS_PORT"
+  set_env_var "SING_BOX_WG_PORT" "$CFG_SING_BOX_WG_PORT"
+  set_env_var "XRAY_LISTEN_PORT" "$CFG_XRAY_LISTEN_PORT"
+  set_env_var "XRAY_GRPC_PORT" "$CFG_XRAY_GRPC_PORT"
+  set_env_var "XRAY_TCP_TLS_PORT" "$CFG_XRAY_TCP_TLS_PORT"
+  set_env_var "XRAY_TROJAN_PORT" "$CFG_XRAY_TROJAN_PORT"
+  set_env_var "XRAY_SS_PORT" "$CFG_XRAY_SS_PORT"
+  set_env_var "XRAY_WG_PORT" "$CFG_XRAY_WG_PORT"
+  set_env_var "MTPROXY_PORT_MIN" "$CFG_MTPROXY_PORT_MIN"
+  set_env_var "MTPROXY_PORT_MAX" "$CFG_MTPROXY_PORT_MAX"
+  set_env_var "SING_BOX_ENABLED" "$CFG_SING_BOX_ENABLED"
+  set_env_var "XRAY_ENABLED" "$CFG_XRAY_ENABLED"
+  set_env_var "MTPROXY_ENABLED" "$CFG_MTPROXY_ENABLED"
+  set_env_var "CREATE_DEFAULT_INBOUNDS" "$CFG_CREATE_DEFAULT_INBOUNDS"
+  set_env_var "UFW_ENABLED" "${CFG_USE_UFW:-true}"
+  set_env_var "ENABLED_PROTOCOLS" "$CFG_ENABLED_PROTOCOLS"
+  set_env_var "COMPOSE_PROFILES" "$CFG_ENABLED_CORES"
+  set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
 
@@ -2373,9 +2714,16 @@ generate_env() {
     if [[ "$with_nginx" == "true" ]]; then
       set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
       set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
-      set_env_var "XRAY_LISTEN_PORT" "9443"
-      set_env_var "XRAY_GRPC_PORT" "9446"
-      set_env_var "XRAY_TCP_TLS_PORT" "9447"
+      [[ "$CFG_XRAY_LISTEN_PORT" == "8443" ]] && CFG_XRAY_LISTEN_PORT="9443"
+      [[ "$CFG_XRAY_GRPC_PORT" == "8446" ]] && CFG_XRAY_GRPC_PORT="9446"
+      [[ "$CFG_XRAY_TCP_TLS_PORT" == "8447" ]] && CFG_XRAY_TCP_TLS_PORT="9447"
+      [[ "$CFG_XRAY_TROJAN_PORT" == "8448" ]] && CFG_XRAY_TROJAN_PORT="9448"
+      [[ "$CFG_XRAY_SS_PORT" == "8449" ]] && CFG_XRAY_SS_PORT="9449"
+      set_env_var "XRAY_LISTEN_PORT" "$CFG_XRAY_LISTEN_PORT"
+      set_env_var "XRAY_GRPC_PORT" "$CFG_XRAY_GRPC_PORT"
+      set_env_var "XRAY_TCP_TLS_PORT" "$CFG_XRAY_TCP_TLS_PORT"
+      set_env_var "XRAY_TROJAN_PORT" "$CFG_XRAY_TROJAN_PORT"
+      set_env_var "XRAY_SS_PORT" "$CFG_XRAY_SS_PORT"
       set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
       set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
     fi
@@ -2411,6 +2759,13 @@ SUB_HOST=${CFG_SUB_HOST:-}
 SUB_PATH=${CFG_SUB_PATH:-}
 VPN_HOST=${CFG_VPN_HOST:-}
 EMAIL=${CFG_EMAIL:-}
+INSTALL_DEPTH=${CFG_INSTALL_DEPTH:-simple}
+ENABLED_PROTOCOLS=${CFG_ENABLED_PROTOCOLS}
+ENABLED_CORES=${CFG_ENABLED_CORES}
+CREATE_DEFAULT_INBOUNDS=${CFG_CREATE_DEFAULT_INBOUNDS}
+UFW_ENABLED=${CFG_USE_UFW:-true}
+SING_BOX_ENABLED=${CFG_SING_BOX_ENABLED}
+XRAY_ENABLED=${CFG_XRAY_ENABLED}
 MTPROXY_ENABLED=${CFG_MTPROXY_ENABLED:-true}
 CLI_LANG=${CLI_LANG}
 EOF
@@ -2431,6 +2786,16 @@ wait_for_health() {
   done
   colorized_echo yellow "$(cli_t health_timeout "$APP_NAME")"
   return 1
+}
+
+bootstrap_default_inbounds() {
+  [[ "$(get_env_var CREATE_DEFAULT_INBOUNDS "$ENV_FILE" 2>/dev/null || true)" == "true" ]] || return 0
+  colorized_echo blue "$(cli_t creating_default_inbounds)"
+  compose exec -T \
+    -e "BOOTSTRAP_ADMIN_USER=$(get_env_var BOOTSTRAP_ADMIN_USER "$ENV_FILE")" \
+    -e "BOOTSTRAP_ADMIN_PASSWORD=$(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$ENV_FILE")" \
+    -e "ENABLED_PROTOCOLS=$(get_env_var ENABLED_PROTOCOLS "$ENV_FILE")" \
+    api node apps/api/dist/scripts/bootstrap-default-inbounds.js
 }
 
 print_success() {
@@ -2486,6 +2851,8 @@ Usage:
   ${APP_NAME} menu                 Same as bare command
   ${APP_NAME} install [options]
   ${APP_NAME} up | down | restart | status | logs [service] | update | check-update | uninstall
+  ${APP_NAME} enable-core <singbox|xray|mtproxy>
+  ${APP_NAME} disable-core <singbox|xray|mtproxy>
   ${APP_NAME} info | edit | bootstrap | nginx | config | install-script
 
 Config (domains, nginx, certificates):
@@ -2497,7 +2864,7 @@ Config (domains, nginx, certificates):
   ${APP_NAME} config apply
 
 Install wizard (console screens):
-  language → install mode → domains/email → DNS (wait or skip) → MTProxy → confirm
+  language → simple/detailed → install mode → domains/email → DNS → protocols/ports → confirm
   Then runs unattended (packages, Docker, images, Nginx/TLS).
 
 Options:
@@ -2510,6 +2877,14 @@ Options:
   --branch <name>          Git branch (default: ${DEFAULT_BRANCH})
   --tag <tag>              GHCR image tag (default: ${DEFAULT_IMAGE_TAG})
   --build                  Build images locally instead of pulling from GHCR
+  --simple                 Use all protocols on Sing-box and Xray
+  --detailed               Enable detailed protocol/core configuration
+  --protocols <list>       Comma-separated protocol enum names (case-insensitive)
+  --cores <list>           singbox,xray,mtproxy; enables all protocols for each core
+  --ports <pairs>          Comma-separated PROTOCOL=PORT pairs
+  --create-default-inbounds
+                           Request default inbounds after bootstrap (default)
+  --no-default-inbounds    Do not request default inbounds
   --with-mtproxy           Enable MTProxy / Telemt (default)
   --without-mtproxy        Skip MTProxy / Telemt
   --skip-dns               Do not wait for DNS before issuing certificates
@@ -2533,10 +2908,12 @@ cmd_install() {
   local image_tag="$DEFAULT_IMAGE_TAG" do_build="false"
   local with_nginx="auto" use_ufw="true"
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
-  local flag_mtproxy=""
+  local flag_mtproxy="" flag_depth="" flag_protocols="" flag_cores="" flag_ports=""
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="true"
+  CFG_CREATE_DEFAULT_INBOUNDS="true"
+  CFG_USE_UFW="true"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2549,11 +2926,18 @@ cmd_install() {
       --branch) branch="${2:-}"; shift 2 ;;
       --tag|--version) image_tag="${2:-}"; shift 2 ;;
       --build) do_build="true"; shift ;;
+      --simple) flag_depth="simple"; shift ;;
+      --detailed) flag_depth="detailed"; shift ;;
+      --protocols) flag_protocols="${2:-}"; shift 2 ;;
+      --cores) flag_cores="${2:-}"; shift 2 ;;
+      --ports) flag_ports="${2:-}"; shift 2 ;;
+      --create-default-inbounds) CFG_CREATE_DEFAULT_INBOUNDS="true"; shift ;;
+      --no-default-inbounds) CFG_CREATE_DEFAULT_INBOUNDS="false"; shift ;;
       --with-mtproxy) flag_mtproxy="true"; shift ;;
       --without-mtproxy) flag_mtproxy="false"; shift ;;
       --skip-dns) CFG_SKIP_DNS="true"; shift ;;
       --no-nginx) with_nginx="false"; shift ;;
-      --no-ufw) use_ufw="false"; shift ;;
+      --no-ufw) use_ufw="false"; CFG_USE_UFW="false"; CFG_UFW_DECIDED="true"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) colorized_echo red "$(cli_t unknown_option "$1")"; usage; exit 1 ;;
     esac
@@ -2573,9 +2957,33 @@ cmd_install() {
   CFG_VPN_HOST=""
   CFG_EMAIL=""
   CFG_MODE="ip"
+  CFG_INSTALL_DEPTH="${flag_depth:-simple}"
+  initialize_protocol_config
+  if [[ -n "$flag_depth" || -n "$flag_protocols" || -n "$flag_cores" || -n "$flag_ports" ]]; then
+    CFG_DEPTH_SKIP_PROMPT="true"
+  fi
+  if [[ -n "$flag_protocols" ]]; then
+    CFG_ENABLED_PROTOCOLS="$(normalize_protocol_list "$flag_protocols")"
+    [[ -n "$CFG_ENABLED_PROTOCOLS" ]] || { colorized_echo red "$(cli_t no_protocols)"; exit 1; }
+    CFG_INSTALL_DEPTH="detailed"
+    CFG_DETAILED_SKIP_PROMPTS="true"
+    derive_enabled_cores
+  elif [[ -n "$flag_cores" ]]; then
+    CFG_ENABLED_PROTOCOLS="$(protocols_for_cores "$flag_cores")"
+    CFG_INSTALL_DEPTH="detailed"
+    CFG_DETAILED_SKIP_PROMPTS="true"
+    derive_enabled_cores
+  fi
+  [[ -n "$flag_ports" ]] && apply_port_overrides "$flag_ports"
   if [[ -n "$flag_mtproxy" ]]; then
     CFG_MTPROXY_ENABLED="$flag_mtproxy"
     CFG_MTPROXY_SKIP_PROMPT="true"
+    if [[ "$flag_mtproxy" == "true" && ",$CFG_ENABLED_PROTOCOLS," != *,MTPROXY,* ]]; then
+      CFG_ENABLED_PROTOCOLS="${CFG_ENABLED_PROTOCOLS:+${CFG_ENABLED_PROTOCOLS},}MTPROXY"
+    elif [[ "$flag_mtproxy" == "false" ]]; then
+      CFG_ENABLED_PROTOCOLS="$(printf '%s' "$CFG_ENABLED_PROTOCOLS" | sed -E 's/(^|,)MTPROXY(,|$)/\1/; s/,,+/,/g; s/^,//; s/,$//')"
+    fi
+    derive_enabled_cores
   fi
 
   # Collect ALL answers first — then run unattended.
@@ -2598,6 +3006,8 @@ cmd_install() {
       CFG_EMAIL="$flag_email"
     fi
   fi
+
+  use_ufw="${CFG_USE_UFW:-$use_ufw}"
 
   if [[ "$with_nginx" == "auto" ]]; then
     if [[ "$CFG_MODE" == "domain" ]]; then
@@ -2643,11 +3053,95 @@ cmd_install() {
 
   colorized_echo blue "$(cli_t creating_owner)"
   compose --profile tools run --rm bootstrap-admin
+  bootstrap_default_inbounds
 
   install_cli "${APP_DIR}/install.sh"
   apply_deploy_permissions
   mark_install_complete
   print_success "$web_port"
+}
+
+enabled_profiles_from_env() {
+  local profiles=""
+  core_enabled singbox && profiles="singbox"
+  core_enabled xray && profiles="${profiles:+${profiles},}xray"
+  core_enabled mtproxy && profiles="${profiles:+${profiles},}mtproxy"
+  printf '%s' "$profiles"
+}
+
+core_protocols() {
+  case "$1" in
+    singbox) printf '%s' "$SINGBOX_PROTOCOLS" ;;
+    xray) printf '%s' "$XRAY_PROTOCOLS" ;;
+    mtproxy) printf 'MTPROXY' ;;
+  esac
+}
+
+update_core_protocol_lists() {
+  local core=$1 enabled=$2 current protocol result=""
+  current="$(get_env_var ENABLED_PROTOCOLS "$ENV_FILE" 2>/dev/null || true)"
+  [[ -z "$current" ]] && current="$(get_env_var ENABLED_PROTOCOLS "$INSTALL_CONF" 2>/dev/null || true)"
+  if [[ "$enabled" == "true" ]]; then
+    current="${current:+${current},}$(core_protocols "$core")"
+    current="$(normalize_protocol_list "$current")"
+  else
+    IFS=',' read -ra _current_protocols <<<"$current"
+    for protocol in "${_current_protocols[@]}"; do
+      [[ "$(protocol_engine "$protocol" 2>/dev/null || true)" == "$core" ]] && continue
+      result="${result:+${result},}${protocol}"
+    done
+    current="$result"
+  fi
+  set_env_var "ENABLED_PROTOCOLS" "$current"
+  set_install_conf_var "ENABLED_PROTOCOLS" "$current"
+}
+
+cmd_enable_core() {
+  check_root
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
+  local core="${1,,}" key
+  case "$core" in
+    singbox) key="SING_BOX_ENABLED" ;;
+    xray) key="XRAY_ENABLED" ;;
+    mtproxy) key="MTPROXY_ENABLED" ;;
+    *) colorized_echo red "Core must be singbox, xray, or mtproxy"; exit 1 ;;
+  esac
+  set_env_var "$key" "true"
+  update_core_protocol_lists "$core" true
+  set_install_conf_var "$key" "true"
+  set_env_var "COMPOSE_PROFILES" "$(enabled_profiles_from_env)"
+  set_install_conf_var "ENABLED_CORES" "$(enabled_profiles_from_env)"
+  CFG_ENABLED_PROTOCOLS="$(get_env_var ENABLED_PROTOCOLS "$ENV_FILE")"
+  if [[ "$(get_env_var UFW_ENABLED "$INSTALL_CONF" 2>/dev/null || true)" != "false" ]]; then
+    configure_firewall false "$(get_env_var WEB_PORT "$ENV_FILE")"
+  fi
+  case "$core" in
+    singbox) compose up -d core-config-init core ;;
+    xray) compose up -d core-xray-config-init core-xray ;;
+    mtproxy) compose up -d core-mtproxy-config-init core-mtproxy ;;
+  esac
+  colorized_echo green "Core enabled: $core"
+}
+
+cmd_disable_core() {
+  check_root
+  is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
+  local core="${1,,}" key services
+  case "$core" in
+    singbox) key="SING_BOX_ENABLED"; services="core core-config-init" ;;
+    xray) key="XRAY_ENABLED"; services="core-xray core-xray-config-init" ;;
+    mtproxy) key="MTPROXY_ENABLED"; services="core-mtproxy core-mtproxy-config-init" ;;
+    *) colorized_echo red "Core must be singbox, xray, or mtproxy"; exit 1 ;;
+  esac
+  colorized_echo yellow "Disable/remove inbounds for $core in the admin panel before disabling this core."
+  compose stop $services >/dev/null 2>&1 || true
+  compose rm -f $services >/dev/null 2>&1 || true
+  set_env_var "$key" "false"
+  update_core_protocol_lists "$core" false
+  set_install_conf_var "$key" "false"
+  set_env_var "COMPOSE_PROFILES" "$(enabled_profiles_from_env)"
+  set_install_conf_var "ENABLED_CORES" "$(enabled_profiles_from_env)"
+  colorized_echo green "Core disabled: $core"
 }
 
 cmd_up() {
@@ -2845,6 +3339,7 @@ cmd_bootstrap() {
   check_root
   is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   compose --profile tools run --rm bootstrap-admin
+  bootstrap_default_inbounds
   colorized_echo green "$(cli_t bootstrap_finished)"
 }
 
@@ -3078,6 +3573,28 @@ show_update_submenu() {
   done
 }
 
+show_cores_submenu() {
+  local choice core
+  while true; do
+    ui_select_menu 2 \
+      "enable|enable-core" \
+      "disable|disable-core" \
+      "back|$(cli_t menu_update_back)"
+    choice="$UI_SELECT_RESULT"
+    case "$choice" in
+      enable|disable)
+        core="$(ui_prompt "singbox | xray | mtproxy")"
+        if [[ "$choice" == "enable" ]]; then
+          menu_run_action cmd_enable_core "$core"
+        else
+          menu_run_action cmd_disable_core "$core"
+        fi
+        ;;
+      back) return ;;
+    esac
+  done
+}
+
 show_main_menu() {
   check_root
   local w choice svc
@@ -3107,7 +3624,7 @@ show_main_menu() {
 
   while true; do
     UI_MENU_HEADER=_show_main_menu_header
-    ui_select_menu 8 \
+    ui_select_menu 9 \
       "1|$(cli_t menu_status)" \
       "2|$(cli_t menu_info)" \
       "3|$(cli_t menu_logs)" \
@@ -3115,7 +3632,8 @@ show_main_menu() {
       "5|$(cli_t menu_update)" \
       "6|$(cli_t menu_edit)" \
       "7|$(cli_t menu_nginx)" \
-      "8|${TUI_RED}$(cli_t menu_uninstall)${TUI_NC}" \
+      "8|$(cli_t menu_cores)" \
+      "9|${TUI_RED}$(cli_t menu_uninstall)${TUI_NC}" \
       "0|$(cli_t menu_exit)"
     choice="$UI_SELECT_RESULT"
     unset UI_MENU_HEADER
@@ -3141,7 +3659,8 @@ show_main_menu() {
       5) show_update_submenu ;;
       6) menu_run_action cmd_edit ;;
       7) menu_run_action cmd_nginx ;;
-      8)
+      8) show_cores_submenu ;;
+      9)
         cmd_uninstall
         exit 0
         ;;
@@ -3168,6 +3687,8 @@ main() {
 
   case "$cmd" in
     install) cmd_install "$@" ;;
+    enable-core) cmd_enable_core "${1:-}" ;;
+    disable-core) cmd_disable_core "${1:-}" ;;
     up|start) cmd_up ;;
     down|stop) cmd_down ;;
     restart) cmd_restart ;;

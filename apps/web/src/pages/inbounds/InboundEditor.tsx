@@ -42,10 +42,23 @@ const SING_BOX_PROTOCOLS: InboundProtocol[] = [
   'VLESS_REALITY',
   'TROJAN',
   'SHADOWSOCKS',
+  'WIREGUARD',
 ];
-const XRAY_PROTOCOLS: InboundProtocol[] = ['VLESS_XHTTP_TLS', 'VLESS_GRPC_TLS', 'VLESS_TCP_TLS'];
+const XRAY_PROTOCOLS: InboundProtocol[] = [
+  'VLESS_XHTTP_TLS',
+  'VLESS_GRPC_TLS',
+  'VLESS_TCP_TLS',
+  'TROJAN_TLS',
+  'SHADOWSOCKS_XRAY',
+  'WIREGUARD_XRAY',
+];
 const MTPROXY_PROTOCOLS: InboundProtocol[] = ['MTPROXY'];
-const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>(XRAY_PROTOCOLS);
+const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>([
+  'VLESS_XHTTP_TLS',
+  'VLESS_GRPC_TLS',
+  'VLESS_TCP_TLS',
+  'TROJAN_TLS',
+]);
 const MTPROXY_SECRET_MODES = ['CLASSIC', 'SECURE', 'TLS'] as const;
 
 const VLESS_FLOWS = ['', 'xtls-rprx-vision'] as const;
@@ -405,6 +418,16 @@ export function sanitizeInboundForm(
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
+  if (values.protocol === 'TROJAN_TLS') {
+    const preset = buildDefaultInboundSettings('TROJAN_TLS', context, overrides);
+    const settings = overlayPresetKeys(
+      preset as Record<string, unknown>,
+      dirty,
+    ) as typeof preset & { tls: ReturnType<typeof resolveXhttpTls> };
+    settings.tls = resolveXhttpTls(dirty, host, defaultsContext);
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
+  }
+
   if (values.protocol === 'HYSTERIA2' || values.protocol === 'TROJAN') {
     const preset = buildDefaultInboundSettings(values.protocol, context, overrides) as Extract<
       ReturnType<typeof buildDefaultInboundSettings>,
@@ -462,7 +485,21 @@ export function sanitizeInboundForm(
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
-  const preset = buildDefaultInboundSettings('SHADOWSOCKS', context, overrides);
+  if (
+    values.protocol === 'WIREGUARD' ||
+    values.protocol === 'WIREGUARD_XRAY'
+  ) {
+    const preset = buildDefaultInboundSettings(values.protocol, context, overrides);
+    const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
+      'privateKey',
+      'publicKey',
+    ]) as typeof preset & Record<string, unknown>;
+    delete settings.publicKeyPresent;
+    delete settings.privateKeyPresent;
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
+  }
+
+  const preset = buildDefaultInboundSettings(values.protocol, context, overrides);
   const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
     'password',
   ]) as typeof preset & { password?: string };
@@ -774,11 +811,16 @@ function VlessRealityFields({ detailed }: { detailed: boolean }) {
 
 function ShadowsocksFields() {
   const { t } = useTranslation();
+  const protocol = Form.useWatch('protocol');
+  const methods =
+    protocol === 'SHADOWSOCKS_XRAY'
+      ? (['2022-blake3-aes-256-gcm'] as const)
+      : SHADOWSOCKS_METHODS;
 
   return (
     <>
       <Form.Item name={['settings', 'method']} label={t('inbounds.shadowsocksMethod')}>
-        <Select options={SHADOWSOCKS_METHODS.map((value) => ({ value, label: value }))} />
+        <Select options={methods.map((value) => ({ value, label: value }))} />
       </Form.Item>
       <Form.Item name={['settings', 'password']} label={t('inbounds.shadowsocksPassword')}>
         <Input.Password
@@ -788,6 +830,24 @@ function ShadowsocksFields() {
         />
       </Form.Item>
     </>
+  );
+}
+
+function WireguardFields() {
+  const { t } = useTranslation();
+  return (
+    <Space size="large" wrap>
+      <Form.Item
+        name={['settings', 'address']}
+        label={t('inbounds.wireguardAddress')}
+        rules={[{ required: true }]}
+      >
+        <Input autoComplete="off" placeholder="10.66.0.1/24" />
+      </Form.Item>
+      <Form.Item name={['settings', 'mtu']} label={t('inbounds.wireguardMtu')}>
+        <InputNumber min={576} max={9000} style={{ width: 140 }} />
+      </Form.Item>
+    </Space>
   );
 }
 
@@ -956,6 +1016,12 @@ function ProtocolFields({
       return <Hysteria2Fields detailed={detailed} />;
     case 'TROJAN':
       return <TrojanFields detailed={detailed} />;
+    case 'TROJAN_TLS':
+      return (
+        <>
+          <XrayFilesTlsFields detailed={detailed} />
+        </>
+      );
     case 'VLESS_REALITY':
       return <VlessRealityFields detailed={detailed} />;
     case 'VLESS_XHTTP_TLS':
@@ -965,7 +1031,11 @@ function ProtocolFields({
     case 'VLESS_TCP_TLS':
       return <VlessTcpTlsFields detailed={detailed} />;
     case 'SHADOWSOCKS':
+    case 'SHADOWSOCKS_XRAY':
       return <ShadowsocksFields />;
+    case 'WIREGUARD':
+    case 'WIREGUARD_XRAY':
+      return <WireguardFields />;
     case 'MTPROXY':
       return <MtproxyFields />;
     default:
@@ -1018,9 +1088,13 @@ export function InboundEditor({
       singBoxTcpPort: readOnly.singBoxTcpPort,
       singBoxTrojanPort: readOnly.singBoxTrojanPort,
       singBoxSsPort: readOnly.singBoxSsPort,
+      singBoxWgPort: readOnly.singBoxWgPort,
       xrayListenPort: readOnly.xrayListenPort,
       xrayGrpcPort: readOnly.xrayGrpcPort,
       xrayTcpTlsPort: readOnly.xrayTcpTlsPort,
+      xrayTrojanPort: readOnly.xrayTrojanPort,
+      xraySsPort: readOnly.xraySsPort,
+      xrayWgPort: readOnly.xrayWgPort,
       mtproxyPortMin: readOnly.mtproxyPortMin,
       mtproxyPortMax: readOnly.mtproxyPortMax,
       tlsCertificatePath: readOnly.tlsCertificatePath,
@@ -1047,6 +1121,81 @@ export function InboundEditor({
       rangeLabel: null as string | null,
     };
   }, [defaultsContext, protocol]);
+
+  const engineEnabled = useMemo(
+    () => ({
+      SING_BOX: settingsQuery.data?.readOnly.singBoxEnabled ?? true,
+      XRAY: settingsQuery.data?.readOnly.xrayEnabled ?? true,
+      MTPROXY: settingsQuery.data?.readOnly.mtproxyEnabled ?? true,
+    }),
+    [settingsQuery.data],
+  );
+
+  const protocolSelectOptions = useMemo(() => {
+    const labelFor = (value: InboundProtocol) =>
+      t(`enums.protocol.${value}`, {
+        defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
+      });
+    const groups: Array<{
+      label: string;
+      options: Array<{ value: InboundProtocol; label: string; disabled?: boolean }>;
+    }> = [];
+    if (engineEnabled.SING_BOX) {
+      groups.push({
+        label: t('inbounds.engineGroupSingBox'),
+        options: SING_BOX_PROTOCOLS.map((value) => ({
+          value,
+          label: labelFor(value),
+        })),
+      });
+    } else {
+      groups.push({
+        label: `${t('inbounds.engineGroupSingBox')} (${t('inbounds.engineDisabled')})`,
+        options: SING_BOX_PROTOCOLS.map((value) => ({
+          value,
+          label: labelFor(value),
+          disabled: true,
+        })),
+      });
+    }
+    if (engineEnabled.XRAY) {
+      groups.push({
+        label: t('inbounds.engineGroupXray'),
+        options: XRAY_PROTOCOLS.map((value) => ({
+          value,
+          label: labelFor(value),
+        })),
+      });
+    } else {
+      groups.push({
+        label: `${t('inbounds.engineGroupXray')} (${t('inbounds.engineDisabled')})`,
+        options: XRAY_PROTOCOLS.map((value) => ({
+          value,
+          label: labelFor(value),
+          disabled: true,
+        })),
+      });
+    }
+    if (engineEnabled.MTPROXY) {
+      groups.push({
+        label: t('inbounds.engineGroupMtproxy'),
+        options: MTPROXY_PROTOCOLS.map((value) => ({
+          value,
+          label: labelFor(value),
+        })),
+      });
+    } else {
+      groups.push({
+        label: `${t('inbounds.engineGroupMtproxy')} (${t('inbounds.engineDisabled')})`,
+        options: MTPROXY_PROTOCOLS.map((value) => ({
+          value,
+          label: labelFor(value),
+          disabled: true,
+        })),
+      });
+    }
+    return groups;
+  }, [engineEnabled, t]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: InboundEditorForm) => {
@@ -1234,6 +1383,16 @@ export function InboundEditor({
           flow: 'xtls-rprx-vision',
           tls,
         };
+      } else if (value === 'TROJAN_TLS') {
+        nextSettings = {
+          listenHost: current.settings?.listenHost ?? '0.0.0.0',
+          listenPort: port,
+          publicHost: current.settings?.publicHost ?? defaultsContext.publicHost,
+          publicPort: port,
+          enabled: current.settings?.enabled ?? true,
+          tls,
+          fallback: null,
+        };
       } else {
         nextSettings = {
           listenHost: current.settings?.listenHost ?? '0.0.0.0',
@@ -1345,35 +1504,7 @@ export function InboundEditor({
           >
             <Select
               disabled={!!inbound}
-              options={[
-                {
-                  label: t('inbounds.engineGroupSingBox'),
-                  options: SING_BOX_PROTOCOLS.map((value) => ({
-                    value,
-                    label: t(`enums.protocol.${value}`, {
-                      defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
-                    }),
-                  })),
-                },
-                {
-                  label: t('inbounds.engineGroupXray'),
-                  options: XRAY_PROTOCOLS.map((value) => ({
-                    value,
-                    label: t(`enums.protocol.${value}`, {
-                      defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
-                    }),
-                  })),
-                },
-                {
-                  label: t('inbounds.engineGroupMtproxy'),
-                  options: MTPROXY_PROTOCOLS.map((value) => ({
-                    value,
-                    label: t(`enums.protocol.${value}`, {
-                      defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
-                    }),
-                  })),
-                },
-              ]}
+              options={protocolSelectOptions}
               onChange={handleProtocolChange}
             />
           </Form.Item>
@@ -1535,7 +1666,11 @@ export function InboundEditor({
           protocol === 'VLESS_XHTTP_TLS' ||
           protocol === 'VLESS_GRPC_TLS' ||
           protocol === 'VLESS_TCP_TLS' ||
-          protocol === 'SHADOWSOCKS' ? (
+          protocol === 'TROJAN_TLS' ||
+          protocol === 'SHADOWSOCKS' ||
+          protocol === 'SHADOWSOCKS_XRAY' ||
+          protocol === 'WIREGUARD' ||
+          protocol === 'WIREGUARD_XRAY' ? (
             <>
               <Typography.Title level={5}>{t('inbounds.sectionProtocol')}</Typography.Title>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>

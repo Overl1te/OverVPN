@@ -16,21 +16,23 @@ import {
 } from './core-config-utils';
 import {
   type CoreDesiredState,
+  type AssignmentCredential,
   type CoreHealthResult,
   type CoreProviderApplyResult,
   type DesiredInbound,
+  type DesiredShadowsocksXrayInbound,
+  type DesiredTrojanTlsInbound,
   type DesiredVlessGrpcTlsInbound,
   type DesiredVlessTcpTlsInbound,
   type DesiredVlessXhttpTlsInbound,
+  type DesiredWireguardInbound,
   EngineProvider,
   type JsonObject,
   type OnlineClient,
   type OnlineClientsResult,
-  type PasswordCredential,
   type RenderedCoreConfig,
   type TrafficCounter,
   type TrafficSnapshotResult,
-  type VlessCredential,
   type VlessXhttpTlsInboundSecrets,
 } from './core-provider';
 import {
@@ -394,6 +396,15 @@ export class XrayProvider extends EngineProvider {
     if (inbound.protocol === 'VLESS_TCP_TLS') {
       return this.renderVlessTcpTlsInbound(inbound, secretValues);
     }
+    if (inbound.protocol === 'TROJAN_TLS') {
+      return this.renderTrojanTlsInbound(inbound, secretValues);
+    }
+    if (inbound.protocol === 'SHADOWSOCKS_XRAY') {
+      return this.renderShadowsocksInbound(inbound, secretValues);
+    }
+    if (inbound.protocol === 'WIREGUARD_XRAY') {
+      return this.renderWireguardInbound(inbound, secretValues);
+    }
     throw new Error(
       `XrayProvider cannot render ${inbound.protocol} inbound ${inbound.id}`,
     );
@@ -545,6 +556,100 @@ export class XrayProvider extends EngineProvider {
     };
   }
 
+  private renderTrojanTlsInbound(
+    inbound: DesiredTrojanTlsInbound,
+    secretValues: Set<string>,
+  ): JsonObject {
+    const clients = inbound.assignments.map((assignment) => {
+      const password = passwordFrom(assignment.credential);
+      secretValues.add(password);
+      return { password, email: assignment.userId };
+    });
+    const tlsSettings: JsonObject = {
+      serverName: inbound.config.tls.sni,
+      alpn: ['h2', 'http/1.1'],
+      certificates: [
+        this.renderTlsCertificate(
+          inbound.tag,
+          inbound.config.tls,
+          inbound.secrets,
+          secretValues,
+        ),
+      ],
+    };
+    const settings: JsonObject = { clients };
+    if (inbound.config.fallback) {
+      settings.fallbacks = [
+        {
+          dest: `${inbound.config.fallback.server}:${inbound.config.fallback.serverPort}`,
+        },
+      ];
+    }
+    return {
+      listen: inbound.listenHost,
+      port: inbound.listenPort,
+      protocol: 'trojan',
+      tag: inbound.tag,
+      settings,
+      streamSettings: {
+        network: 'tcp',
+        security: 'tls',
+        tlsSettings,
+      },
+    };
+  }
+
+  private renderShadowsocksInbound(
+    inbound: DesiredShadowsocksXrayInbound,
+    secretValues: Set<string>,
+  ): JsonObject {
+    secretValues.add(inbound.secrets.serverPassword);
+    const clients = inbound.assignments.map((assignment) => {
+      const password = passwordFrom(assignment.credential);
+      secretValues.add(password);
+      return { password, email: assignment.userId };
+    });
+    return {
+      listen: inbound.listenHost,
+      port: inbound.listenPort,
+      protocol: 'shadowsocks',
+      tag: inbound.tag,
+      settings: {
+        method: inbound.config.method,
+        password: inbound.secrets.serverPassword,
+        clients,
+        network: 'tcp,udp',
+      },
+    };
+  }
+
+  private renderWireguardInbound(
+    inbound: DesiredWireguardInbound,
+    secretValues: Set<string>,
+  ): JsonObject {
+    secretValues.add(inbound.secrets.privateKey);
+    const peers = inbound.assignments.map((assignment) => {
+      secretValues.add(assignment.credential.publicKey);
+      return {
+        publicKey: assignment.credential.publicKey,
+        allowedIPs: [assignment.credential.address],
+      };
+    });
+    return {
+      listen: inbound.listenHost,
+      port: inbound.listenPort,
+      protocol: 'wireguard',
+      tag: inbound.tag,
+      settings: {
+        secretKey: inbound.secrets.privateKey,
+        address: [inbound.config.address],
+        peers,
+        mtu: inbound.config.mtu,
+        noKernelTun: true,
+      },
+    };
+  }
+
   private renderTlsCertificate(
     tag: string,
     tls: {
@@ -602,11 +707,18 @@ function compareByTagAndId(
   );
 }
 
-function uuidFrom(credential: PasswordCredential | VlessCredential): string {
+function uuidFrom(credential: AssignmentCredential): string {
   if (!('uuid' in credential)) {
     throw new Error('Expected a VLESS UUID credential');
   }
   return credential.uuid;
+}
+
+function passwordFrom(credential: AssignmentCredential): string {
+  if (!('password' in credential)) {
+    throw new Error('Expected a password credential');
+  }
+  return credential.password;
 }
 
 function requiredSecret(value: string | undefined, label: string): string {

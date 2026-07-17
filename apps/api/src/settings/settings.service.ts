@@ -306,11 +306,18 @@ export class SettingsService {
           infer: true,
         }),
         singBoxSsPort: this.config.get('SING_BOX_SS_PORT', { infer: true }),
+        singBoxWgPort: this.config.get('SING_BOX_WG_PORT', { infer: true }),
         xrayListenPort: this.config.get('XRAY_LISTEN_PORT', { infer: true }),
         xrayGrpcPort: this.config.get('XRAY_GRPC_PORT', { infer: true }),
         xrayTcpTlsPort: this.config.get('XRAY_TCP_TLS_PORT', { infer: true }),
+        xrayTrojanPort: this.config.get('XRAY_TROJAN_PORT', { infer: true }),
+        xraySsPort: this.config.get('XRAY_SS_PORT', { infer: true }),
+        xrayWgPort: this.config.get('XRAY_WG_PORT', { infer: true }),
         mtproxyPortMin: this.config.get('MTPROXY_PORT_MIN', { infer: true }),
         mtproxyPortMax: this.config.get('MTPROXY_PORT_MAX', { infer: true }),
+        singBoxEnabled: this.config.get('SING_BOX_ENABLED', { infer: true }),
+        xrayEnabled: this.config.get('XRAY_ENABLED', { infer: true }),
+        mtproxyEnabled: this.config.get('MTPROXY_ENABLED', { infer: true }),
         tlsCertificatePath:
           this.config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }) ?? null,
         tlsKeyPath:

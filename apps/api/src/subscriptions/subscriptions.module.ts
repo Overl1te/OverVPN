@@ -3,12 +3,16 @@ import { AuthModule } from '../auth/auth.module';
 import {
   Hysteria2SubscriptionAdapter,
   ShadowsocksSubscriptionAdapter,
+  ShadowsocksXraySubscriptionAdapter,
   SubscriptionProfileBuilder,
   TrojanSubscriptionAdapter,
+  TrojanTlsSubscriptionAdapter,
   VlessGrpcTlsSubscriptionAdapter,
   VlessRealitySubscriptionAdapter,
   VlessTcpTlsSubscriptionAdapter,
   VlessXhttpTlsSubscriptionAdapter,
+  WireguardSubscriptionAdapter,
+  WireguardXraySubscriptionAdapter,
 } from './subscription-profile';
 import {
   SubscriptionRateLimitGuard,
@@ -28,7 +32,11 @@ import { SubscriptionsService } from './subscriptions.service';
     VlessGrpcTlsSubscriptionAdapter,
     VlessTcpTlsSubscriptionAdapter,
     TrojanSubscriptionAdapter,
+    TrojanTlsSubscriptionAdapter,
     ShadowsocksSubscriptionAdapter,
+    ShadowsocksXraySubscriptionAdapter,
+    WireguardSubscriptionAdapter,
+    WireguardXraySubscriptionAdapter,
     SubscriptionProfileBuilder,
     SubscriptionRateLimitStore,
     SubscriptionRateLimiter,

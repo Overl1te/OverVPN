@@ -295,6 +295,12 @@ export const environmentSchema = z
     XRAY_GRPC_PORT: z.coerce.number().int().min(1).max(65_535).default(8446),
     /** Published TCP port for VLESS TCP TLS (compose → host). */
     XRAY_TCP_TLS_PORT: z.coerce.number().int().min(1).max(65_535).default(8447),
+    /** Published TCP port for Trojan TLS on Xray (compose → host). */
+    XRAY_TROJAN_PORT: z.coerce.number().int().min(1).max(65_535).default(8448),
+    /** Published TCP port for Shadowsocks on Xray (compose → host). */
+    XRAY_SS_PORT: z.coerce.number().int().min(1).max(65_535).default(8449),
+    /** Published UDP port for WireGuard on Xray (compose → host). */
+    XRAY_WG_PORT: z.coerce.number().int().min(1).max(65_535).default(51_821),
     XRAY_PROCESS_TIMEOUT_MS: z.coerce
       .number()
       .int()
@@ -313,6 +319,10 @@ export const environmentSchema = z
       .min(250)
       .max(60_000)
       .default(5_000),
+    /** When false, SingBoxProvider is not registered and SING_BOX inbounds are rejected. */
+    SING_BOX_ENABLED: booleanFromEnvironment.default(true),
+    /** When false, XrayProvider is not registered and XRAY inbounds are rejected. */
+    XRAY_ENABLED: booleanFromEnvironment.default(true),
     MTPROXY_ENABLED: booleanFromEnvironment.default(true),
     MTPROXY_CONFIG_PATH: z
       .string()
@@ -413,6 +423,13 @@ export const environmentSchema = z
       .default(8444),
     /** Published TCP port for Shadowsocks (compose → host). */
     SING_BOX_SS_PORT: z.coerce.number().int().min(1).max(65_535).default(8445),
+    /** Published UDP port for WireGuard on sing-box (compose → host). */
+    SING_BOX_WG_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(51_820),
     SING_BOX_ACME_HTTP_PORT: z.coerce
       .number()
       .int()

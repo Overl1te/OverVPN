@@ -69,6 +69,11 @@
       <td>English</td>
     </tr>
     <tr>
+      <td>Depth</td>
+      <td>Простая или детальная установка</td>
+      <td>Простая (оба ядра + MTProxy)</td>
+    </tr>
+    <tr>
       <td>Mode</td>
       <td>С доменом (Nginx + TLS) или только IP</td>
       <td>Домен; IP → <code>http://IP:8000</code></td>
@@ -84,12 +89,21 @@
       <td>Проверить</td>
     </tr>
     <tr>
+      <td>Detailed</td>
+      <td>Протоколы → ядра → пресет/порты → default inbounds → UFW</td>
+      <td>Только в <code>--detailed</code></td>
+    </tr>
+    <tr>
       <td>Confirm</td>
       <td>Итог и старт установки</td>
       <td>Начать</td>
     </tr>
   </tbody>
 </table>
+<p>
+  Ядра включаются профилями Compose <code>singbox</code> / <code>xray</code> / <code>mtproxy</code>.
+  Доустановка после install: <code>overvpn enable-core singbox|xray|mtproxy</code>.
+</p>
 <p>После установки выводится экран с URL панели и учётными данными владельца.</p>
 
 <h2>Флаги установщика</h2>
@@ -101,6 +115,26 @@
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td><code>--simple</code> / <code>--detailed</code></td>
+      <td>Простой или детальный мастер</td>
+    </tr>
+    <tr>
+      <td><code>--protocols &lt;list&gt;</code></td>
+      <td>Список протоколов</td>
+    </tr>
+    <tr>
+      <td><code>--cores singbox,xray,mtproxy</code></td>
+      <td>Ядра (без protocols → все протоколы ядер)</td>
+    </tr>
+    <tr>
+      <td><code>--ports key=value,…</code></td>
+      <td>Порты протоколов</td>
+    </tr>
+    <tr>
+      <td><code>--create-default-inbounds</code> / <code>--no-default-inbounds</code></td>
+      <td>Стартовые inbound’ы</td>
+    </tr>
     <tr>
       <td><code>--base-domain &lt;host&gt;</code></td>
       <td>Базовый домен</td>

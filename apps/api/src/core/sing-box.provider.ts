@@ -17,6 +17,7 @@ import {
 } from './core-config-utils';
 import {
   type CoreDesiredState,
+  type AssignmentCredential,
   type CoreHealthResult,
   type CoreProviderApplyResult,
   type DesiredHysteria2Inbound,
@@ -24,15 +25,14 @@ import {
   type DesiredShadowsocksInbound,
   type DesiredTrojanInbound,
   type DesiredVlessRealityInbound,
+  type DesiredWireguardInbound,
   EngineProvider,
   type JsonObject,
   type OnlineClient,
   type OnlineClientsResult,
-  type PasswordCredential,
   type RenderedCoreConfig,
   type TrafficCounter,
   type TrafficSnapshotResult,
-  type VlessCredential,
 } from './core-provider';
 import {
   localizeCoreHealthError,
@@ -99,9 +99,17 @@ export class SingBoxProvider extends EngineProvider {
       );
     }
     const secretValues = new Set<string>([this.clashApiSecret]);
-    const inbounds = [...state.inbounds]
+    const inbounds = state.inbounds
+      .filter((inbound) => inbound.protocol !== 'WIREGUARD')
       .sort(compareByTagAndId)
       .map((inbound) => this.renderInbound(inbound, secretValues));
+    const endpoints = state.inbounds
+      .filter(
+        (inbound): inbound is DesiredWireguardInbound =>
+          inbound.protocol === 'WIREGUARD',
+      )
+      .sort(compareByTagAndId)
+      .map((inbound) => this.renderWireguardInbound(inbound, secretValues));
     const userNames = [
       ...new Set(
         state.inbounds.flatMap((inbound) =>
@@ -129,6 +137,7 @@ export class SingBoxProvider extends EngineProvider {
         strategy: 'prefer_ipv4',
       },
       inbounds,
+      ...(endpoints.length > 0 ? { endpoints } : {}),
       outbounds: [
         { type: 'direct', tag: 'direct' },
         { type: 'block', tag: 'block' },
@@ -624,6 +633,32 @@ export class SingBoxProvider extends EngineProvider {
     };
   }
 
+  private renderWireguardInbound(
+    inbound: DesiredWireguardInbound,
+    secretValues: Set<string>,
+  ): JsonObject {
+    secretValues.add(inbound.secrets.privateKey);
+    const peers = inbound.assignments
+      .sort((left, right) => compareStrings(left.userId, right.userId))
+      .map((assignment) => {
+        secretValues.add(assignment.credential.publicKey);
+        return {
+          public_key: assignment.credential.publicKey,
+          allowed_ips: [assignment.credential.address],
+        };
+      });
+    return {
+      type: 'wireguard',
+      tag: inbound.tag,
+      listen_port: inbound.listenPort,
+      system: false,
+      private_key: inbound.secrets.privateKey,
+      address: [inbound.config.address],
+      mtu: inbound.config.mtu,
+      peers,
+    };
+  }
+
   private renderTls(
     tls: DesiredHysteria2Inbound['config']['tls'],
     secrets:
@@ -799,16 +834,14 @@ function compareByTagAndId(
   );
 }
 
-function passwordFrom(
-  credential: PasswordCredential | VlessCredential,
-): string {
+function passwordFrom(credential: AssignmentCredential): string {
   if (!('password' in credential)) {
     throw new Error('Expected a password credential');
   }
   return credential.password;
 }
 
-function uuidFrom(credential: PasswordCredential | VlessCredential): string {
+function uuidFrom(credential: AssignmentCredential): string {
   if (!('uuid' in credential)) {
     throw new Error('Expected a VLESS UUID credential');
   }

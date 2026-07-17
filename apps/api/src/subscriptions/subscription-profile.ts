@@ -9,22 +9,28 @@ import {
 import type {
   Hysteria2SubscriptionEndpoint,
   ShadowsocksSubscriptionEndpoint,
+  ShadowsocksXraySubscriptionEndpoint,
   SubscriptionEndpoint,
   SubscriptionProfileDescriptor,
   TrojanSubscriptionEndpoint,
+  TrojanTlsSubscriptionEndpoint,
   VlessGrpcTlsSubscriptionEndpoint,
   VlessRealitySubscriptionEndpoint,
   VlessTcpTlsSubscriptionEndpoint,
   VlessXhttpTlsSubscriptionEndpoint,
+  WireguardSubscriptionEndpoint,
+  WireguardXraySubscriptionEndpoint,
 } from '@overvpn/shared/schemas';
 import {
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
+  trojanTlsInboundPublicConfigSchema,
   vlessGrpcTlsPublicConfigSchema,
   vlessRealityInboundPublicConfigSchema,
   vlessTcpTlsPublicConfigSchema,
   vlessXhttpTlsPublicConfigSchema,
+  wireguardInboundPublicConfigSchema,
 } from '@overvpn/shared/schemas';
 import { stringify as stringifyYaml } from 'yaml';
 import { SecretEncryptionService } from '../auth/auth-crypto';
@@ -46,6 +52,7 @@ import { buildVlessGrpcTlsUri } from '../inbounds/vless-grpc-tls-domain';
 import { buildVlessUri } from '../inbounds/vless-reality-domain';
 import { buildVlessTcpTlsUri } from '../inbounds/vless-tcp-tls-domain';
 import { buildVlessXhttpTlsUri } from '../inbounds/vless-xhttp-tls-domain';
+import { buildWireguardUri } from '../inbounds/wireguard-domain';
 
 export interface SubscriptionInboundRecord {
   id: string;
@@ -138,8 +145,11 @@ export class Hysteria2SubscriptionAdapter implements SubscriptionProtocolAdapter
       password: credential,
       tls: {
         serverName: config.data.tls.sni,
-        insecure: config.data.tls.clientInsecure,
-        alpn: config.data.tls.alpn,
+        insecure:
+          'clientInsecure' in config.data.tls
+            ? config.data.tls.clientInsecure
+            : false,
+        alpn: 'alpn' in config.data.tls ? config.data.tls.alpn : [],
       },
       obfs: obfsPassword
         ? {
@@ -354,7 +364,7 @@ export class VlessTcpTlsSubscriptionAdapter implements SubscriptionProtocolAdapt
 
 @Injectable()
 export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
-  readonly protocol = 'TROJAN' as const;
+  readonly protocol: 'TROJAN' | 'TROJAN_TLS' = 'TROJAN';
 
   constructor(private readonly encryption: SecretEncryptionService) {}
 
@@ -363,12 +373,15 @@ export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
     user: SubscriptionProfileUser,
     tag: string,
     displayName: string,
-  ): TrojanSubscriptionEndpoint {
+  ): TrojanSubscriptionEndpoint | TrojanTlsSubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost) {
       throw unavailable();
     }
-    const config = trojanInboundPublicConfigSchema.safeParse(inbound.config);
+    const config =
+      this.protocol === 'TROJAN'
+        ? trojanInboundPublicConfigSchema.safeParse(inbound.config)
+        : trojanTlsInboundPublicConfigSchema.safeParse(inbound.config);
     if (!config.success) {
       throw unavailable();
     }
@@ -379,7 +392,7 @@ export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
     );
     void user;
     return {
-      protocol: 'TROJAN',
+      protocol: this.protocol,
       tag,
       displayName,
       server: inbound.publicHost,
@@ -387,16 +400,28 @@ export class TrojanSubscriptionAdapter implements SubscriptionProtocolAdapter {
       password,
       tls: {
         serverName: config.data.tls.sni,
-        insecure: config.data.tls.clientInsecure,
-        alpn: config.data.tls.alpn,
+        insecure:
+          'clientInsecure' in config.data.tls
+            ? config.data.tls.clientInsecure
+            : false,
+        alpn: 'alpn' in config.data.tls ? config.data.tls.alpn : [],
       },
     };
   }
 }
 
 @Injectable()
+export class TrojanTlsSubscriptionAdapter extends TrojanSubscriptionAdapter {
+  override readonly protocol = 'TROJAN_TLS' as const;
+
+  constructor(encryption: SecretEncryptionService) {
+    super(encryption);
+  }
+}
+
+@Injectable()
 export class ShadowsocksSubscriptionAdapter implements SubscriptionProtocolAdapter {
-  readonly protocol = 'SHADOWSOCKS' as const;
+  readonly protocol: 'SHADOWSOCKS' | 'SHADOWSOCKS_XRAY' = 'SHADOWSOCKS';
 
   constructor(private readonly encryption: SecretEncryptionService) {}
 
@@ -405,7 +430,7 @@ export class ShadowsocksSubscriptionAdapter implements SubscriptionProtocolAdapt
     user: SubscriptionProfileUser,
     tag: string,
     displayName: string,
-  ): ShadowsocksSubscriptionEndpoint {
+  ): ShadowsocksSubscriptionEndpoint | ShadowsocksXraySubscriptionEndpoint {
     const inbound = assignment.inbound;
     if (!inbound.publicHost || !inbound.secretDataEncrypted) {
       throw unavailable();
@@ -429,7 +454,7 @@ export class ShadowsocksSubscriptionAdapter implements SubscriptionProtocolAdapt
     );
     void user;
     return {
-      protocol: 'SHADOWSOCKS',
+      protocol: this.protocol,
       tag,
       displayName,
       server: inbound.publicHost,
@@ -441,6 +466,77 @@ export class ShadowsocksSubscriptionAdapter implements SubscriptionProtocolAdapt
         userPassword,
       ),
     };
+  }
+}
+
+@Injectable()
+export class ShadowsocksXraySubscriptionAdapter extends ShadowsocksSubscriptionAdapter {
+  override readonly protocol = 'SHADOWSOCKS_XRAY' as const;
+
+  constructor(encryption: SecretEncryptionService) {
+    super(encryption);
+  }
+}
+
+@Injectable()
+export class WireguardSubscriptionAdapter implements SubscriptionProtocolAdapter {
+  readonly protocol: 'WIREGUARD' | 'WIREGUARD_XRAY' = 'WIREGUARD';
+
+  constructor(private readonly encryption: SecretEncryptionService) {}
+
+  build(
+    assignment: SubscriptionAssignmentRecord,
+    user: SubscriptionProfileUser,
+    tag: string,
+    displayName: string,
+  ): WireguardSubscriptionEndpoint | WireguardXraySubscriptionEndpoint {
+    const inbound = assignment.inbound;
+    const config = wireguardInboundPublicConfigSchema.safeParse(inbound.config);
+    if (
+      !config.success ||
+      !inbound.publicHost ||
+      !inbound.secretDataEncrypted
+    ) {
+      throw unavailable();
+    }
+    const secrets = parseEncryptedObject(
+      this.encryption,
+      inbound.secretDataEncrypted,
+    );
+    const credential = parseEncryptedObject(
+      this.encryption,
+      assignment.credentialEncrypted,
+    );
+    if (
+      typeof secrets.publicKey !== 'string' ||
+      typeof credential.privateKey !== 'string' ||
+      typeof credential.publicKey !== 'string' ||
+      typeof credential.address !== 'string'
+    ) {
+      throw unavailable();
+    }
+    void user;
+    return {
+      protocol: this.protocol,
+      tag,
+      displayName,
+      server: inbound.publicHost,
+      port: inbound.publicPort ?? inbound.listenPort,
+      privateKey: credential.privateKey,
+      publicKey: credential.publicKey,
+      serverPublicKey: secrets.publicKey,
+      address: credential.address,
+      mtu: config.data.mtu,
+    };
+  }
+}
+
+@Injectable()
+export class WireguardXraySubscriptionAdapter extends WireguardSubscriptionAdapter {
+  override readonly protocol = 'WIREGUARD_XRAY' as const;
+
+  constructor(encryption: SecretEncryptionService) {
+    super(encryption);
   }
 }
 
@@ -458,7 +554,11 @@ export class SubscriptionProfileBuilder {
     vlessGrpcTls: VlessGrpcTlsSubscriptionAdapter,
     vlessTcpTls: VlessTcpTlsSubscriptionAdapter,
     trojan: TrojanSubscriptionAdapter,
+    trojanTls: TrojanTlsSubscriptionAdapter,
     shadowsocks: ShadowsocksSubscriptionAdapter,
+    shadowsocksXray: ShadowsocksXraySubscriptionAdapter,
+    wireguard: WireguardSubscriptionAdapter,
+    wireguardXray: WireguardXraySubscriptionAdapter,
   ) {
     this.adapters = new Map<InboundProtocol, SubscriptionProtocolAdapter>([
       [hysteria2.protocol, hysteria2],
@@ -467,7 +567,11 @@ export class SubscriptionProfileBuilder {
       [vlessGrpcTls.protocol, vlessGrpcTls],
       [vlessTcpTls.protocol, vlessTcpTls],
       [trojan.protocol, trojan],
+      [trojanTls.protocol, trojanTls],
       [shadowsocks.protocol, shadowsocks],
+      [shadowsocksXray.protocol, shadowsocksXray],
+      [wireguard.protocol, wireguard],
+      [wireguardXray.protocol, wireguardXray],
     ]);
   }
 
@@ -570,9 +674,23 @@ export function renderSingBoxProfile(
     (endpoint) => endpoint.protocol !== 'VLESS_XHTTP_TLS',
   );
   const endpointTags = singBoxEndpoints.map((endpoint) => endpoint.displayName);
-  const proxyOutbounds = singBoxEndpoints.map((endpoint) =>
-    renderSingBoxOutbound(endpoint),
-  );
+  const wireguardEndpoints = singBoxEndpoints
+    .filter(
+      (
+        endpoint,
+      ): endpoint is
+        WireguardSubscriptionEndpoint | WireguardXraySubscriptionEndpoint =>
+        endpoint.protocol === 'WIREGUARD' ||
+        endpoint.protocol === 'WIREGUARD_XRAY',
+    )
+    .map(renderSingBoxWireguardEndpoint);
+  const proxyOutbounds = singBoxEndpoints
+    .filter(
+      (endpoint) =>
+        endpoint.protocol !== 'WIREGUARD' &&
+        endpoint.protocol !== 'WIREGUARD_XRAY',
+    )
+    .map(renderSingBoxOutbound);
 
   return `${JSON.stringify(
     {
@@ -611,6 +729,9 @@ export function renderSingBoxProfile(
           strict_route: true,
         },
       ],
+      ...(wireguardEndpoints.length > 0
+        ? { endpoints: wireguardEndpoints }
+        : {}),
       outbounds: [
         {
           type: 'selector',
@@ -756,7 +877,7 @@ function renderSingBoxOutbound(
       },
     };
   }
-  if (endpoint.protocol === 'TROJAN') {
+  if (endpoint.protocol === 'TROJAN' || endpoint.protocol === 'TROJAN_TLS') {
     return {
       type: 'trojan',
       tag: endpoint.displayName,
@@ -771,6 +892,12 @@ function renderSingBoxOutbound(
       },
     };
   }
+  if (
+    endpoint.protocol === 'WIREGUARD' ||
+    endpoint.protocol === 'WIREGUARD_XRAY'
+  ) {
+    throw new Error('WireGuard must be rendered as a sing-box endpoint');
+  }
   return {
     type: 'shadowsocks',
     tag: endpoint.displayName,
@@ -778,6 +905,28 @@ function renderSingBoxOutbound(
     server_port: endpoint.port,
     method: endpoint.method,
     password: endpoint.password,
+  };
+}
+
+function renderSingBoxWireguardEndpoint(
+  endpoint: WireguardSubscriptionEndpoint | WireguardXraySubscriptionEndpoint,
+): Record<string, unknown> {
+  return {
+    type: 'wireguard',
+    tag: endpoint.displayName,
+    system: false,
+    address: [endpoint.address],
+    private_key: endpoint.privateKey,
+    mtu: endpoint.mtu,
+    peers: [
+      {
+        address: endpoint.server,
+        port: endpoint.port,
+        public_key: endpoint.serverPublicKey,
+        allowed_ips: ['0.0.0.0/0', '::/0'],
+        persistent_keepalive_interval: 25,
+      },
+    ],
   };
 }
 
@@ -839,7 +988,7 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
         label: endpoint.displayName,
       });
     }
-    if (endpoint.protocol === 'TROJAN') {
+    if (endpoint.protocol === 'TROJAN' || endpoint.protocol === 'TROJAN_TLS') {
       return buildTrojanUri({
         password: endpoint.password,
         host: endpoint.server,
@@ -847,6 +996,21 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
         sni: endpoint.tls.serverName,
         insecure: endpoint.tls.insecure,
         alpn: endpoint.tls.alpn,
+        label: endpoint.displayName,
+      });
+    }
+    if (
+      endpoint.protocol === 'WIREGUARD' ||
+      endpoint.protocol === 'WIREGUARD_XRAY'
+    ) {
+      return buildWireguardUri({
+        privateKey: endpoint.privateKey,
+        publicKey: endpoint.publicKey,
+        serverPublicKey: endpoint.serverPublicKey,
+        address: endpoint.address,
+        host: endpoint.server,
+        port: endpoint.port,
+        mtu: endpoint.mtu,
         label: endpoint.displayName,
       });
     }
@@ -973,7 +1137,10 @@ export function renderClashProfile(
           },
         ];
       }
-      if (endpoint.protocol === 'TROJAN') {
+      if (
+        endpoint.protocol === 'TROJAN' ||
+        endpoint.protocol === 'TROJAN_TLS'
+      ) {
         return [
           {
             name: endpoint.displayName,
@@ -986,6 +1153,24 @@ export function renderClashProfile(
             ...(endpoint.tls.alpn.length > 0
               ? { alpn: endpoint.tls.alpn }
               : {}),
+          },
+        ];
+      }
+      if (
+        endpoint.protocol === 'WIREGUARD' ||
+        endpoint.protocol === 'WIREGUARD_XRAY'
+      ) {
+        return [
+          {
+            name: endpoint.displayName,
+            type: 'wireguard',
+            server: endpoint.server,
+            port: endpoint.port,
+            ip: endpoint.address.replace('/32', ''),
+            'private-key': endpoint.privateKey,
+            'public-key': endpoint.serverPublicKey,
+            mtu: endpoint.mtu,
+            udp: true,
           },
         ];
       }
@@ -1064,6 +1249,24 @@ function passwordCredential(
       throw new Error('Invalid credential payload');
     }
     return normalize(value.password);
+  } catch {
+    throw unavailable();
+  }
+}
+
+function parseEncryptedObject(
+  encryption: SecretEncryptionService,
+  encrypted: string,
+): Record<string, unknown> {
+  if (!encrypted.startsWith('v1:')) {
+    throw unavailable();
+  }
+  try {
+    const value = JSON.parse(encryption.decrypt(encrypted)) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Invalid encrypted object');
+    }
+    return value as Record<string, unknown>;
   } catch {
     throw unavailable();
   }

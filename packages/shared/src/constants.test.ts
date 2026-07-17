@@ -23,9 +23,13 @@ describe('PROTOCOL_ENGINE_MAP', () => {
       VLESS_REALITY: 'SING_BOX',
       TROJAN: 'SING_BOX',
       SHADOWSOCKS: 'SING_BOX',
+      WIREGUARD: 'SING_BOX',
       VLESS_XHTTP_TLS: 'XRAY',
       VLESS_GRPC_TLS: 'XRAY',
       VLESS_TCP_TLS: 'XRAY',
+      TROJAN_TLS: 'XRAY',
+      SHADOWSOCKS_XRAY: 'XRAY',
+      WIREGUARD_XRAY: 'XRAY',
       MTPROXY: 'MTPROXY',
     } as const satisfies Record<InboundProtocol, CoreEngine>;
 

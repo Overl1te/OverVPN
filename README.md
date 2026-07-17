@@ -22,7 +22,7 @@ OverVPN — **однонодовая** панель для выдачи дост
 
 |               |                                                            |
 | ------------- | ---------------------------------------------------------- |
-| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks · MTProxy |
+| **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks · WireGuard · Xray TLS/SS/WireGuard · MTProxy |
 | **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит       |
 | **Подписки**  | JSON · Clash Meta · список ссылок · QR                     |
 | **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce                |
@@ -35,17 +35,19 @@ OverVPN — **однонодовая** панель для выдачи дост
 
 ### Dual cores + MTProxy
 
-| Зона     | Engine     | Протоколы (MVP)                                    | Compose service |
-| -------- | ---------- | -------------------------------------------------- | --------------- |
-| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS      | `core`          |
-| Xray     | `XRAY`     | VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS     | `core-xray`     |
-| MTProxy  | `MTPROXY`  | MTPROXY (до 16 inbound’ов, secret на пользователя) | `core-mtproxy`  |
+Ядра включаются через Compose profiles (`singbox`, `xray`, `mtproxy`) и флаги `SING_BOX_ENABLED` / `XRAY_ENABLED` / `MTPROXY_ENABLED`. Простая установка поднимает оба data-plane ядра + MTProxy; детальная — только ядра под выбранные протоколы. Доустановка: `overvpn enable-core singbox|xray|mtproxy`.
 
-Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`). MTProxy (если включён при установке) публикует диапазон TCP `10001–10016` (`MTPROXY_PORT_MIN` / `MTPROXY_PORT_MAX`, профиль Compose `mtproxy`).
+| Зона     | Engine     | Протоколы                                                              | Compose service / profile |
+| -------- | ---------- | ---------------------------------------------------------------------- | ------------------------- |
+| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS, WIREGUARD               | `core` (`singbox`)        |
+| Xray     | `XRAY`     | VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS, TROJAN_TLS, SHADOWSOCKS_XRAY, WIREGUARD_XRAY | `core-xray` (`xray`) |
+| MTProxy  | `MTPROXY`  | MTPROXY (до 16 inbound’ов, secret на пользователя)                     | `core-mtproxy` (`mtproxy`)|
+
+Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`). MTProxy (если включён) публикует диапазон TCP `10001–10016`. WireGuard: UDP `51820` (sing-box) / `51821` (Xray).
 
 Ссылки MTProxy выдаются **только в панели** (карточка пользователя) — в subscription formats (`sing-box` / `clash` / `links`) они не попадают.
 
-Ограничения подписок для Xray-only transports: полный endpoint всегда в `?format=links`; client `sing-box` JSON может пропускать xHTTP; Clash Meta — best-effort.
+Ограничения подписок: Xray xHTTP может пропускаться в client `sing-box` JSON; Clash Meta — best-effort; WireGuard — надёжнее через sing-box/Clash профили, `wg://` в links — best-effort. Per-user WG traffic stats зависят от возможностей ядра.
 
 ---
 
@@ -74,32 +76,39 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 
 **Флаги установщика**
 
-| Флаг                    | Назначение                                   |
-| ----------------------- | -------------------------------------------- |
-| `--base-domain <host>`  | Базовый домен (лендинг + TLS)                |
-| `--panel <host>`        | Хост панели                                  |
-| `--subscription <spec>` | Хост или `хост/путь` для подписок            |
-| `--vpn-host <host>`     | Публичный VPN-endpoint для клиентов          |
-| `--email <email>`       | Let’s Encrypt                                |
-| `--port <port>`         | Порт панели без домена (по умолчанию `8000`) |
-| `--tag <tag>`           | Тег образов GHCR                             |
-| `--build`               | Собрать образы локально                      |
-| `--with-mtproxy`        | Включить MTProxy / Telemt (по умолчанию)     |
-| `--without-mtproxy`     | Не ставить MTProxy                           |
-| `--skip-dns`            | Не ждать DNS перед сертификатами             |
-| `--no-nginx`            | Без Nginx/TLS                                |
-| `--no-ufw`              | Не трогать UFW                               |
+| Флаг                         | Назначение                                         |
+| ---------------------------- | -------------------------------------------------- |
+| `--simple` / `--detailed`    | Простой или детальный мастер                       |
+| `--protocols <list>`         | Список протоколов (детальный / non-interactive)    |
+| `--cores singbox,xray,mtproxy` | Ядра (без `--protocols` → все протоколы ядер)    |
+| `--ports key=value,…`        | Порты протоколов (`hysteria2=443`, `wg=51820`, …)  |
+| `--create-default-inbounds`  | Создать inbound на каждый выбранный протокол       |
+| `--no-default-inbounds`      | Не создавать стартовые inbound’ы                   |
+| `--base-domain <host>`       | Базовый домен (лендинг + TLS)                      |
+| `--panel <host>`             | Хост панели                                        |
+| `--subscription <spec>`      | Хост или `хост/путь` для подписок                  |
+| `--vpn-host <host>`          | Публичный VPN-endpoint для клиентов                |
+| `--email <email>`            | Let’s Encrypt                                      |
+| `--port <port>`              | Порт панели без домена (по умолчанию `8000`)       |
+| `--tag <tag>`                | Тег образов GHCR                                   |
+| `--build`                    | Собрать образы локально                            |
+| `--with-mtproxy`             | Включить MTProxy / Telemt (по умолчанию в simple)  |
+| `--without-mtproxy`          | Не ставить MTProxy                                 |
+| `--skip-dns`                 | Не ждать DNS перед сертификатами                   |
+| `--no-nginx`                 | Без Nginx/TLS                                      |
+| `--no-ufw`                   | Не трогать UFW                                     |
 
 ### Что спросит мастер
 
-Мастер — **консольные экраны** (clear + баннер + рамка), как у типичных серверных TUI-установщиков. Навигация: **стрелки ↑/↓** и **Enter** (цифры — быстрый выбор). Сначала все ответы, потом установка без пауз:
+Мастер — **консольные экраны** (clear + баннер + рамка). Навигация: **стрелки ↑/↓** и **Enter** (цифры — быстрый выбор). Сначала все ответы, потом установка без пауз:
 
 1. **Язык** — English / Русский
-2. **Режим** — с доменом (Nginx + TLS) или только IP (`http://IP:8000`)
-3. **Домены** — базовый, панель, подписки, VPN-хост, email Let’s Encrypt
-4. **DNS** — список A-записей; проверить сейчас (ожидание до ~15 мин) или пропустить
-5. **MTProxy** — ставить Telemt (порты `10001–10016`) или пропустить
-6. **Подтверждение** — summary и старт
+2. **Глубина** — простая (как раньше) или детальная (протоколы → ядра → порты)
+3. **Режим** — с доменом (Nginx + TLS) или только IP (`http://IP:8000`)
+4. **Домены** — базовый, панель, подписки, VPN-хост, email Let’s Encrypt
+5. **DNS** — список A-записей; проверить сейчас (ожидание до ~15 мин) или пропустить
+6. **Simple:** MTProxy да/нет · **Detailed:** чеклист протоколов, пресет портов, порты, default inbounds, UFW
+7. **Подтверждение** — summary и старт
 
 Дальше скрипт без пауз ставит Docker, образы, Nginx и сертификаты. В конце — экран с URL и логином владельца.
 
@@ -126,6 +135,8 @@ overvpn logs                   # все сервисы
 overvpn logs api               # только API
 overvpn info                   # URL, хосты, bootstrap-учётка
 overvpn edit                   # открыть .env в $EDITOR
+overvpn enable-core singbox|xray|mtproxy   # доустановить ядро
+overvpn disable-core singbox|xray|mtproxy  # отключить (если нет inbound’ов)
 overvpn restart                # перезапуск стека
 overvpn check-update           # есть ли новый образ в GHCR (без установки)
 overvpn update                 # pull новых образов из GHCR
@@ -136,7 +147,7 @@ overvpn up | down              # поднять / остановить
 overvpn uninstall              # удалить установку
 ```
 
-Панель тоже показывает статус обновления (Обзор / Система) и раз в несколько часов опрашивает GitHub `master` без Releases. Если в Settings включён Telegram — пришлёт уведомление. Применение только через `overvpn update` на хосте.
+Панель (Система → ядра) показывает статус engines и копируемую команду `enable-core`. Применение профилей — только на хосте.
 
 ### Порты
 
@@ -150,9 +161,13 @@ overvpn uninstall              # удалить установку
 | VPN TCP Reality  | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                          |
 | VPN TCP Trojan   | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)                       |
 | VPN TCP SS       | `SING_BOX_SS_PORT` (по умолчанию `8445`)                           |
+| VPN UDP WireGuard| `SING_BOX_WG_PORT` (по умолчанию `51820`)                          |
 | VPN Xray xHTTP   | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx)          |
 | VPN Xray gRPC    | `XRAY_GRPC_PORT` (по умолчанию `8446` / `9446` с Nginx)            |
 | VPN Xray TCP TLS | `XRAY_TCP_TLS_PORT` (по умолчанию `8447` / `9447` с Nginx)         |
+| VPN Xray Trojan  | `XRAY_TROJAN_PORT` (по умолчанию `8448` / `9448` с Nginx)          |
+| VPN Xray SS      | `XRAY_SS_PORT` (по умолчанию `8449` / `9449` с Nginx)              |
+| VPN Xray WG      | `XRAY_WG_PORT` (по умолчанию `51821`)                              |
 | MTProxy TCP      | `MTPROXY_PORT_MIN`–`MTPROXY_PORT_MAX` (по умолчанию `10001–10016`) |
 
 > [!WARNING]
@@ -164,13 +179,13 @@ overvpn uninstall              # удалить установку
 
 ### 1. Создать inbound
 
-1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks / Xray VLESS / MTProxy).
+1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks / WireGuard / Xray VLESS, Trojan TLS, Shadowsocks или WireGuard / MTProxy).
 2. Укажите `tag`, listen / public host и port.
 3. TLS-файлы кладите в каталог сертификатов ядра (`deploy/sing-box/certs`, в контейнере — `/var/lib/sing-box-certs`).
 
 При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_`* — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
-Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `XRAY_LISTEN_PORT` (xHTTP), `XRAY_GRPC_PORT` (gRPC), `XRAY_TCP_TLS_PORT` (TCP TLS), `MTPROXY_PORT_MIN`…`MAX` (MTProxy). Не выбирайте другие порты без правки `.env` и publish в Compose.
+Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `SING_BOX_WG_PORT` (WireGuard), `XRAY_LISTEN_PORT` (xHTTP), `XRAY_GRPC_PORT` (gRPC), `XRAY_TCP_TLS_PORT` (TCP TLS), `XRAY_TROJAN_PORT`, `XRAY_SS_PORT`, `XRAY_WG_PORT`, `MTPROXY_PORT_MIN`…`MAX` (MTProxy). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
 ### 2. Создать план и пользователя
 
@@ -304,6 +319,10 @@ trojan://PASSWORD@host:443?security=tls&sni=...&allowInsecure=0&type=tcp#LABEL
 ```
 
 **Shadowsocks 2022** — пароль клиента: `SERVER_PASSWORD:USER_PASSWORD`  
+
+**WireGuard** — серверные и клиентские X25519-ключи создаются автоматически, а адрес
+клиента хранится в его assignment credential. Учёт трафика на пользователя может быть
+ограничен возможностями статистики конкретного ядра; inbound-счётчики остаются доступны.
 SIP002: `ss://BASE64(method:password)@host:port#LABEL`
 
 ---

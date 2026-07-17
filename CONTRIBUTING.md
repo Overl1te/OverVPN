@@ -31,10 +31,11 @@
 
 OverVPN — **control plane** над VPN data plane на одной машине. Сейчас поддержаны **два независимых ядра** на одной ноде:
 
-- **sing-box** — HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS
-- **Xray** — VLESS_XHTTP_TLS (и зона для будущих Xray-only протоколов)
+- **sing-box** — HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS, WIREGUARD
+- **Xray** — VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS, TROJAN_TLS, SHADOWSOCKS_XRAY, WIREGUARD_XRAY
+- **MTProxy** — MTPROXY (optional Compose profile)
 
-Одна админ-панель, одна модель пользователей/планов/assignments, один URL подписки `/api/sub/:token`, агрегированный учёт трафика и онлайна. Inbound всегда принадлежит ровно одному engine (`PROTOCOL_ENGINE_MAP` в `@overvpn/shared`).
+Ядра опциональны (`SING_BOX_ENABLED` / `XRAY_ENABLED` / `MTPROXY_ENABLED` + Compose profiles `singbox` / `xray` / `mtproxy`). Inbound всегда принадлежит ровно одному engine (`PROTOCOL_ENGINE_MAP` в `@overvpn/shared`).
 
 ```mermaid
 flowchart LR
