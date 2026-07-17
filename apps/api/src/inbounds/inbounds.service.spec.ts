@@ -271,9 +271,15 @@ describe('InboundsService remove', () => {
       disabledAt: null,
       _count: { userAssignments: 0 },
     };
-    const onlineSession = { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) };
-    const trafficCheckpoint = { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) };
-    const usageDaily = { updateMany: jest.fn().mockResolvedValue({ count: 1 }) };
+    const onlineSession = {
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    const trafficCheckpoint = {
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    const usageDaily = {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
     const inboundDelete = jest.fn().mockResolvedValue(inbound);
     const coreState = {
       upsert: jest.fn().mockResolvedValue({}),
