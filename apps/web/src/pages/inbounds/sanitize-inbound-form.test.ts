@@ -228,4 +228,73 @@ describe('sanitizeInboundForm', () => {
     expect(sanitized.settings).not.toHaveProperty('handshakeServer');
     expect(sanitized.settings).not.toHaveProperty('method');
   });
+
+  it('strips leftover keys when saving MTProxy', () => {
+    const sanitized = sanitizeInboundForm(
+      {
+        tag: 'tg',
+        protocol: 'MTPROXY',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 10001,
+          publicHost: 'vpn.overl1te-private.online',
+          publicPort: 10001,
+          enabled: true,
+          secretMode: 'SECURE',
+          tlsDomain: 'example.com',
+          // leftovers from switching protocols / Shadowsocks fallback bug
+          method: '2022-blake3-aes-256-gcm',
+          path: '/',
+          upMbps: null,
+          tls: { mode: 'FILES' },
+        } as never,
+      },
+      {
+        ...defaults,
+        mtproxyPortMin: 10001,
+        mtproxyPortMax: 10016,
+      },
+    );
+
+    expect(sanitized.settings).toEqual(
+      expect.objectContaining({
+        listenPort: 10001,
+        secretMode: 'SECURE',
+      }),
+    );
+    expect(sanitized.settings).not.toHaveProperty('method');
+    expect(sanitized.settings).not.toHaveProperty('path');
+    expect(sanitized.settings).not.toHaveProperty('upMbps');
+    expect(sanitized.settings).not.toHaveProperty('tls');
+    expect(sanitized.settings).not.toHaveProperty('tlsDomain');
+  });
+
+  it('keeps tlsDomain only for MTProxy TLS mode', () => {
+    const sanitized = sanitizeInboundForm(
+      {
+        tag: 'tg-tls',
+        protocol: 'MTPROXY',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 10002,
+          publicHost: 'vpn.overl1te-private.online',
+          enabled: true,
+          secretMode: 'TLS',
+          tlsDomain: '  cloudflare.com  ',
+          method: '2022-blake3-aes-256-gcm',
+        } as never,
+      },
+      {
+        ...defaults,
+        mtproxyPortMin: 10001,
+        mtproxyPortMax: 10016,
+      },
+    );
+
+    expect(sanitized.settings).toMatchObject({
+      secretMode: 'TLS',
+      tlsDomain: 'cloudflare.com',
+    });
+    expect(sanitized.settings).not.toHaveProperty('method');
+  });
 });

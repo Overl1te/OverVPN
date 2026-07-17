@@ -443,6 +443,25 @@ export function sanitizeInboundForm(
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
+  if (values.protocol === 'MTPROXY') {
+    const preset = buildDefaultInboundSettings('MTPROXY', context, overrides);
+    const settings = overlayPresetKeys(
+      preset as Record<string, unknown>,
+      dirty,
+    ) as typeof preset & { secretMode?: string; tlsDomain?: string | null };
+    if (settings.secretMode !== 'TLS') {
+      delete settings.tlsDomain;
+    } else if (typeof settings.tlsDomain === 'string') {
+      const domain = settings.tlsDomain.trim();
+      if (domain) {
+        settings.tlsDomain = domain;
+      } else {
+        delete settings.tlsDomain;
+      }
+    }
+    return { ...values, settings: settings as InboundEditorForm['settings'] };
+  }
+
   const preset = buildDefaultInboundSettings('SHADOWSOCKS', context, overrides);
   const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
     'password',
