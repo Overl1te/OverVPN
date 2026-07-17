@@ -185,6 +185,250 @@ ui_press_enter() {
   read -r -p "$(printf ' %s%s%s' "$TUI_DIM" "$msg" "$TUI_NC")" _
 }
 
+# Arrow-key menu primitives (raw TTY; falls back to typed ui_choice)
+UI_TTY_SAVED=""
+UI_TTY_RAW=0
+UI_MENU_HEADER=""
+
+ui_tty_save() {
+  UI_TTY_SAVED=""
+  UI_TTY_RAW=0
+  if [[ -t 0 ]] && command -v stty >/dev/null 2>&1; then
+    UI_TTY_SAVED="$(stty -g 2>/dev/null || true)"
+  fi
+}
+
+ui_tty_restore() {
+  if [[ "$UI_TTY_RAW" == "1" && -n "$UI_TTY_SAVED" ]]; then
+    stty "$UI_TTY_SAVED" 2>/dev/null || true
+  fi
+  UI_TTY_RAW=0
+}
+
+ui_tty_enter_raw() {
+  if [[ -z "$UI_TTY_SAVED" ]]; then
+    return 1
+  fi
+  if ! stty -echo -icanon min 1 time 0 2>/dev/null; then
+    return 1
+  fi
+  UI_TTY_RAW=1
+  return 0
+}
+
+ui_arrows_available() {
+  [[ -t 0 && -t 1 ]] && command -v stty >/dev/null 2>&1
+}
+
+# Prints: up|down|enter|esc|digit|letter|…
+ui_read_key() {
+  local key rest
+  IFS= read -r -n1 -s key || return 1
+  if [[ "$key" == $'\e' ]]; then
+    rest=""
+    IFS= read -r -n1 -s -t 0.1 rest || true
+    if [[ -z "$rest" ]]; then
+      printf 'esc'
+      return 0
+    fi
+    if [[ "$rest" == '[' ]]; then
+      IFS= read -r -n1 -s -t 0.1 rest || true
+      case "$rest" in
+        A) printf 'up' ;;
+        B) printf 'down' ;;
+        C) printf 'right' ;;
+        D) printf 'left' ;;
+        *) printf 'unknown' ;;
+      esac
+      return 0
+    fi
+    printf 'esc'
+    return 0
+  fi
+  if [[ -z "$key" || "$key" == $'\n' || "$key" == $'\r' ]]; then
+    printf 'enter'
+    return 0
+  fi
+  printf '%s' "$key"
+}
+
+# Typed (non-arrow) fallback used when TTY raw mode is unavailable.
+# Expects items[] / selected / count in caller scope via nameref-style args.
+ui_select_menu_typed() {
+  local selected="$1"
+  shift
+  local -a items=("$@")
+  local count=${#items[@]}
+  local w key i val label
+
+  w="$(tui_term_width)"
+  if [[ -n "${UI_MENU_HEADER:-}" ]] && declare -F "${UI_MENU_HEADER}" >/dev/null 2>&1; then
+    clear_screen
+    "${UI_MENU_HEADER}"
+  fi
+  for i in "${!items[@]}"; do
+    label="${items[$i]#*|}"
+    draw_box_line " ${TUI_BRIGHT_CYAN}[$((i + 1))]${TUI_NC} ${label}" "$w"
+  done
+  draw_box_empty "$w"
+  draw_box_bottom "$w"
+  key="$(ui_choice "$(cli_t ui_choice_label)" "$((selected + 1))")"
+  key="$(printf '%s' "$key" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  if [[ "$key" =~ ^[0-9]+$ ]]; then
+    i=$((key - 1))
+    if [[ "$i" -ge 0 && "$i" -lt "$count" ]]; then
+      printf '%s' "${items[$i]%%|*}"
+      return 0
+    fi
+  fi
+  for i in "${!items[@]}"; do
+    val="${items[$i]%%|*}"
+    if [[ "$val" == "$key" ]]; then
+      printf '%s' "$val"
+      return 0
+    fi
+  done
+  printf '%s' "${items[$selected]%%|*}"
+  return 0
+}
+
+ui_menu_alias_match() {
+  local val="$1" lower="$2"
+  [[ "$val" == "$lower" ]] && return 0
+  [[ "$val" == "yes" && "$lower" == "y" ]] && return 0
+  [[ "$val" == "no" && "$lower" == "n" ]] && return 0
+  [[ "$val" == "skip" && "$lower" == "s" ]] && return 0
+  [[ "$val" == "back" && "$lower" == "b" ]] && return 0
+  [[ "$val" == "quit" && "$lower" == "q" ]] && return 0
+  return 1
+}
+
+# ui_select_menu <default_index> "value|label" "value|label" ...
+# Optional: set UI_MENU_HEADER to a function name drawn after clear_screen each redraw.
+# Prints selected value to stdout.
+ui_select_menu() {
+  local selected="${1:-0}"
+  shift
+  local -a items=("$@")
+  local count=${#items[@]}
+  local w key i val label prefix lower
+
+  if [[ "$count" -eq 0 ]]; then
+    return 1
+  fi
+  if [[ "$selected" -lt 0 ]]; then
+    selected=0
+  elif [[ "$selected" -ge "$count" ]]; then
+    selected=$((count - 1))
+  fi
+
+  if ! ui_arrows_available; then
+    ui_select_menu_typed "$selected" "${items[@]}"
+    return $?
+  fi
+
+  ui_tty_save
+  if ! ui_tty_enter_raw; then
+    ui_tty_restore
+    ui_select_menu_typed "$selected" "${items[@]}"
+    return $?
+  fi
+
+  trap 'ui_tty_restore' EXIT
+  trap 'ui_tty_restore; exit 130' INT
+  trap 'ui_tty_restore; exit 143' TERM
+
+  while true; do
+    w="$(tui_term_width)"
+    clear_screen
+    if [[ -n "${UI_MENU_HEADER:-}" ]] && declare -F "${UI_MENU_HEADER}" >/dev/null 2>&1; then
+      "${UI_MENU_HEADER}"
+    fi
+    for i in "${!items[@]}"; do
+      label="${items[$i]#*|}"
+      if [[ "$i" -eq "$selected" ]]; then
+        prefix="${TUI_BRIGHT_CYAN}${TUI_BOLD}▸${TUI_NC} ${TUI_BRIGHT_CYAN}${TUI_BOLD}${label}${TUI_NC}"
+      else
+        prefix="  ${label}"
+      fi
+      draw_box_line " ${prefix}" "$w"
+    done
+    draw_box_empty "$w"
+    draw_box_sep "$w"
+    draw_box_center "${TUI_DIM}$(cli_t ui_nav_hint)${TUI_NC}" "$w"
+    draw_box_bottom "$w"
+
+    key="$(ui_read_key)" || key="enter"
+    case "$key" in
+      up|left)
+        if [[ "$selected" -le 0 ]]; then
+          selected=$((count - 1))
+        else
+          selected=$((selected - 1))
+        fi
+        ;;
+      down|right)
+        selected=$(( (selected + 1) % count ))
+        ;;
+      enter)
+        ui_tty_restore
+        trap - EXIT INT TERM
+        printf '%s' "${items[$selected]%%|*}"
+        return 0
+        ;;
+      esc) ;;
+      [0-9])
+        for i in "${!items[@]}"; do
+          val="${items[$i]%%|*}"
+          if [[ "$val" == "$key" ]]; then
+            ui_tty_restore
+            trap - EXIT INT TERM
+            printf '%s' "$val"
+            return 0
+          fi
+        done
+        if [[ "$key" != "0" ]]; then
+          i=$((key - 1))
+          if [[ "$i" -ge 0 && "$i" -lt "$count" ]]; then
+            ui_tty_restore
+            trap - EXIT INT TERM
+            printf '%s' "${items[$i]%%|*}"
+            return 0
+          fi
+        fi
+        ;;
+      y|Y|n|N|s|S|q|Q|b|B)
+        lower="$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')"
+        for i in "${!items[@]}"; do
+          val="${items[$i]%%|*}"
+          if ui_menu_alias_match "$val" "$lower"; then
+            ui_tty_restore
+            trap - EXIT INT TERM
+            printf '%s' "$val"
+            return 0
+          fi
+        done
+        ;;
+    esac
+  done
+}
+
+# ui_confirm <default y|n> [yes_label] [no_label]
+# Returns 0 if yes, 1 if no. Uses UI_MENU_HEADER when set.
+ui_confirm() {
+  local default="${1:-y}"
+  local yes_label="${2:-$(cli_t opt_yes)}"
+  local no_label="${3:-$(cli_t opt_no)}"
+  local idx=0
+  local choice
+  default="$(printf '%s' "$default" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$default" == "n" || "$default" == "no" ]]; then
+    idx=1
+  fi
+  choice="$(ui_select_menu "$idx" "yes|${yes_label}" "no|${no_label}")"
+  [[ "$choice" == "yes" ]]
+}
+
 colorized_echo() {
   local color=$1
   shift
@@ -283,17 +527,17 @@ cli_t() {
       mtproxy_screen_hint) printf '%s' "Опциональный Telegram MTProxy на Telemt (порты 10001–10016)." ;;
       mtproxy_opt_yes) printf '%s' "Установить MTProxy" ;;
       mtproxy_opt_no) printf '%s' "Пропустить MTProxy" ;;
-      prompt_mtproxy) printf '%s' "Ставить MTProxy (Telemt)? [Y/n]" ;;
+      prompt_mtproxy) printf '%s' "Ставить MTProxy (Telemt)?" ;;
       dns_title) printf '%s' "DNS A-записи" ;;
       dns_hint) printf 'У регистратора DNS → A-записи → %s' "$1" ;;
       dns_point) printf '%s  →  %s' "$1" "$2" ;;
       dns_cloudflare) printf '%s' "Cloudflare: серая тучка (только DNS), пока нет сертификатов." ;;
       dns_firewall) printf '%s' "Откройте UDP/443 и TCP 80/443 в файрволе." ;;
-      dns_prompt_hint) printf '%s' "Если записи уже созданы — Enter (Y). Пропуск (s) часто ломает TLS." ;;
-      prompt_dns_ready) printf '%s' "Проверить DNS сейчас? [Y/s]" ;;
+      dns_prompt_hint) printf '%s' "Если записи уже созданы — выберите проверку. Пропуск часто ломает TLS." ;;
+      prompt_dns_ready) printf '%s' "Проверить DNS сейчас?" ;;
       dns_skip) printf '%s' "Проверка DNS пропущена. Без верных A-записей сертификаты не выпустятся." ;;
       dns_wait_ok) printf '%s' "ОК — проверяем DNS сейчас…" ;;
-      prompt_start_now) printf '%s' "Начать установку? [Y/n]" ;;
+      prompt_start_now) printf '%s' "Начать установку?" ;;
       aborted) printf '%s' "Отменено." ;;
       no_more_prompts) printf '%s' "Больше вопросов не будет. Можно пить чай." ;;
       ensuring_utf8_locale) printf '%s' "Устанавливаем поддержку UTF-8 для кириллицы в терминале…" ;;
@@ -308,6 +552,9 @@ cli_t() {
       install_success_manage) printf 'Меню: %s   ·   CLI: %s status | logs | update' "$1" "$1" ;;
       ui_press_enter) printf '%s' "Enter — продолжить…" ;;
       ui_choice_label) printf '%s' "Выбор" ;;
+      ui_nav_hint) printf '%s' "↑/↓ — навигация · Enter — выбор" ;;
+      opt_yes) printf '%s' "Да" ;;
+      opt_no) printf '%s' "Нет" ;;
       lang_screen_title) printf '%s' "Язык / Language" ;;
       lang_opt_en) printf '%s' "English" ;;
       lang_opt_ru) printf '%s' "Русский" ;;
@@ -393,7 +640,8 @@ cli_t() {
       already_installed) printf 'OverVPN уже установлен в %s.' "$1" ;;
       use_update_or_uninstall) printf 'Сначала выполните '\''%s update'\'' или '\''%s uninstall'\''.' "$1" "$1" ;;
       partial_install_found) printf 'Найдена незавершённая установка в %s (прошлый запуск оборвался).' "$1" ;;
-      prompt_clean_partial) printf '%s' "Снести её и начать заново? [Y/n]: " ;;
+      prompt_clean_partial) printf '%s' "Снести её и начать заново?" ;;
+      partial_clean_title) printf '%s' "Незавершённая установка" ;;
       partial_install_cleaning) printf '%s' "Удаляем незавершённую установку…" ;;
       partial_aborted) printf '%s' "Ок, ничего не трогаем. Чтобы снести вручную: overvpn uninstall  (или тот же one-liner с @ uninstall)." ;;
       install_failed_recover) printf '%s' "Установка оборвалась, но файлы уже есть. Не сносите сервер — просто запустите установщик снова: он предложит подчистить и продолжить." ;;
@@ -415,9 +663,10 @@ cli_t() {
       update_check_local) printf 'Локальный:  %s' "$1" ;;
       update_check_remote) printf 'В реестре:  %s' "$1" ;;
       uninstall_warn) printf '%s' "Будут удалены контейнеры OverVPN, Docker-образы стека, /opt/overvpn, сайт nginx и CLI." ;;
-      prompt_wipe_volumes) printf '%s' "Удалить Docker volumes (БД/данные)? [Y/n] " ;;
-      prompt_purge_certs) printf '%s' "Удалить сертификаты Let'\''s Encrypt для panel/sub/vpn? [Y/n] " ;;
-      prompt_purge_nginx) printf '%s' "Удалить пакеты Nginx + Certbot из системы? [y/N] " ;;
+      uninstall_title) printf '%s' "Удаление OverVPN" ;;
+      prompt_wipe_volumes) printf '%s' "Удалить Docker volumes (БД/данные)?" ;;
+      prompt_purge_certs) printf '%s' "Удалить сертификаты Let'\''s Encrypt для panel/sub/vpn?" ;;
+      prompt_purge_nginx) printf '%s' "Удалить пакеты Nginx + Certbot из системы?" ;;
       removing_nginx_pkgs) printf '%s' "Удаляем пакеты Nginx и Certbot…" ;;
       nginx_pkgs_removed) printf '%s' "Пакеты Nginx и Certbot удалены." ;;
       fully_removed) printf '%s' "OverVPN полностью удалён." ;;
@@ -476,17 +725,17 @@ cli_t() {
       mtproxy_screen_hint) printf '%s' "Optional Telegram MTProxy via Telemt (ports 10001–10016)." ;;
       mtproxy_opt_yes) printf '%s' "Install MTProxy" ;;
       mtproxy_opt_no) printf '%s' "Skip MTProxy" ;;
-      prompt_mtproxy) printf '%s' "Install MTProxy (Telemt)? [Y/n]" ;;
+      prompt_mtproxy) printf '%s' "Install MTProxy (Telemt)?" ;;
       dns_title) printf '%s' "DNS A records" ;;
       dns_hint) printf 'At your DNS provider → A records → %s' "$1" ;;
       dns_point) printf '%s  →  %s' "$1" "$2" ;;
       dns_cloudflare) printf '%s' "Cloudflare: grey cloud (DNS only) until certs are issued." ;;
       dns_firewall) printf '%s' "Also open UDP/443 and TCP 80/443 on the firewall." ;;
-      dns_prompt_hint) printf '%s' "If records are already created — press Enter (Y). Skipping (s) usually breaks TLS." ;;
-      prompt_dns_ready) printf '%s' "Check DNS now? [Y/s]" ;;
+      dns_prompt_hint) printf '%s' "If records are already created — choose verify. Skipping usually breaks TLS." ;;
+      prompt_dns_ready) printf '%s' "Check DNS now?" ;;
       dns_skip) printf '%s' "DNS check skipped. If records do not point here yet, certificate issuance will fail." ;;
       dns_wait_ok) printf '%s' "OK — verifying DNS now…" ;;
-      prompt_start_now) printf '%s' "Start installation? [Y/n]" ;;
+      prompt_start_now) printf '%s' "Start installation?" ;;
       aborted) printf '%s' "Aborted." ;;
       no_more_prompts) printf '%s' "No more prompts. You can go drink tea." ;;
       ensuring_utf8_locale) printf '%s' "Ensuring UTF-8 support for Cyrillic in the terminal..." ;;
@@ -501,6 +750,9 @@ cli_t() {
       install_success_manage) printf 'Menu: %s   ·   CLI: %s status | logs | update' "$1" "$1" ;;
       ui_press_enter) printf '%s' "Press Enter to continue…" ;;
       ui_choice_label) printf '%s' "Choice" ;;
+      ui_nav_hint) printf '%s' "↑/↓ navigate · Enter select" ;;
+      opt_yes) printf '%s' "Yes" ;;
+      opt_no) printf '%s' "No" ;;
       lang_screen_title) printf '%s' "Language / Язык" ;;
       lang_opt_en) printf '%s' "English" ;;
       lang_opt_ru) printf '%s' "Русский" ;;
@@ -586,7 +838,8 @@ cli_t() {
       already_installed) printf 'OverVPN already installed in %s.' "$1" ;;
       use_update_or_uninstall) printf 'Use '\''%s update'\'' or '\''%s uninstall'\'' first.' "$1" "$1" ;;
       partial_install_found) printf 'Found an incomplete install in %s (previous run aborted).' "$1" ;;
-      prompt_clean_partial) printf '%s' "Wipe it and start fresh? [Y/n]: " ;;
+      prompt_clean_partial) printf '%s' "Wipe it and start fresh?" ;;
+      partial_clean_title) printf '%s' "Incomplete install" ;;
       partial_install_cleaning) printf '%s' "Removing incomplete install..." ;;
       partial_aborted) printf '%s' "Left as-is. To remove manually: overvpn uninstall  (or the same one-liner with @ uninstall)." ;;
       install_failed_recover) printf '%s' "Install aborted, but files already exist. Do not wipe the server — re-run the installer; it will offer to clean up and continue." ;;
@@ -608,9 +861,10 @@ cli_t() {
       update_check_local) printf 'Local:   %s' "$1" ;;
       update_check_remote) printf 'Remote:  %s' "$1" ;;
       uninstall_warn) printf '%s' "This removes OverVPN containers, stack Docker images, /opt/overvpn, nginx site, and CLI." ;;
-      prompt_wipe_volumes) printf '%s' "Delete Docker volumes (DB/data)? [Y/n] " ;;
-      prompt_purge_certs) printf '%s' "Delete Let'\''s Encrypt certs for panel/sub/vpn hosts? [Y/n] " ;;
-      prompt_purge_nginx) printf '%s' "Remove Nginx + Certbot packages from the system? [y/N] " ;;
+      uninstall_title) printf '%s' "Uninstall OverVPN" ;;
+      prompt_wipe_volumes) printf '%s' "Delete Docker volumes (DB/data)?" ;;
+      prompt_purge_certs) printf '%s' "Delete Let'\''s Encrypt certs for panel/sub/vpn hosts?" ;;
+      prompt_purge_nginx) printf '%s' "Remove Nginx + Certbot packages from the system?" ;;
       removing_nginx_pkgs) printf '%s' "Removing Nginx and Certbot packages..." ;;
       nginx_pkgs_removed) printf '%s' "Nginx and Certbot packages removed." ;;
       fully_removed) printf '%s' "OverVPN fully removed." ;;
@@ -646,41 +900,36 @@ prompt_wizard_language() {
   if [[ ! -t 0 ]]; then
     return
   fi
-  local w choice
-  w="$(tui_term_width)"
-  while true; do
-    clear_screen
+  local choice
+  _prompt_wizard_language_header() {
+    local w
+    w="$(tui_term_width)"
     show_banner "$(cli_t wizard_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t lang_screen_title)${TUI_NC}" "$w"
     draw_box_sep "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t lang_opt_en)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t lang_opt_ru)" "$w"
-    draw_box_empty "$w"
-    draw_box_bottom "$w"
-    choice="$(ui_choice "$(cli_t ui_choice_label)" "1")"
-    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-    case "$choice" in
-      2|ru|russian|русский|р)
-        CLI_LANG=ru
-        apply_cli_lang
-        return
-        ;;
-      1|en|english|"")
-        CLI_LANG=en
-        return
-        ;;
-    esac
-  done
+  }
+  UI_MENU_HEADER=_prompt_wizard_language_header
+  choice="$(ui_select_menu 0 "en|$(cli_t lang_opt_en)" "ru|$(cli_t lang_opt_ru)")"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    ru)
+      CLI_LANG=ru
+      apply_cli_lang
+      ;;
+    *)
+      CLI_LANG=en
+      ;;
+  esac
 }
 
 prompt_install_mode() {
   local ip=$1
-  local w choice
-  w="$(tui_term_width)"
-  while true; do
-    clear_screen
+  local choice
+  _prompt_install_mode_header() {
+    local w
+    w="$(tui_term_width)"
     show_banner "$(cli_t wizard_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t mode_screen_title)${TUI_NC}" "$w"
@@ -689,17 +938,16 @@ prompt_install_mode() {
     draw_box_line " $(cli_t answer_all)" "$w"
     draw_box_sep "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t mode_opt_domain)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")" "$w"
-    draw_box_empty "$w"
-    draw_box_bottom "$w"
-    choice="$(ui_choice "$(cli_t ui_choice_label)" "1")"
-    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-    case "$choice" in
-      1|d|domain) CFG_MODE="domain"; return ;;
-      2|i|ip) CFG_MODE="ip"; return ;;
-    esac
-  done
+  }
+  UI_MENU_HEADER=_prompt_install_mode_header
+  choice="$(ui_select_menu 0 \
+    "domain|$(cli_t mode_opt_domain)" \
+    "ip|$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")")"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    ip) CFG_MODE="ip" ;;
+    *) CFG_MODE="domain" ;;
+  esac
 }
 
 prompt_install_hosts() {
@@ -740,10 +988,10 @@ prompt_install_dns_screen() {
   local ip=$1
   shift
   local hosts=("$@")
-  local w choice host
-  w="$(tui_term_width)"
-  while true; do
-    clear_screen
+  local choice host
+  _prompt_install_dns_header() {
+    local w host
+    w="$(tui_term_width)"
     show_banner "$(cli_t wizard_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t dns_title)${TUI_NC}" "$w"
@@ -759,39 +1007,36 @@ prompt_install_dns_screen() {
     draw_box_sep "$w"
     draw_box_line " $(cli_t dns_prompt_hint)" "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[Y]${TUI_NC} $(cli_t dns_opt_check)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[s]${TUI_NC} $(cli_t dns_opt_skip)" "$w"
-    draw_box_empty "$w"
-    draw_box_bottom "$w"
-    choice="$(ui_choice "$(cli_t prompt_dns_ready)" "Y")"
-    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-    case "$choice" in
-      s|skip)
-        CFG_SKIP_DNS="true"
-        CFG_DNS_HANDLED="true"
-        colorized_echo yellow "$(cli_t dns_skip)"
-        sleep 1
-        return
-        ;;
-      y|yes|"")
-        CFG_SKIP_DNS="false"
-        colorized_echo green "$(cli_t dns_wait_ok)"
-        echo
-        wait_for_dns "$ip" "${hosts[@]}"
-        CFG_DNS_HANDLED="true"
-        sleep 1
-        return
-        ;;
-    esac
-  done
+  }
+  UI_MENU_HEADER=_prompt_install_dns_header
+  choice="$(ui_select_menu 0 \
+    "check|$(cli_t dns_opt_check)" \
+    "skip|$(cli_t dns_opt_skip)")"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    skip)
+      CFG_SKIP_DNS="true"
+      CFG_DNS_HANDLED="true"
+      colorized_echo yellow "$(cli_t dns_skip)"
+      sleep 1
+      ;;
+    *)
+      CFG_SKIP_DNS="false"
+      colorized_echo green "$(cli_t dns_wait_ok)"
+      echo
+      wait_for_dns "$ip" "${hosts[@]}"
+      CFG_DNS_HANDLED="true"
+      sleep 1
+      ;;
+  esac
 }
 
 prompt_install_confirm() {
   local ip=$1
-  local w choice
-  w="$(tui_term_width)"
-  while true; do
-    clear_screen
+  local choice
+  _prompt_install_confirm_header() {
+    local w
+    w="$(tui_term_width)"
     show_banner "$(cli_t wizard_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t confirm_screen_title)${TUI_NC}" "$w"
@@ -823,59 +1068,50 @@ prompt_install_confirm() {
     fi
     draw_box_sep "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_GREEN}[Y]${TUI_NC} $(cli_t confirm_opt_yes)" "$w"
-    draw_box_line " ${TUI_RED}[n]${TUI_NC} $(cli_t confirm_opt_no)" "$w"
-    draw_box_empty "$w"
-    draw_box_bottom "$w"
-    choice="$(ui_choice "$(cli_t prompt_start_now)" "Y")"
-    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-    case "$choice" in
-      y|yes|"")
-        clear_screen
-        show_banner "$(cli_t wizard_subtitle)"
-        colorized_echo green "$(cli_t no_more_prompts)"
-        echo
-        return
-        ;;
-      n|no)
-        colorized_echo red "$(cli_t aborted)"
-        exit 1
-        ;;
-    esac
-  done
+  }
+  UI_MENU_HEADER=_prompt_install_confirm_header
+  choice="$(ui_select_menu 0 \
+    "yes|${TUI_GREEN}$(cli_t confirm_opt_yes)${TUI_NC}" \
+    "no|${TUI_RED}$(cli_t confirm_opt_no)${TUI_NC}")"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    no)
+      colorized_echo red "$(cli_t aborted)"
+      exit 1
+      ;;
+    *)
+      clear_screen
+      show_banner "$(cli_t wizard_subtitle)"
+      colorized_echo green "$(cli_t no_more_prompts)"
+      echo
+      ;;
+  esac
 }
 
 prompt_install_mtproxy() {
   if [[ "${CFG_MTPROXY_SKIP_PROMPT:-}" == "true" ]]; then
     return
   fi
-  local w choice
-  w="$(tui_term_width)"
-  while true; do
-    clear_screen
+  local choice
+  _prompt_install_mtproxy_header() {
+    local w
+    w="$(tui_term_width)"
     show_banner "$(cli_t wizard_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t mtproxy_screen_title)${TUI_NC}" "$w"
     draw_box_sep "$w"
     draw_box_line " $(cli_t mtproxy_screen_hint)" "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[Y]${TUI_NC} $(cli_t mtproxy_opt_yes)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[n]${TUI_NC} $(cli_t mtproxy_opt_no)" "$w"
-    draw_box_empty "$w"
-    draw_box_bottom "$w"
-    choice="$(ui_choice "$(cli_t prompt_mtproxy)" "Y")"
-    choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-    case "$choice" in
-      y|yes|"")
-        CFG_MTPROXY_ENABLED="true"
-        return
-        ;;
-      n|no)
-        CFG_MTPROXY_ENABLED="false"
-        return
-        ;;
-    esac
-  done
+  }
+  UI_MENU_HEADER=_prompt_install_mtproxy_header
+  choice="$(ui_select_menu 0 \
+    "yes|$(cli_t mtproxy_opt_yes)" \
+    "no|$(cli_t mtproxy_opt_no)")"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    no) CFG_MTPROXY_ENABLED="false" ;;
+    *) CFG_MTPROXY_ENABLED="true" ;;
+  esac
 }
 
 prompt_install_endpoints() {
@@ -1245,13 +1481,24 @@ ensure_clean_for_install() {
   fi
   colorized_echo yellow "$(cli_t partial_install_found "$APP_DIR")"
   if [[ -t 0 ]]; then
-    local ans
-    read -r -p "$(cli_t prompt_clean_partial)" ans
-    ans="$(printf '%s' "${ans:-y}" | tr '[:upper:]' '[:lower:]')"
-    if [[ "$ans" != "y" && "$ans" != "yes" ]]; then
+    _ensure_clean_partial_header() {
+      local w
+      w="$(tui_term_width)"
+      show_banner "$(cli_t wizard_subtitle)"
+      draw_box_top "$w"
+      draw_box_center "${TUI_BOLD}$(cli_t partial_clean_title)${TUI_NC}" "$w"
+      draw_box_sep "$w"
+      draw_box_line " $(cli_t partial_install_found "$APP_DIR")" "$w"
+      draw_box_line " $(cli_t prompt_clean_partial)" "$w"
+      draw_box_empty "$w"
+    }
+    UI_MENU_HEADER=_ensure_clean_partial_header
+    if ! ui_confirm y; then
+      unset UI_MENU_HEADER
       colorized_echo yellow "$(cli_t partial_aborted)"
       exit 1
     fi
+    unset UI_MENU_HEADER
   fi
   cleanup_partial_install
 }
@@ -2457,14 +2704,29 @@ cmd_uninstall() {
   local wipe="y"
   local purge_certs="y"
   local purge_nginx="n"
-  colorized_echo yellow "$(cli_t uninstall_warn)"
   if [[ -t 0 ]]; then
-    read -r -p "$(cli_t prompt_wipe_volumes)" wipe
-    wipe="${wipe:-y}"
-    read -r -p "$(cli_t prompt_purge_certs)" purge_certs
-    purge_certs="${purge_certs:-y}"
-    read -r -p "$(cli_t prompt_purge_nginx)" purge_nginx
-    purge_nginx="${purge_nginx:-n}"
+    _cmd_uninstall_header() {
+      local w
+      w="$(tui_term_width)"
+      show_banner "$(cli_t menu_subtitle)"
+      draw_box_top "$w"
+      draw_box_center "${TUI_BOLD}$(cli_t uninstall_title)${TUI_NC}" "$w"
+      draw_box_sep "$w"
+      draw_box_line " $(cli_t uninstall_warn)" "$w"
+      draw_box_line " ${_uninstall_prompt_msg}" "$w"
+      draw_box_empty "$w"
+    }
+    local _uninstall_prompt_msg
+    _uninstall_prompt_msg="$(cli_t prompt_wipe_volumes)"
+    UI_MENU_HEADER=_cmd_uninstall_header
+    if ui_confirm y; then wipe="y"; else wipe="n"; fi
+    _uninstall_prompt_msg="$(cli_t prompt_purge_certs)"
+    if ui_confirm y; then purge_certs="y"; else purge_certs="n"; fi
+    _uninstall_prompt_msg="$(cli_t prompt_purge_nginx)"
+    if ui_confirm n; then purge_nginx="y"; else purge_nginx="n"; fi
+    unset UI_MENU_HEADER
+  else
+    colorized_echo yellow "$(cli_t uninstall_warn)"
   fi
 
   if [[ -f "$COMPOSE_FILE" && -f "$ENV_FILE" ]]; then
@@ -2752,22 +3014,23 @@ menu_run_action() {
 }
 
 show_update_submenu() {
-  local w choice
-  w="$(tui_term_width)"
-  while true; do
-    clear_screen
+  local choice
+  _show_update_submenu_header() {
+    local w
+    w="$(tui_term_width)"
     show_banner "$(cli_t menu_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t menu_update)${TUI_NC}" "$w"
     draw_box_sep "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t menu_update_check)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t menu_update_apply)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[0]${TUI_NC} $(cli_t menu_update_back)" "$w"
-    draw_box_empty "$w"
-    draw_box_bottom "$w"
-    choice="$(ui_choice "$(cli_t ui_choice_label)" "0")"
-    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  }
+  while true; do
+    UI_MENU_HEADER=_show_update_submenu_header
+    choice="$(ui_select_menu 2 \
+      "1|$(cli_t menu_update_check)" \
+      "2|$(cli_t menu_update_apply)" \
+      "0|$(cli_t menu_update_back)")"
+    unset UI_MENU_HEADER
     case "$choice" in
       1)
         echo
@@ -2780,7 +3043,7 @@ show_update_submenu() {
       2)
         menu_run_action cmd_update
         ;;
-      0|b|back|"") return ;;
+      0) return ;;
     esac
   done
 }
@@ -2802,31 +3065,29 @@ show_main_menu() {
     return 1
   fi
 
-  while true; do
+  _show_main_menu_header() {
+    local w
     w="$(tui_term_width)"
-    clear_screen
     show_banner "$(cli_t menu_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t menu_title)${TUI_NC}" "$w"
     draw_box_sep "$w"
     draw_box_empty "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[1]${TUI_NC} $(cli_t menu_status)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[2]${TUI_NC} $(cli_t menu_info)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[3]${TUI_NC} $(cli_t menu_logs)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[4]${TUI_NC} $(cli_t menu_restart)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[5]${TUI_NC} $(cli_t menu_update)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[6]${TUI_NC} $(cli_t menu_edit)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[7]${TUI_NC} $(cli_t menu_nginx)" "$w"
-    draw_box_empty "$w"
-    draw_box_line " ${TUI_RED}[8]${TUI_NC} $(cli_t menu_uninstall)" "$w"
-    draw_box_line " ${TUI_BRIGHT_CYAN}[0]${TUI_NC} $(cli_t menu_exit)" "$w"
-    draw_box_empty "$w"
-    draw_box_sep "$w"
-    draw_box_center "${TUI_DIM}${APP_NAME} · $(cli_t menu_subtitle)${TUI_NC}" "$w"
-    draw_box_bottom "$w"
+  }
 
-    choice="$(ui_choice "$(cli_t ui_choice_label)" "0")"
-    choice="$(printf '%s' "$choice" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  while true; do
+    UI_MENU_HEADER=_show_main_menu_header
+    choice="$(ui_select_menu 8 \
+      "1|$(cli_t menu_status)" \
+      "2|$(cli_t menu_info)" \
+      "3|$(cli_t menu_logs)" \
+      "4|$(cli_t menu_restart)" \
+      "5|$(cli_t menu_update)" \
+      "6|$(cli_t menu_edit)" \
+      "7|$(cli_t menu_nginx)" \
+      "8|${TUI_RED}$(cli_t menu_uninstall)${TUI_NC}" \
+      "0|$(cli_t menu_exit)")"
+    unset UI_MENU_HEADER
     case "$choice" in
       1) menu_run_action cmd_status ;;
       2) menu_run_action cmd_info ;;
@@ -2853,7 +3114,7 @@ show_main_menu() {
         cmd_uninstall
         exit 0
         ;;
-      0|q|quit|exit|"")
+      0)
         echo
         exit 0
         ;;
