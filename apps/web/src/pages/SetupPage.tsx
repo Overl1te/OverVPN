@@ -110,13 +110,7 @@ export function SetupPage() {
     if (!setup.steps[0]?.done) {
       setCurrent(1);
     }
-  }, [
-    createdInboundId,
-    current,
-    inboundsQuery.data,
-    inboundsQuery.isSuccess,
-    setup.steps,
-  ]);
+  }, [createdInboundId, current, inboundsQuery.data, inboundsQuery.isSuccess, setup.steps]);
 
   useEffect(() => {
     if (current === 1) {

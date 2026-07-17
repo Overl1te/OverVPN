@@ -1356,10 +1356,9 @@ export const shadowsocksInboundSettingsSchema = z
     }
   });
 export type ShadowsocksInboundSettings = z.infer<typeof shadowsocksInboundSettingsSchema>;
-export const shadowsocksXrayInboundSettingsSchema =
-  shadowsocksInboundSettingsSchema.safeExtend({
-    method: z.literal('2022-blake3-aes-256-gcm'),
-  });
+export const shadowsocksXrayInboundSettingsSchema = shadowsocksInboundSettingsSchema.safeExtend({
+  method: z.literal('2022-blake3-aes-256-gcm'),
+});
 
 const wireguardKeySchema = z
   .string()
@@ -2299,10 +2298,9 @@ const wireguardSubscriptionEndpointBaseSchema = z
     mtu: z.number().int().min(576).max(9_000),
   })
   .strict();
-export const wireguardSubscriptionEndpointSchema =
-  wireguardSubscriptionEndpointBaseSchema.extend({
-    protocol: z.literal('WIREGUARD'),
-  });
+export const wireguardSubscriptionEndpointSchema = wireguardSubscriptionEndpointBaseSchema.extend({
+  protocol: z.literal('WIREGUARD'),
+});
 export const wireguardXraySubscriptionEndpointSchema =
   wireguardSubscriptionEndpointBaseSchema.extend({
     protocol: z.literal('WIREGUARD_XRAY'),

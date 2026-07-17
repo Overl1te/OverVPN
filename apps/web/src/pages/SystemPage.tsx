@@ -1,8 +1,25 @@
 import { useEffect } from 'react';
-import { Button, Card, Form, Input, InputNumber, Switch, Table, Tag, Typography, message } from 'antd';
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Switch,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { checkForUpdates, getDashboard, getSystemEngines, getSystemHealth, getUpdateStatus } from '@/api/system';
+import {
+  checkForUpdates,
+  getDashboard,
+  getSystemEngines,
+  getSystemHealth,
+  getUpdateStatus,
+} from '@/api/system';
 import { getSettings, updateSettings } from '@/api/settings';
 import { useAuth } from '@/auth/AuthContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -335,12 +352,8 @@ export function SystemPage() {
             {
               title: t('system.enginePorts'),
               dataIndex: 'publishedPorts',
-              render: (
-                ports: Array<{ protocol: string; port: number; transport: string }>,
-              ) =>
-                ports
-                  .map((entry) => `${entry.port}/${entry.transport}`)
-                  .join(', '),
+              render: (ports: Array<{ protocol: string; port: number; transport: string }>) =>
+                ports.map((entry) => `${entry.port}/${entry.transport}`).join(', '),
             },
             {
               title: t('system.engineEnable'),
@@ -349,11 +362,7 @@ export function SystemPage() {
                 row.enabled ? (
                   '—'
                 ) : (
-                  <Typography.Text
-                    copyable={{ text: command }}
-                    code
-                    style={{ fontSize: 12 }}
-                  >
+                  <Typography.Text copyable={{ text: command }} code style={{ fontSize: 12 }}>
                     {command}
                   </Typography.Text>
                 ),

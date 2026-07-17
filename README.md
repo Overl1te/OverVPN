@@ -20,13 +20,13 @@ Docker
 
 OverVPN — **однонодовая** панель для выдачи доступа, подписок и учёта:
 
-|               |                                                            |
-| ------------- | ---------------------------------------------------------- |
+|               |                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------- |
 | **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks · WireGuard · Xray TLS/SS/WireGuard · MTProxy |
-| **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит       |
-| **Подписки**  | JSON · Clash Meta · список ссылок · QR                     |
-| **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce                |
-| **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты        |
+| **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит                                           |
+| **Подписки**  | JSON · Clash Meta · список ссылок · QR                                                         |
+| **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce                                                    |
+| **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты                                            |
 
 Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — независимые ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/), [Xray-core](https://github.com/XTLS/Xray-core) и опционально MTProxy на [Telemt](https://github.com/telemt/telemt) (образ [`whn0thacked/telemt-docker`](https://hub.docker.com/r/whn0thacked/telemt-docker)).
 
@@ -37,11 +37,11 @@ OverVPN — **однонодовая** панель для выдачи дост
 
 Ядра включаются через Compose profiles (`singbox`, `xray`, `mtproxy`) и флаги `SING_BOX_ENABLED` / `XRAY_ENABLED` / `MTPROXY_ENABLED`. Простая установка поднимает оба data-plane ядра + MTProxy; детальная — только ядра под выбранные протоколы. Доустановка: `overvpn enable-core singbox|xray|mtproxy`.
 
-| Зона     | Engine     | Протоколы                                                              | Compose service / profile |
-| -------- | ---------- | ---------------------------------------------------------------------- | ------------------------- |
-| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS, WIREGUARD               | `core` (`singbox`)        |
-| Xray     | `XRAY`     | VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS, TROJAN_TLS, SHADOWSOCKS_XRAY, WIREGUARD_XRAY | `core-xray` (`xray`) |
-| MTProxy  | `MTPROXY`  | MTPROXY (до 16 inbound’ов, secret на пользователя)                     | `core-mtproxy` (`mtproxy`)|
+| Зона     | Engine     | Протоколы                                                                                    | Compose service / profile  |
+| -------- | ---------- | -------------------------------------------------------------------------------------------- | -------------------------- |
+| Sing-box | `SING_BOX` | HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS, WIREGUARD                                     | `core` (`singbox`)         |
+| Xray     | `XRAY`     | VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS, TROJAN_TLS, SHADOWSOCKS_XRAY, WIREGUARD_XRAY | `core-xray` (`xray`)       |
+| MTProxy  | `MTPROXY`  | MTPROXY (до 16 inbound’ов, secret на пользователя)                                           | `core-mtproxy` (`mtproxy`) |
 
 Общее: Postgres, Redis, API, web, один subscription URL, учёт пользователя. Порты VPN-listen не должны пересекаться между inbound’ами. По умолчанию Xray публикует TCP `8443` (при Nginx install — `9443`, чтобы не конфликтовать с ACME `8443`). MTProxy (если включён) публикует диапазон TCP `10001–10016`. WireGuard: UDP `51820` (sing-box) / `51821` (Xray).
 
@@ -76,27 +76,27 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/ma
 
 **Флаги установщика**
 
-| Флаг                         | Назначение                                         |
-| ---------------------------- | -------------------------------------------------- |
-| `--simple` / `--detailed`    | Простой или детальный мастер                       |
-| `--protocols <list>`         | Список протоколов (детальный / non-interactive)    |
-| `--cores singbox,xray,mtproxy` | Ядра (без `--protocols` → все протоколы ядер)    |
-| `--ports key=value,…`        | Порты протоколов (`hysteria2=443`, `wg=51820`, …)  |
-| `--create-default-inbounds`  | Создать inbound на каждый выбранный протокол       |
-| `--no-default-inbounds`      | Не создавать стартовые inbound’ы                   |
-| `--base-domain <host>`       | Базовый домен (лендинг + TLS)                      |
-| `--panel <host>`             | Хост панели                                        |
-| `--subscription <spec>`      | Хост или `хост/путь` для подписок                  |
-| `--vpn-host <host>`          | Публичный VPN-endpoint для клиентов                |
-| `--email <email>`            | Let’s Encrypt                                      |
-| `--port <port>`              | Порт панели без домена (по умолчанию `8000`)       |
-| `--tag <tag>`                | Тег образов GHCR                                   |
-| `--build`                    | Собрать образы локально                            |
-| `--with-mtproxy`             | Включить MTProxy / Telemt (по умолчанию в simple)  |
-| `--without-mtproxy`          | Не ставить MTProxy                                 |
-| `--skip-dns`                 | Не ждать DNS перед сертификатами                   |
-| `--no-nginx`                 | Без Nginx/TLS                                      |
-| `--no-ufw`                   | Не трогать UFW                                     |
+| Флаг                           | Назначение                                        |
+| ------------------------------ | ------------------------------------------------- |
+| `--simple` / `--detailed`      | Простой или детальный мастер                      |
+| `--protocols <list>`           | Список протоколов (детальный / non-interactive)   |
+| `--cores singbox,xray,mtproxy` | Ядра (без `--protocols` → все протоколы ядер)     |
+| `--ports key=value,…`          | Порты протоколов (`hysteria2=443`, `wg=51820`, …) |
+| `--create-default-inbounds`    | Создать inbound на каждый выбранный протокол      |
+| `--no-default-inbounds`        | Не создавать стартовые inbound’ы                  |
+| `--base-domain <host>`         | Базовый домен (лендинг + TLS)                     |
+| `--panel <host>`               | Хост панели                                       |
+| `--subscription <spec>`        | Хост или `хост/путь` для подписок                 |
+| `--vpn-host <host>`            | Публичный VPN-endpoint для клиентов               |
+| `--email <email>`              | Let’s Encrypt                                     |
+| `--port <port>`                | Порт панели без домена (по умолчанию `8000`)      |
+| `--tag <tag>`                  | Тег образов GHCR                                  |
+| `--build`                      | Собрать образы локально                           |
+| `--with-mtproxy`               | Включить MTProxy / Telemt (по умолчанию в simple) |
+| `--without-mtproxy`            | Не ставить MTProxy                                |
+| `--skip-dns`                   | Не ждать DNS перед сертификатами                  |
+| `--no-nginx`                   | Без Nginx/TLS                                     |
+| `--no-ufw`                     | Не трогать UFW                                    |
 
 ### Что спросит мастер
 
@@ -151,24 +151,24 @@ overvpn uninstall              # удалить установку
 
 ### Порты
 
-| Компонент        | По умолчанию                                                       |
-| ---------------- | ------------------------------------------------------------------ |
-| Веб-панель       | `8000` (без домена) / `443` через Nginx                            |
-| API              | внутри Compose; наружу через веб/прокси                            |
-| PostgreSQL       | `5432` → только `127.0.0.1`                                        |
-| Redis            | `6379` → только `127.0.0.1`                                        |
-| VPN UDP inbound  | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2               |
-| VPN TCP Reality  | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                          |
-| VPN TCP Trojan   | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)                       |
-| VPN TCP SS       | `SING_BOX_SS_PORT` (по умолчанию `8445`)                           |
-| VPN UDP WireGuard| `SING_BOX_WG_PORT` (по умолчанию `51820`)                          |
-| VPN Xray xHTTP   | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx)          |
-| VPN Xray gRPC    | `XRAY_GRPC_PORT` (по умолчанию `8446` / `9446` с Nginx)            |
-| VPN Xray TCP TLS | `XRAY_TCP_TLS_PORT` (по умолчанию `8447` / `9447` с Nginx)         |
-| VPN Xray Trojan  | `XRAY_TROJAN_PORT` (по умолчанию `8448` / `9448` с Nginx)          |
-| VPN Xray SS      | `XRAY_SS_PORT` (по умолчанию `8449` / `9449` с Nginx)              |
-| VPN Xray WG      | `XRAY_WG_PORT` (по умолчанию `51821`)                              |
-| MTProxy TCP      | `MTPROXY_PORT_MIN`–`MTPROXY_PORT_MAX` (по умолчанию `10001–10016`) |
+| Компонент         | По умолчанию                                                       |
+| ----------------- | ------------------------------------------------------------------ |
+| Веб-панель        | `8000` (без домена) / `443` через Nginx                            |
+| API               | внутри Compose; наружу через веб/прокси                            |
+| PostgreSQL        | `5432` → только `127.0.0.1`                                        |
+| Redis             | `6379` → только `127.0.0.1`                                        |
+| VPN UDP inbound   | `SING_BOX_UDP_PORT` (по умолчанию `443`) — Hysteria2               |
+| VPN TCP Reality   | `SING_BOX_TCP_PORT` (по умолчанию `4443`)                          |
+| VPN TCP Trojan    | `SING_BOX_TROJAN_PORT` (по умолчанию `8444`)                       |
+| VPN TCP SS        | `SING_BOX_SS_PORT` (по умолчанию `8445`)                           |
+| VPN UDP WireGuard | `SING_BOX_WG_PORT` (по умолчанию `51820`)                          |
+| VPN Xray xHTTP    | `XRAY_LISTEN_PORT` (по умолчанию `8443` / `9443` с Nginx)          |
+| VPN Xray gRPC     | `XRAY_GRPC_PORT` (по умолчанию `8446` / `9446` с Nginx)            |
+| VPN Xray TCP TLS  | `XRAY_TCP_TLS_PORT` (по умолчанию `8447` / `9447` с Nginx)         |
+| VPN Xray Trojan   | `XRAY_TROJAN_PORT` (по умолчанию `8448` / `9448` с Nginx)          |
+| VPN Xray SS       | `XRAY_SS_PORT` (по умолчанию `8449` / `9449` с Nginx)              |
+| VPN Xray WG       | `XRAY_WG_PORT` (по умолчанию `51821`)                              |
+| MTProxy TCP       | `MTPROXY_PORT_MIN`–`MTPROXY_PORT_MAX` (по умолчанию `10001–10016`) |
 
 > [!WARNING]
 > Не публикуйте Postgres, Redis и API напрямую в интернет. Панель — за Nginx с TLS.
@@ -318,7 +318,7 @@ vless://UUID@host:443?encryption=none&security=reality&sni=...&fp=chrome&pbk=...
 trojan://PASSWORD@host:443?security=tls&sni=...&allowInsecure=0&type=tcp#LABEL
 ```
 
-**Shadowsocks 2022** — пароль клиента: `SERVER_PASSWORD:USER_PASSWORD`  
+**Shadowsocks 2022** — пароль клиента: `SERVER_PASSWORD:USER_PASSWORD`
 
 **WireGuard** — серверные и клиентские X25519-ключи создаются автоматически, а адрес
 клиента хранится в его assignment credential. Учёт трафика на пользователя может быть

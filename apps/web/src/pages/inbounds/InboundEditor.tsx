@@ -485,10 +485,7 @@ export function sanitizeInboundForm(
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
-  if (
-    values.protocol === 'WIREGUARD' ||
-    values.protocol === 'WIREGUARD_XRAY'
-  ) {
+  if (values.protocol === 'WIREGUARD' || values.protocol === 'WIREGUARD_XRAY') {
     const preset = buildDefaultInboundSettings(values.protocol, context, overrides);
     const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
       'privateKey',
@@ -813,9 +810,7 @@ function ShadowsocksFields() {
   const { t } = useTranslation();
   const protocol = Form.useWatch('protocol');
   const methods =
-    protocol === 'SHADOWSOCKS_XRAY'
-      ? (['2022-blake3-aes-256-gcm'] as const)
-      : SHADOWSOCKS_METHODS;
+    protocol === 'SHADOWSOCKS_XRAY' ? (['2022-blake3-aes-256-gcm'] as const) : SHADOWSOCKS_METHODS;
 
   return (
     <>

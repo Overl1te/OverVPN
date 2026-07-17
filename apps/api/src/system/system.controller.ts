@@ -366,7 +366,9 @@ export class SystemController {
   }
 
   @Get('engines')
-  @ApiOkResponse({ description: 'Installed data-plane engines and enable hints' })
+  @ApiOkResponse({
+    description: 'Installed data-plane engines and enable hints',
+  })
   engines() {
     return this.system.engines();
   }

@@ -131,9 +131,7 @@ export function isPublishedMtproxyPort(listenPort: number, context: PublishedPor
 export function publishedTransportForProtocol(
   protocol: InboundProtocol,
 ): InboundPublishedTransport {
-  return protocol === 'HYSTERIA2' ||
-    protocol === 'WIREGUARD' ||
-    protocol === 'WIREGUARD_XRAY'
+  return protocol === 'HYSTERIA2' || protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY'
     ? 'udp'
     : 'tcp';
 }
