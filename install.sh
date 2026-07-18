@@ -56,6 +56,10 @@ tui_term_width() {
   if [[ -z "$cols" || ! "$cols" =~ ^[0-9]+$ ]]; then
     cols="${COLUMNS:-72}"
   fi
+  # Leave a 1-col margin — some SSH clients report width one cell too wide.
+  if [[ "$cols" -gt 2 ]]; then
+    cols=$((cols - 1))
+  fi
   if [[ "$cols" -gt 80 ]]; then
     cols=80
   elif [[ "$cols" -lt 48 ]]; then
@@ -67,6 +71,7 @@ tui_term_width() {
 _tui_strlen() {
   local clean="$1"
   local esc=$'\033'
+  local len
   clean="${clean//$'\\033'/$esc}"
   while [[ "$clean" == *"${esc}["* ]]; do
     local before="${clean%%${esc}\[*}"
@@ -75,7 +80,35 @@ _tui_strlen() {
     [[ "$rest" == "$after" ]] && break
     clean="${before}${after}"
   done
-  printf '%s' "${#clean}"
+  # Count Unicode chars, not bytes — LANG=C breaks Cyrillic box padding.
+  len="$(printf '%s' "$clean" | LC_ALL=C.UTF-8 wc -m 2>/dev/null | tr -d '[:space:]')"
+  if [[ -z "$len" || ! "$len" =~ ^[0-9]+$ ]]; then
+    len="$(LC_ALL=C.UTF-8 bash -c 'printf %s "${#1}"' _ "$clean" 2>/dev/null || true)"
+  fi
+  if [[ -z "$len" || ! "$len" =~ ^[0-9]+$ ]]; then
+    len="${#clean}"
+  fi
+  printf '%s' "$len"
+}
+
+# Trim plain/ANSI text to fit box inner width (display columns).
+_tui_fit() {
+  local text="$1" max="$2"
+  local plain="$text"
+  local esc=$'\033'
+  [[ "$max" -le 0 ]] && { printf ''; return; }
+  while [[ "$(_tui_strlen "$text")" -gt "$max" && -n "$plain" ]]; do
+    plain="${plain%?}"
+    # Rebuild from truncated plain only when text has no ANSI (common path).
+    if [[ "$text" != *"$esc"* ]]; then
+      text="$plain"
+    else
+      # Fallback: drop trailing char from raw string (may clip mid-sequence rarely).
+      text="${text%?}"
+      plain="$text"
+    fi
+  done
+  printf '%s' "$text"
 }
 
 _tui_repeat() {
@@ -113,7 +146,10 @@ draw_box_sep() {
 draw_box_line() {
   local text="$1" width="${2:-$(tui_term_width)}"
   local inner=$((width - 2))
-  local text_len padding
+  local text_len padding max_text
+  max_text=$((inner - 1))
+  [[ "$max_text" -lt 0 ]] && max_text=0
+  text="$(_tui_fit "$text" "$max_text")"
   text_len="$(_tui_strlen "$text")"
   padding=$((inner - text_len - 1))
   [[ "$padding" -lt 0 ]] && padding=0
@@ -128,6 +164,7 @@ draw_box_center() {
   local text="$1" width="${2:-$(tui_term_width)}"
   local inner=$((width - 2))
   local text_len left_pad right_pad
+  text="$(_tui_fit "$text" "$inner")"
   text_len="$(_tui_strlen "$text")"
   left_pad=$(( (inner - text_len) / 2 ))
   right_pad=$((inner - text_len - left_pad))
@@ -270,18 +307,27 @@ ui_select_menu_typed() {
   local count=${#items[@]}
   local w key i val label
   local default_hint
+  local has_header=0
 
   UI_SELECT_RESULT=""
   w="$(tui_term_width)"
   if [[ -n "${UI_MENU_HEADER:-}" ]] && declare -F "${UI_MENU_HEADER}" >/dev/null 2>&1; then
-    clear_screen
+    has_header=1
+  fi
+  clear_screen
+  if [[ "$has_header" -eq 1 ]]; then
     "${UI_MENU_HEADER}"
+  else
+    draw_box_top "$w"
+    draw_box_empty "$w"
   fi
   for i in "${!items[@]}"; do
     label="${items[$i]#*|}"
     draw_box_line " ${TUI_BRIGHT_CYAN}[$((i + 1))]${TUI_NC} ${label}" "$w"
   done
   draw_box_empty "$w"
+  draw_box_sep "$w"
+  draw_box_center "${TUI_DIM}$(cli_t ui_nav_hint)${TUI_NC}" "$w"
   draw_box_bottom "$w"
   default_hint="$((selected + 1))"
   key="$(ui_choice "$(cli_t ui_choice_label)" "$default_hint")"
@@ -332,6 +378,7 @@ ui_select_menu() {
   local -a items=("$@")
   local count=${#items[@]}
   local w key i val label prefix lower
+  local has_header=0
 
   UI_SELECT_RESULT=""
   if [[ "$count" -eq 0 ]]; then
@@ -341,6 +388,9 @@ ui_select_menu() {
     selected=0
   elif [[ "$selected" -ge "$count" ]]; then
     selected=$((count - 1))
+  fi
+  if [[ -n "${UI_MENU_HEADER:-}" ]] && declare -F "${UI_MENU_HEADER}" >/dev/null 2>&1; then
+    has_header=1
   fi
 
   if ! ui_arrows_available; then
@@ -362,8 +412,11 @@ ui_select_menu() {
   while true; do
     w="$(tui_term_width)"
     clear_screen
-    if [[ -n "${UI_MENU_HEADER:-}" ]] && declare -F "${UI_MENU_HEADER}" >/dev/null 2>&1; then
+    if [[ "$has_header" -eq 1 ]]; then
       "${UI_MENU_HEADER}"
+    else
+      draw_box_top "$w"
+      draw_box_empty "$w"
     fi
     for i in "${!items[@]}"; do
       label="${items[$i]#*|}"
@@ -434,18 +487,33 @@ ui_select_menu() {
   done
 }
 
-# ui_confirm <default y|n> [yes_label] [no_label]
-# Returns 0 if yes, 1 if no. Uses UI_MENU_HEADER when set.
+# ui_confirm <default y|n> [question]
+# Shows question in a header box; options are Да/Нет (or Yes/No).
+# Returns 0 if yes, 1 if no.
 ui_confirm() {
   local default="${1:-y}"
-  local yes_label="${2:-$(cli_t opt_yes)}"
-  local no_label="${3:-$(cli_t opt_no)}"
+  local question="${2:-}"
   local idx=0
+  local prev_header="${UI_MENU_HEADER:-}"
   default="$(printf '%s' "$default" | tr '[:upper:]' '[:lower:]')"
   if [[ "$default" == "n" || "$default" == "no" ]]; then
     idx=1
   fi
-  ui_select_menu "$idx" "yes|${yes_label}" "no|${no_label}"
+  if [[ -n "$question" ]]; then
+    _ui_confirm_header() {
+      local w
+      w="$(tui_term_width)"
+      show_banner "$(cli_t wizard_subtitle)"
+      draw_box_top "$w"
+      draw_box_center "${TUI_BOLD}${question}${TUI_NC}" "$w"
+      draw_box_sep "$w"
+      draw_box_empty "$w"
+    }
+    UI_MENU_HEADER=_ui_confirm_header
+  fi
+  ui_select_menu "$idx" "yes|$(cli_t opt_yes)" "no|$(cli_t opt_no)"
+  UI_MENU_HEADER="$prev_header"
+  unset -f _ui_confirm_header 2>/dev/null || true
   [[ "$UI_SELECT_RESULT" == "yes" ]]
 }
 
@@ -597,7 +665,7 @@ cli_t() {
       lang_opt_en) printf '%s' "English" ;;
       lang_opt_ru) printf '%s' "Русский" ;;
       mode_screen_title) printf '%s' "Режим установки" ;;
-      mode_opt_domain) printf '%s' "С доменом (Nginx + Let'\''s Encrypt TLS)" ;;
+      mode_opt_domain) printf '%s' "С доменом (Nginx + Let's Encrypt TLS)" ;;
       mode_opt_ip) printf 'Только IP — http://%s:%s (без TLS)' "$1" "$2" ;;
       hosts_screen_title) printf '%s' "Домены и почта" ;;
       hosts_base_hint) printf '%s' "Базовый домен для лендинга и TLS" ;;
@@ -668,7 +736,7 @@ cli_t() {
       downloading_bundle) printf 'Скачиваем deploy-бандл (%s) в %s…' "$1" "$2" ;;
       missing_install_conf) printf 'Отсутствует %s' "$1" ;;
       certbot_missing) printf '%s' "certbot не установлен." ;;
-      requesting_expand_cert) printf '%s' "Запрашиваем/расширяем сертификат Let'\''s Encrypt…" ;;
+      requesting_expand_cert) printf '%s' "Запрашиваем/расширяем сертификат Let's Encrypt…" ;;
       cert_failed) printf '%s' "Не удалось выпустить сертификат." ;;
       cert_failed_hint2) printf '%s' "Проверьте DNS (серая тучка в Cloudflare), порт 80 и резолв хостов." ;;
       generating_env) printf '%s' "Генерируем секреты .env…" ;;
@@ -705,7 +773,7 @@ cli_t() {
       uninstall_warn) printf '%s' "Будут удалены контейнеры OverVPN, Docker-образы стека, /opt/overvpn, сайт nginx и CLI." ;;
       uninstall_title) printf '%s' "Удаление OverVPN" ;;
       prompt_wipe_volumes) printf '%s' "Удалить Docker volumes (БД/данные)?" ;;
-      prompt_purge_certs) printf '%s' "Удалить сертификаты Let'\''s Encrypt для panel/sub/vpn?" ;;
+      prompt_purge_certs) printf '%s' "Удалить сертификаты Let's Encrypt для panel/sub/vpn?" ;;
       prompt_purge_nginx) printf '%s' "Удалить пакеты Nginx + Certbot из системы?" ;;
       removing_nginx_pkgs) printf '%s' "Удаляем пакеты Nginx и Certbot…" ;;
       nginx_pkgs_removed) printf '%s' "Пакеты Nginx и Certbot удалены." ;;
@@ -815,7 +883,7 @@ cli_t() {
       lang_opt_en) printf '%s' "English" ;;
       lang_opt_ru) printf '%s' "Русский" ;;
       mode_screen_title) printf '%s' "Install mode" ;;
-      mode_opt_domain) printf '%s' "With domain (Nginx + Let'\''s Encrypt TLS)" ;;
+      mode_opt_domain) printf '%s' "With domain (Nginx + Let's Encrypt TLS)" ;;
       mode_opt_ip) printf 'IP-only — http://%s:%s (no TLS)' "$1" "$2" ;;
       hosts_screen_title) printf '%s' "Domains and email" ;;
       hosts_base_hint) printf '%s' "Base domain for landing page and TLS" ;;
@@ -886,7 +954,7 @@ cli_t() {
       downloading_bundle) printf 'Downloading deploy bundle (%s) into %s...' "$1" "$2" ;;
       missing_install_conf) printf 'Missing %s' "$1" ;;
       certbot_missing) printf '%s' "certbot is not installed." ;;
-      requesting_expand_cert) printf '%s' "Requesting/expanding Let'\''s Encrypt certificate..." ;;
+      requesting_expand_cert) printf '%s' "Requesting/expanding Let's Encrypt certificate..." ;;
       cert_failed) printf '%s' "Certificate issuance failed." ;;
       cert_failed_hint2) printf '%s' "Check DNS (grey cloud on Cloudflare), port 80, and host resolution." ;;
       generating_env) printf '%s' "Generating .env secrets..." ;;
@@ -923,7 +991,7 @@ cli_t() {
       uninstall_warn) printf '%s' "This removes OverVPN containers, stack Docker images, /opt/overvpn, nginx site, and CLI." ;;
       uninstall_title) printf '%s' "Uninstall OverVPN" ;;
       prompt_wipe_volumes) printf '%s' "Delete Docker volumes (DB/data)?" ;;
-      prompt_purge_certs) printf '%s' "Delete Let'\''s Encrypt certs for panel/sub/vpn hosts?" ;;
+      prompt_purge_certs) printf '%s' "Delete Let's Encrypt certs for panel/sub/vpn hosts?" ;;
       prompt_purge_nginx) printf '%s' "Remove Nginx + Certbot packages from the system?" ;;
       removing_nginx_pkgs) printf '%s' "Removing Nginx and Certbot packages..." ;;
       nginx_pkgs_removed) printf '%s' "Nginx and Certbot packages removed." ;;
@@ -1144,10 +1212,23 @@ apply_port_overrides() {
 
 prompt_install_depth() {
   [[ "${CFG_DEPTH_SKIP_PROMPT:-false}" == "true" ]] && return
-  UI_MENU_HEADER=""
+  _prompt_install_depth_header() {
+    local w
+    w="$(tui_term_width)"
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t depth_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t answer_all)" "$w"
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+  }
+  UI_MENU_HEADER=_prompt_install_depth_header
   ui_select_menu 0 \
     "simple|$(cli_t depth_simple)" \
     "detailed|$(cli_t depth_detailed)"
+  unset UI_MENU_HEADER
+  unset -f _prompt_install_depth_header 2>/dev/null || true
   CFG_INSTALL_DEPTH="$UI_SELECT_RESULT"
 }
 
@@ -1157,7 +1238,7 @@ prompt_detailed_protocols() {
     colorized_echo cyan "${heading%%:*}"
     IFS=',' read -ra _group <<<"${heading#*:}"
     for protocol in "${_group[@]}"; do
-      if ui_confirm y "$(cli_t select_protocol "${heading%%:*} / $protocol") — $(cli_t opt_yes)" "$(cli_t opt_no)"; then
+      if ui_confirm y "$(cli_t select_protocol "${heading%%:*} / $protocol")"; then
         selected="${selected:+${selected},}${protocol}"
       fi
     done
@@ -1173,9 +1254,21 @@ prompt_detailed_protocols() {
 
 prompt_detailed_ports() {
   local protocol var value
+  _prompt_port_preset_header() {
+    local w
+    w="$(tui_term_width)"
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t port_preset_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_empty "$w"
+  }
+  UI_MENU_HEADER=_prompt_port_preset_header
   ui_select_menu 0 \
     "standard|$(cli_t port_standard)" \
     "stealth|$(cli_t port_stealth)"
+  unset UI_MENU_HEADER
+  unset -f _prompt_port_preset_header 2>/dev/null || true
   CFG_PORT_PRESET="$UI_SELECT_RESULT"
   IFS=',' read -ra _selected <<<"$CFG_ENABLED_PROTOCOLS"
   for protocol in "${_selected[@]}"; do
@@ -1183,13 +1276,13 @@ prompt_detailed_ports() {
     value="$(ui_prompt "$(cli_t prompt_protocol_port "$protocol")" "$(protocol_default_port "$protocol" "$CFG_PORT_PRESET")")"
     set_protocol_port "$protocol" "$value"
   done
-  if ui_confirm y "$(cli_t prompt_default_inbounds) — $(cli_t opt_yes)" "$(cli_t opt_no)"; then
+  if ui_confirm y "$(cli_t prompt_default_inbounds)"; then
     CFG_CREATE_DEFAULT_INBOUNDS="true"
   else
     CFG_CREATE_DEFAULT_INBOUNDS="false"
   fi
   if [[ "${CFG_UFW_DECIDED:-false}" != "true" ]]; then
-    if ui_confirm y "$(cli_t prompt_ufw) — $(cli_t opt_yes)" "$(cli_t opt_no)"; then
+    if ui_confirm y "$(cli_t prompt_ufw)"; then
       CFG_USE_UFW="true"
     else
       CFG_USE_UFW="false"
