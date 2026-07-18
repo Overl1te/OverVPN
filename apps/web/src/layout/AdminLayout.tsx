@@ -90,21 +90,10 @@ export function AdminLayout() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  // Soft open guide once for incomplete OWNER setup; sidebar stays available.
+  // Leaving via the menu dismisses so the panel is never a cage.
   if (setup.shouldShowWizard && !isSetupRoute && !setup.isLoading) {
     return <Navigate to="/setup" replace />;
-  }
-
-  if (isSetupRoute) {
-    return (
-      <Layout className="admin-shell setup-layout">
-        <Header className="admin-header setup-header">
-          <LocaleLogoutBar />
-        </Header>
-        <Content className="setup-content">
-          <Outlet />
-        </Content>
-      </Layout>
-    );
   }
 
   const selected = `/${location.pathname.split('/')[1] || 'dashboard'}`;
@@ -131,9 +120,14 @@ export function AdminLayout() {
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[selected === '/' ? '/dashboard' : selected]}
+          selectedKeys={[selected === '/' || selected === '/setup' ? '/dashboard' : selected]}
           items={items}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (setup.shouldShowWizard && key !== '/setup') {
+              setup.dismissWizard();
+            }
+            navigate(key);
+          }}
         />
         <SupportButton collapsed={collapsed} />
       </Sider>

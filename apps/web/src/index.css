@@ -228,29 +228,113 @@ a {
   place-items: center;
 }
 
-.setup-layout .setup-header {
-  justify-content: space-between;
+.setup-guide {
+  max-width: 920px;
 }
 
-.setup-content {
-  min-height: calc(100vh - 64px);
-  padding: 24px 16px 40px;
-  background:
-    linear-gradient(145deg, rgba(15, 118, 110, 0.06), transparent 42%),
-    linear-gradient(320deg, rgba(15, 23, 42, 0.04), transparent 48%), var(--admin-bg);
+.setup-guide-lead {
+  margin-top: -4px;
+  margin-bottom: 20px;
+  max-width: 62ch;
 }
 
-.setup-shell {
-  width: min(880px, 100%);
-  margin: 0 auto;
-}
-
-.setup-card {
-  padding: 28px 28px 20px;
+.setup-guide-section {
+  margin-bottom: 24px;
+  padding: 18px 20px;
   background: #fff;
   border: 1px solid var(--admin-border);
+  border-radius: 10px;
+}
+
+.setup-guide-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 4px;
+}
+
+.setup-guide-flow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-guide-flow-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(15, 118, 110, 0.06);
+  border: 1px solid rgba(15, 118, 110, 0.18);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  font-weight: 500;
+  font-size: 13px;
+  color: #0f766e;
+}
+
+.setup-guide-flow-icon {
+  font-size: 15px;
+}
+
+.setup-guide-flow-arrow {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.setup-guide-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.setup-guide-nav-card {
+  padding: 12px 14px;
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+}
+
+.setup-guide-nav-card--highlight {
+  background: rgba(15, 118, 110, 0.05);
+  border-color: rgba(15, 118, 110, 0.28);
+}
+
+.setup-guide-nav-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.setup-guide-nav-card-icon {
+  color: #0f766e;
+}
+
+.setup-guide-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.setup-guide-step {
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+}
+
+.setup-checklist-model {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 4px 10px;
+  background: rgba(15, 118, 110, 0.06);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0f766e;
+  letter-spacing: 0.01em;
 }
 
 .setup-checklist-item {

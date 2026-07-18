@@ -131,7 +131,10 @@ export function DashboardPage() {
                 <Typography.Title level={5} style={{ margin: 0 }}>
                   {t('setup.checklistTitle')}
                 </Typography.Title>
-                <Typography.Text type="secondary">{t('setup.checklistSubtitle')}</Typography.Text>
+                <span className="setup-checklist-model">{t('setup.checklistModel')}</span>
+                <div>
+                  <Typography.Text type="secondary">{t('setup.checklistSubtitle')}</Typography.Text>
+                </div>
               </div>
               <Space wrap>
                 <Progress
@@ -141,7 +144,7 @@ export function DashboardPage() {
                   format={() => `${setup.doneCount}/${setup.totalSteps}`}
                 />
                 <Link to="/setup">
-                  <Button type="primary">{t('setup.openWizard')}</Button>
+                  <Button type="primary">{t('setup.openGuide')}</Button>
                 </Link>
               </Space>
             </div>
