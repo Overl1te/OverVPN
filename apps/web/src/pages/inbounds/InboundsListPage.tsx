@@ -1,6 +1,6 @@
 import { App as AntApp, Button, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { PROTOCOL_ENGINE_MAP } from '@overvpn/shared';
@@ -23,6 +23,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
+import { TOUR_ASSIST_EVENT, type TourAssistDetail } from '@/hooks/usePanelTour';
 import { notifyCoreApply } from '@/utils/notifyCoreApply';
 import { InboundEditor } from './InboundEditor';
 
@@ -205,6 +206,19 @@ export function InboundsListPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<InboundResult | null>(null);
 
+  useEffect(() => {
+    const onAssist = (event: Event) => {
+      const detail = (event as CustomEvent<TourAssistDetail>).detail;
+      if (detail?.action !== 'create-inbound' || !canMutate) {
+        return;
+      }
+      setEditing(null);
+      setEditorOpen(true);
+    };
+    window.addEventListener(TOUR_ASSIST_EVENT, onAssist);
+    return () => window.removeEventListener(TOUR_ASSIST_EVENT, onAssist);
+  }, [canMutate]);
+
   const query = useQuery({
     queryKey: ['inbounds', page, pageSize],
     queryFn: () => listInbounds({ page, pageSize }),
@@ -234,11 +248,12 @@ export function InboundsListPage() {
   return (
     <div>
       <PageHeader
-        title={t('inbounds.title')}
+        title={<span data-tour="page-inbounds">{t('inbounds.title')}</span>}
         extra={
           <MutateOnly>
             <Button
               type="primary"
+              data-tour="create-inbound"
               onClick={() => {
                 setEditing(null);
                 setEditorOpen(true);

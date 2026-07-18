@@ -117,6 +117,7 @@ const environment: AppEnvironment = {
   UPDATE_CHECK_REF: 'main',
   UPDATE_CHECK_TIMEOUT_MS: 10_000,
   TELEGRAM_ENABLED: false,
+  ONBOARDING_TOUR: true,
   TELEGRAM_TIMEOUT_MS: 5_000,
   BACKUP_DIR: '/var/lib/overvpn/backups',
   BACKUP_RETENTION_DAYS: 30,

@@ -1,6 +1,6 @@
 import { Button, Form, Modal, Popconfirm, Space, Table, Tag } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { archivePlan, createPlan, deletePlan, listPlans, updatePlan } from '@/api/plans';
 import { listInbounds } from '@/api/inbounds';
@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
+import { TOUR_ASSIST_EVENT, type TourAssistDetail } from '@/hooks/usePanelTour';
 import { formatBytes } from '@/utils/format';
 import { PlanFormFields } from './plans/PlanFormFields';
 import {
@@ -29,6 +30,21 @@ export function PlansPage() {
   const [form] = Form.useForm<PlanFormValues>();
   const onError = useApiErrorHandler();
   const onFormError = useApiErrorHandler(form);
+
+  useEffect(() => {
+    const onAssist = (event: Event) => {
+      const detail = (event as CustomEvent<TourAssistDetail>).detail;
+      if (detail?.action !== 'create-plan' || !canMutate) {
+        return;
+      }
+      setEditingId(null);
+      form.resetFields();
+      form.setFieldsValue({ ...defaultPlanFormValues });
+      setModalOpen(true);
+    };
+    window.addEventListener(TOUR_ASSIST_EVENT, onAssist);
+    return () => window.removeEventListener(TOUR_ASSIST_EVENT, onAssist);
+  }, [canMutate, form]);
 
   const plansQuery = useQuery({
     queryKey: ['plans', page, pageSize],
@@ -85,11 +101,12 @@ export function PlansPage() {
   return (
     <div>
       <PageHeader
-        title={t('plans.title')}
+        title={<span data-tour="page-plans">{t('plans.title')}</span>}
         extra={
           <MutateOnly>
             <Button
               type="primary"
+              data-tour="create-plan"
               onClick={() => {
                 setEditingId(null);
                 form.resetFields();

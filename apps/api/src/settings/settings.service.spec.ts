@@ -64,6 +64,20 @@ describe('SettingsService', () => {
           rows.delete(where.key);
           return Promise.resolve({ count: 1 });
         },
+        update: ({
+          where,
+          data,
+        }: {
+          where: { key: string };
+          data: Record<string, unknown>;
+        }) => {
+          const existing = rows.get(where.key);
+          if (!existing) {
+            return Promise.reject(new Error('missing'));
+          }
+          Object.assign(existing, data, { updatedAt: new Date() });
+          return Promise.resolve(existing);
+        },
       },
       $transaction: (fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma),
     } as unknown as PrismaService;
@@ -108,6 +122,7 @@ describe('SettingsService', () => {
     expect(initial.readOnly.tlsKeyPath).toBeNull();
     expect(initial).not.toHaveProperty('telegramBotToken');
     expect(initial.telegramBotTokenConfigured).toBe(false);
+    expect(initial.featureFlags.onboardingTour).toBe(true);
 
     // Schema-shaped placeholder only — not a real BotFather token (avoids secret scanning).
     const fakeTelegramBotToken = '000000000:OVERVPN_TEST_TELEGRAM_BOT_TOKEN';
@@ -147,14 +162,85 @@ describe('SettingsService', () => {
     expect(auditCalls[0]?.[0].after.telegramBotToken).toBe('[REDACTED]');
     expect(auditCalls[0]?.[0].after.revision).toBe(2);
   });
+
+  it('seeds onboardingTour from env when the flag is missing on existing settings', async () => {
+    const rows = new Map<
+      string,
+      {
+        key: string;
+        value: unknown;
+        revision: number;
+        isSecret: boolean;
+        updatedAt: Date;
+        updatedByAdminId: string | null;
+      }
+    >();
+    rows.set('system.settings', {
+      key: 'system.settings',
+      value: {
+        panelUrl: null,
+        subPublicBaseUrl: null,
+        profileUpdateIntervalHours: null,
+        notifyTelegramEnabled: null,
+        featureFlags: {},
+      },
+      revision: 1,
+      isSecret: false,
+      updatedAt: new Date(),
+      updatedByAdminId: null,
+    });
+
+    const prisma = {
+      systemConfig: {
+        findUnique: ({ where }: { where: { key: string } }) =>
+          Promise.resolve(rows.get(where.key) ?? null),
+        update: ({
+          where,
+          data,
+        }: {
+          where: { key: string };
+          data: Record<string, unknown>;
+        }) => {
+          const existing = rows.get(where.key);
+          if (!existing) {
+            return Promise.reject(new Error('missing'));
+          }
+          Object.assign(existing, data, { updatedAt: new Date() });
+          return Promise.resolve(existing);
+        },
+      },
+      $transaction: (fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma),
+    } as unknown as PrismaService;
+
+    const service = new SettingsService(
+      prisma,
+      {
+        record: () => Promise.resolve(undefined),
+        recordFailureSafely: () => Promise.resolve(undefined),
+      } as unknown as AuditService,
+      new SecretEncryptionService(testConfig()),
+      testConfig({ ONBOARDING_TOUR: false }),
+      {
+        assertIntact: jest.fn(),
+        isIntact: jest.fn(() => true),
+      } as unknown as SupportIntegrityService,
+    );
+
+    const settings = await service.get();
+    expect(settings.featureFlags.onboardingTour).toBe(false);
+    expect(rows.get('system.settings')?.revision).toBe(2);
+  });
 });
 
-function testConfig(): ConfigService<AppEnvironment, true> {
+function testConfig(
+  overrides: Record<string, unknown> = {},
+): ConfigService<AppEnvironment, true> {
   const values: Record<string, unknown> = {
     SUB_PUBLIC_BASE_URL: 'https://vpn.example.com',
     VPN_PUBLIC_HOST: 'vpn.example.com',
     SUB_PROFILE_UPDATE_INTERVAL_HOURS: 6,
     TELEGRAM_ENABLED: false,
+    ONBOARDING_TOUR: true,
     TELEGRAM_BOT_TOKEN: undefined,
     TELEGRAM_CHAT_ID: undefined,
     CORS_ORIGINS: ['http://localhost:5173'],
@@ -184,6 +270,7 @@ function testConfig(): ConfigService<AppEnvironment, true> {
     MTPROXY_ENABLED: true,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    ...overrides,
   };
   return {
     get: (key: string) => values[key],

@@ -566,6 +566,8 @@ export const environmentSchema = z
       .max(60_000)
       .default(10_000),
     TELEGRAM_ENABLED: booleanFromEnvironment.default(false),
+    /** When false, OWNER panel onboarding tour is disabled (install-time preference). */
+    ONBOARDING_TOUR: booleanFromEnvironment.default(true),
     TELEGRAM_BOT_TOKEN: z.preprocess(
       (value) => (value === '' ? undefined : value),
       z

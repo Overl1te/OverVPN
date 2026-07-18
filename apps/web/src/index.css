@@ -351,6 +351,35 @@ a {
   padding-bottom: 0;
 }
 
+/* Spotlight panel tour — smooth fly between targets */
+.ant-tour {
+  transition:
+    left 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.ant-tour-mask .ant-tour-placeholder-animated {
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.panel-tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.panel-tour-indicator {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.panel-tour-desc {
+  max-width: 320px;
+}
+
 .code-block {
   margin: 0;
   padding: 12px;

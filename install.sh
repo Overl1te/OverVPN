@@ -96,19 +96,70 @@ _tui_fit() {
   local text="$1" max="$2"
   local plain="$text"
   local esc=$'\033'
+  # Character indexing (${var:0:n} / ${#var}) needs a UTF-8 locale.
+  local LC_ALL=C.UTF-8
   [[ "$max" -le 0 ]] && { printf ''; return; }
-  while [[ "$(_tui_strlen "$text")" -gt "$max" && -n "$plain" ]]; do
-    plain="${plain%?}"
-    # Rebuild from truncated plain only when text has no ANSI (common path).
-    if [[ "$text" != *"$esc"* ]]; then
-      text="$plain"
-    else
-      # Fallback: drop trailing char from raw string (may clip mid-sequence rarely).
-      text="${text%?}"
-      plain="$text"
+  if [[ "$text" != *"$esc"* ]]; then
+    if [[ "$(_tui_strlen "$text")" -gt "$max" ]]; then
+      text="${text:0:$max}"
     fi
+    printf '%s' "$text"
+    return
+  fi
+  while [[ "$(_tui_strlen "$text")" -gt "$max" && -n "$plain" ]]; do
+    # Fallback: drop trailing char from raw string (may clip mid-sequence rarely).
+    text="${text%?}"
+    plain="$text"
   done
   printf '%s' "$text"
+}
+
+# Word-wrap plain text to max display columns. Prints one physical line per row.
+_tui_wrap() {
+  local text="$1" max="$2"
+  local indent="" body="$text" chunk line rest
+  local indent_len body_max
+  local LC_ALL=C.UTF-8
+
+  [[ "$max" -le 0 ]] && { printf '\n'; return; }
+  if [[ "$(_tui_strlen "$text")" -le "$max" ]]; then
+    printf '%s\n' "$text"
+    return
+  fi
+
+  while [[ "$body" == ' '* ]]; do
+    indent+=' '
+    body="${body# }"
+  done
+  indent_len="$(_tui_strlen "$indent")"
+  body_max=$((max - indent_len))
+  if [[ "$body_max" -lt 1 ]]; then
+    indent=""
+    indent_len=0
+    body="$text"
+    body_max=$max
+  fi
+  if [[ -z "$body" ]]; then
+    printf '%s\n' "$indent"
+    return
+  fi
+
+  rest="$body"
+  while [[ -n "$rest" ]]; do
+    if [[ "$(_tui_strlen "$rest")" -le "$body_max" ]]; then
+      printf '%s%s\n' "$indent" "$rest"
+      break
+    fi
+    chunk="${rest:0:$body_max}"
+    line="$chunk"
+    if [[ "$chunk" == *' '* ]]; then
+      line="${chunk% *}"
+      [[ -z "$line" ]] && line="$chunk"
+    fi
+    printf '%s%s\n' "$indent" "$line"
+    rest="${rest:${#line}}"
+    rest="${rest# }"
+  done
 }
 
 _tui_repeat() {
@@ -143,17 +194,31 @@ draw_box_sep() {
   printf '%s%s%s%s%s\n' "$TUI_CYAN" "$BOX_LT" "$(_tui_repeat "$BOX_H" "$inner")" "$BOX_RT" "$TUI_NC"
 }
 
-draw_box_line() {
-  local text="$1" width="${2:-$(tui_term_width)}"
-  local inner=$((width - 2))
-  local text_len padding max_text
-  max_text=$((inner - 1))
-  [[ "$max_text" -lt 0 ]] && max_text=0
+_draw_box_line_one() {
+  local text="$1" width="$2" inner="$3" max_text="$4"
+  local text_len padding
   text="$(_tui_fit "$text" "$max_text")"
   text_len="$(_tui_strlen "$text")"
   padding=$((inner - text_len - 1))
   [[ "$padding" -lt 0 ]] && padding=0
   printf '%s%s%s %s%s%s%s\n' "$TUI_CYAN" "$BOX_V" "$TUI_NC" "$text" "$(_tui_repeat ' ' "$padding")" "$TUI_CYAN" "$BOX_V$TUI_NC"
+}
+
+# Draw one logical line; plain text longer than the box wraps onto following rows.
+draw_box_line() {
+  local text="$1" width="${2:-$(tui_term_width)}"
+  local inner=$((width - 2))
+  local max_text=$((inner - 1))
+  local esc=$'\033' line
+  [[ "$max_text" -lt 0 ]] && max_text=0
+  # ANSI-colored rows stay single-line (fit/truncate); plain text wraps.
+  if [[ "$text" == *"$esc"* ]]; then
+    _draw_box_line_one "$text" "$width" "$inner" "$max_text"
+    return
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    _draw_box_line_one "$line" "$width" "$inner" "$max_text"
+  done < <(_tui_wrap "$text" "$max_text")
 }
 
 draw_box_empty() {
@@ -629,11 +694,17 @@ cli_t() {
       summary_mode_ip) printf 'Режим:        IP-only (порт %s)' "$1" ;;
       summary_mtproxy_on) printf '%s' "MTProxy:      да (Telemt)" ;;
       summary_mtproxy_off) printf '%s' "MTProxy:      нет" ;;
+      summary_onboarding_on) printf '%s' "Онбординг:    да (тур панели)" ;;
+      summary_onboarding_off) printf '%s' "Онбординг:    нет" ;;
       mtproxy_screen_title) printf '%s' "MTProxy (Telemt)" ;;
       mtproxy_screen_hint) printf '%s' "Опциональный Telegram MTProxy на Telemt (порты 10001–10016)." ;;
       mtproxy_opt_yes) printf '%s' "Установить MTProxy" ;;
       mtproxy_opt_no) printf '%s' "Пропустить MTProxy" ;;
       prompt_mtproxy) printf '%s' "Ставить MTProxy (Telemt)?" ;;
+      onboarding_screen_title) printf '%s' "Онбординг панели" ;;
+      onboarding_screen_hint) printf '%s' "Spotlight-тур при первом входе OWNER. Опытным можно выключить." ;;
+      onboarding_opt_yes) printf '%s' "Включить онбординг-тур" ;;
+      onboarding_opt_no) printf '%s' "Без онбординг-тура" ;;
       dns_title) printf '%s' "DNS A-записи" ;;
       dns_hint) printf 'У регистратора DNS → A-записи → %s' "$1" ;;
       dns_point) printf '%s  →  %s' "$1" "$2" ;;
@@ -847,11 +918,17 @@ cli_t() {
       summary_mode_ip) printf 'Mode:         IP-only (port %s)' "$1" ;;
       summary_mtproxy_on) printf '%s' "MTProxy:      yes (Telemt)" ;;
       summary_mtproxy_off) printf '%s' "MTProxy:      no" ;;
+      summary_onboarding_on) printf '%s' "Onboarding:   yes (panel tour)" ;;
+      summary_onboarding_off) printf '%s' "Onboarding:   no" ;;
       mtproxy_screen_title) printf '%s' "MTProxy (Telemt)" ;;
       mtproxy_screen_hint) printf '%s' "Optional Telegram MTProxy via Telemt (ports 10001–10016)." ;;
       mtproxy_opt_yes) printf '%s' "Install MTProxy" ;;
       mtproxy_opt_no) printf '%s' "Skip MTProxy" ;;
       prompt_mtproxy) printf '%s' "Install MTProxy (Telemt)?" ;;
+      onboarding_screen_title) printf '%s' "Panel onboarding" ;;
+      onboarding_screen_hint) printf '%s' "Spotlight tour on first OWNER login. Experienced users can disable it." ;;
+      onboarding_opt_yes) printf '%s' "Enable onboarding tour" ;;
+      onboarding_opt_no) printf '%s' "Skip onboarding tour" ;;
       dns_title) printf '%s' "DNS A records" ;;
       dns_hint) printf 'At your DNS provider → A records → %s' "$1" ;;
       dns_point) printf '%s  →  %s' "$1" "$2" ;;
@@ -1472,6 +1549,11 @@ prompt_install_confirm() {
     else
       draw_box_line " $(cli_t summary_mtproxy_off)" "$w"
     fi
+    if [[ "${CFG_ONBOARDING_TOUR:-true}" == "true" ]]; then
+      draw_box_line " $(cli_t summary_onboarding_on)" "$w"
+    else
+      draw_box_line " $(cli_t summary_onboarding_off)" "$w"
+    fi
     draw_box_sep "$w"
     draw_box_empty "$w"
   }
@@ -1522,6 +1604,33 @@ prompt_install_mtproxy() {
   esac
 }
 
+prompt_install_onboarding() {
+  if [[ "${CFG_ONBOARDING_SKIP_PROMPT:-}" == "true" ]]; then
+    return
+  fi
+  local choice
+  _prompt_install_onboarding_header() {
+    local w
+    w="$(tui_term_width)"
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t onboarding_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t onboarding_screen_hint)" "$w"
+    draw_box_empty "$w"
+  }
+  UI_MENU_HEADER=_prompt_install_onboarding_header
+  ui_select_menu 0 \
+    "yes|$(cli_t onboarding_opt_yes)" \
+    "no|$(cli_t onboarding_opt_no)"
+  choice="$UI_SELECT_RESULT"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    no) CFG_ONBOARDING_TOUR="false" ;;
+    *) CFG_ONBOARDING_TOUR="true" ;;
+  esac
+}
+
 prompt_install_endpoints() {
   local ip
   ip="$(public_ip)"
@@ -1535,6 +1644,7 @@ prompt_install_endpoints() {
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="${CFG_MTPROXY_ENABLED:-true}"
+  CFG_ONBOARDING_TOUR="${CFG_ONBOARDING_TOUR:-true}"
 
   prompt_wizard_language
   initialize_protocol_config
@@ -1555,6 +1665,7 @@ prompt_install_endpoints() {
       prompt_install_mtproxy
       sync_simple_protocol_config
     fi
+    prompt_install_onboarding
     prompt_install_confirm "$ip"
     return
   fi
@@ -1584,6 +1695,7 @@ prompt_install_endpoints() {
         prompt_install_mtproxy
         sync_simple_protocol_config
       fi
+      prompt_install_onboarding
       prompt_install_confirm "$ip"
       return
     fi
@@ -1607,6 +1719,7 @@ prompt_install_endpoints() {
     prompt_install_mtproxy
     sync_simple_protocol_config
   fi
+  prompt_install_onboarding
   prompt_install_confirm "$ip"
 }
 
@@ -2783,6 +2896,7 @@ generate_env() {
   set_env_var "XRAY_ENABLED" "$CFG_XRAY_ENABLED"
   set_env_var "MTPROXY_ENABLED" "$CFG_MTPROXY_ENABLED"
   set_env_var "CREATE_DEFAULT_INBOUNDS" "$CFG_CREATE_DEFAULT_INBOUNDS"
+  set_env_var "ONBOARDING_TOUR" "${CFG_ONBOARDING_TOUR:-true}"
   set_env_var "UFW_ENABLED" "${CFG_USE_UFW:-true}"
   set_env_var "ENABLED_PROTOCOLS" "$CFG_ENABLED_PROTOCOLS"
   set_env_var "COMPOSE_PROFILES" "$CFG_ENABLED_CORES"
@@ -2860,6 +2974,7 @@ UFW_ENABLED=${CFG_USE_UFW:-true}
 SING_BOX_ENABLED=${CFG_SING_BOX_ENABLED}
 XRAY_ENABLED=${CFG_XRAY_ENABLED}
 MTPROXY_ENABLED=${CFG_MTPROXY_ENABLED:-true}
+ONBOARDING_TOUR=${CFG_ONBOARDING_TOUR:-true}
 CLI_LANG=${CLI_LANG}
 EOF
   apply_deploy_permissions
@@ -2980,6 +3095,9 @@ Options:
   --no-default-inbounds    Do not request default inbounds
   --with-mtproxy           Enable MTProxy / Telemt (default)
   --without-mtproxy        Skip MTProxy / Telemt
+  --with-onboarding-tour   Enable OWNER panel onboarding tour (default)
+  --without-onboarding-tour
+                           Disable OWNER panel onboarding tour
   --skip-dns               Do not wait for DNS before issuing certificates
   --no-nginx               Skip Nginx/TLS
   --no-ufw                 Do not touch UFW
@@ -3005,6 +3123,7 @@ cmd_install() {
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="true"
+  CFG_ONBOARDING_TOUR="true"
   CFG_CREATE_DEFAULT_INBOUNDS="true"
   CFG_USE_UFW="true"
 
@@ -3028,6 +3147,8 @@ cmd_install() {
       --no-default-inbounds) CFG_CREATE_DEFAULT_INBOUNDS="false"; shift ;;
       --with-mtproxy) flag_mtproxy="true"; shift ;;
       --without-mtproxy) flag_mtproxy="false"; shift ;;
+      --with-onboarding-tour) CFG_ONBOARDING_TOUR="true"; CFG_ONBOARDING_SKIP_PROMPT="true"; shift ;;
+      --without-onboarding-tour) CFG_ONBOARDING_TOUR="false"; CFG_ONBOARDING_SKIP_PROMPT="true"; shift ;;
       --skip-dns) CFG_SKIP_DNS="true"; shift ;;
       --no-nginx) with_nginx="false"; shift ;;
       --no-ufw) use_ufw="false"; CFG_USE_UFW="false"; CFG_UFW_DECIDED="true"; shift ;;

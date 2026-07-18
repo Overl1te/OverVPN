@@ -14,7 +14,7 @@ import {
   Typography,
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { UserStatus } from '@overvpn/shared/constants';
@@ -27,6 +27,7 @@ import { UserStatusTag } from '@/components/StatusTag';
 import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
+import { TOUR_ASSIST_EVENT, type TourAssistDetail } from '@/hooks/usePanelTour';
 import { buildSubscriptionUrl, formatBytes, sumByteCounts, usagePercent } from '@/utils/format';
 import dayjs from 'dayjs';
 
@@ -48,6 +49,18 @@ export function UsersListPage() {
   const [planOpen, setPlanOpen] = useState(false);
   const [extendDays, setExtendDays] = useState(30);
   const [bulkPlanId, setBulkPlanId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onAssist = (event: Event) => {
+      const detail = (event as CustomEvent<TourAssistDetail>).detail;
+      if (detail?.action !== 'create-user' || !canMutate) {
+        return;
+      }
+      navigate('/users/new');
+    };
+    window.addEventListener(TOUR_ASSIST_EVENT, onAssist);
+    return () => window.removeEventListener(TOUR_ASSIST_EVENT, onAssist);
+  }, [canMutate, navigate]);
 
   const usersQuery = useQuery({
     queryKey: ['users', page, pageSize, search, status, tag, planId],
@@ -149,10 +162,10 @@ export function UsersListPage() {
   return (
     <div>
       <PageHeader
-        title={t('users.title')}
+        title={<span data-tour="page-users">{t('users.title')}</span>}
         extra={
           <MutateOnly>
-            <Button type="primary" onClick={() => navigate('/users/new')}>
+            <Button type="primary" data-tour="create-user" onClick={() => navigate('/users/new')}>
               {t('users.create')}
             </Button>
           </MutateOnly>

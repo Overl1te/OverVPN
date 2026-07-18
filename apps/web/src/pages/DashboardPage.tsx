@@ -21,6 +21,7 @@ import { Column } from '@ant-design/charts';
 import { getDashboard, getHostStats, getSystemHealth, getUpdateStatus } from '@/api/system';
 import { PageHeader } from '@/components/PageHeader';
 import { useSetupProgress, type SetupStepId } from '@/hooks/useSetupProgress';
+import { usePanelTour } from '@/hooks/usePanelTour';
 import { formatBytes, formatBytesPerSecond } from '@/utils/format';
 import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
@@ -44,6 +45,7 @@ function memoryPercent(used: string | undefined, total: string | undefined): num
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const setup = useSetupProgress();
+  const panelTour = usePanelTour();
   const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(29, 'day').startOf('day'),
     dayjs().startOf('day'),
@@ -114,9 +116,22 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title={t('dashboard.title')} />
+      <PageHeader
+        title={<span data-tour="tour-welcome">{t('dashboard.title')}</span>}
+        extra={
+          panelTour.isOwner && panelTour.onboardingTourEnabled ? (
+            <Button
+              onClick={() => {
+                panelTour.relaunchTour();
+              }}
+            >
+              {t('tour.relaunch')}
+            </Button>
+          ) : null
+        }
+      />
       {setup.shouldShowChecklist ? (
-        <Card size="small" style={{ marginBottom: 12 }}>
+        <Card size="small" style={{ marginBottom: 12 }} data-tour="setup-checklist">
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <div
               style={{
@@ -143,9 +158,16 @@ export function DashboardPage() {
                   percent={Math.round((setup.doneCount / setup.totalSteps) * 100)}
                   format={() => `${setup.doneCount}/${setup.totalSteps}`}
                 />
-                <Link to="/setup">
-                  <Button type="primary">{t('setup.openGuide')}</Button>
-                </Link>
+                {panelTour.onboardingTourEnabled ? (
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      panelTour.relaunchTour();
+                    }}
+                  >
+                    {t('tour.relaunch')}
+                  </Button>
+                ) : null}
               </Space>
             </div>
             {setup.steps.map((step) => {

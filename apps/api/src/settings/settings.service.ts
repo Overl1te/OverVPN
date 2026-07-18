@@ -225,28 +225,64 @@ export class SettingsService {
     const existing = await this.prisma.systemConfig.findUnique({
       where: { key: SETTINGS_KEY },
     });
-    if (existing) {
+    if (!existing) {
+      const defaults: StoredSettings = {
+        panelUrl: null,
+        subPublicBaseUrl: this.config.get('SUB_PUBLIC_BASE_URL', {
+          infer: true,
+        }),
+        profileUpdateIntervalHours: this.config.get(
+          'SUB_PROFILE_UPDATE_INTERVAL_HOURS',
+          { infer: true },
+        ),
+        notifyTelegramEnabled: this.config.get('TELEGRAM_ENABLED', {
+          infer: true,
+        }),
+        featureFlags: {
+          onboardingTour: this.config.get('ONBOARDING_TOUR', { infer: true }),
+        },
+      };
+      await this.prisma.systemConfig.create({
+        data: {
+          key: SETTINGS_KEY,
+          value: defaults,
+          description: 'Panel system settings (non-secret)',
+          isSecret: false,
+          revision: 1,
+        },
+      });
       return;
     }
-    const defaults: StoredSettings = {
-      panelUrl: null,
-      subPublicBaseUrl: this.config.get('SUB_PUBLIC_BASE_URL', { infer: true }),
-      profileUpdateIntervalHours: this.config.get(
-        'SUB_PROFILE_UPDATE_INTERVAL_HOURS',
-        { infer: true },
-      ),
-      notifyTelegramEnabled: this.config.get('TELEGRAM_ENABLED', {
-        infer: true,
-      }),
-      featureFlags: {},
+
+    await this.ensureOnboardingTourFlag(existing.value, existing.revision);
+  }
+
+  /** Seed onboardingTour once from env when the flag was never stored. */
+  private async ensureOnboardingTourFlag(
+    rawValue: unknown,
+    revision: number,
+  ): Promise<void> {
+    const stored = parseStored(rawValue);
+    if (
+      Object.prototype.hasOwnProperty.call(
+        stored.featureFlags,
+        'onboardingTour',
+      )
+    ) {
+      return;
+    }
+    const next: StoredSettings = {
+      ...stored,
+      featureFlags: {
+        ...stored.featureFlags,
+        onboardingTour: this.config.get('ONBOARDING_TOUR', { infer: true }),
+      },
     };
-    await this.prisma.systemConfig.create({
+    await this.prisma.systemConfig.update({
+      where: { key: SETTINGS_KEY },
       data: {
-        key: SETTINGS_KEY,
-        value: defaults,
-        description: 'Panel system settings (non-secret)',
-        isSecret: false,
-        revision: 1,
+        value: next,
+        revision: revision + 1,
       },
     });
   }

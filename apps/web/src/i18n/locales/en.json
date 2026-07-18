@@ -124,6 +124,100 @@
     "updateAvailable": "Update available ({{current}} → {{latest}})",
     "updateChangelog": "View latest commit"
   },
+  "tour": {
+    "skip": "Skip",
+    "next": "Next",
+    "finish": "Finish",
+    "relaunch": "Start panel tour",
+    "assistCreate": "Create now",
+    "assistAlreadyDone": "Already created — you can continue.",
+    "skipConfirmTitle": "Skip this step?",
+    "skipConfirmBody": "Skip only this tip, cancel, or leave the whole tour.",
+    "skipStep": "Skip this step",
+    "skipCancel": "Cancel",
+    "skipAll": "Skip all",
+    "systemToggleTitle": "Onboarding tour",
+    "systemToggleLabel": "Show spotlight tour for OWNER on first login",
+    "systemToggleHint": "When off, the tour never auto-starts. You can still leave this enabled and dismiss the tour in the browser.",
+    "steps": {
+      "welcome": {
+        "title": "Welcome to the panel",
+        "body": "Access is built as Inbound → Plan → User → Subscription. Next we walk the left menu, then help you create the first pieces."
+      },
+      "nav-dashboard": {
+        "title": "Dashboard",
+        "body": "Traffic, online users, and host health at a glance."
+      },
+      "nav-inbounds": {
+        "title": "Inbounds",
+        "body": "VPN entry points: protocol and port clients connect to. Start here when adding a new protocol."
+      },
+      "nav-plans": {
+        "title": "Plans",
+        "body": "Limits and which inbounds go into a subscription profile."
+      },
+      "nav-users": {
+        "title": "Users",
+        "body": "Accounts, assigned plans, and subscription links / QR codes."
+      },
+      "nav-online": {
+        "title": "Online sessions",
+        "body": "Who is connected right now."
+      },
+      "nav-config": {
+        "title": "Core config",
+        "body": "Raw VPN core config and apply status after changes."
+      },
+      "nav-system": {
+        "title": "System",
+        "body": "Panel URL, subscription base URL, Telegram, admins, and updates."
+      },
+      "nav-backups": {
+        "title": "Backups",
+        "body": "Backup and restore the panel database."
+      },
+      "page-inbounds": {
+        "title": "Inbounds list",
+        "body": "Here you manage entry points. Create opens the inbound editor."
+      },
+      "page-plans": {
+        "title": "Plans list",
+        "body": "Here you manage plans and attach inbounds."
+      },
+      "page-users": {
+        "title": "Users list",
+        "body": "Here you create users and open cards for subscription links."
+      },
+      "system-panel-url": {
+        "title": "Panel URL",
+        "body": "Public URL of this admin panel (optional; used in links and clients)."
+      },
+      "system-sub-url": {
+        "title": "Subscription base URL",
+        "body": "Public base for subscription links that clients import."
+      },
+      "system-telegram": {
+        "title": "Telegram notifications",
+        "body": "Optional alerts for apply failures and updates. Configure token and chat below."
+      },
+      "assist-inbound": {
+        "title": "Create an inbound",
+        "body": "Create the first entry point together. Use Create now, or the highlighted button."
+      },
+      "assist-plan": {
+        "title": "Create a plan",
+        "body": "Attach inbounds and set limits. Use Create now, or the highlighted button."
+      },
+      "assist-user": {
+        "title": "Create a user",
+        "body": "Assign a plan — the subscription link appears on the user card."
+      },
+      "done": {
+        "title": "You are set",
+        "body": "The menu is on the left. If setup is incomplete, the dashboard checklist will remind you."
+      }
+    }
+  },
   "setup": {
     "title": "Initial setup",
     "guideTitle": "Panel guide",

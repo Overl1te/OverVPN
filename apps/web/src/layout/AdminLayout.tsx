@@ -17,11 +17,16 @@ import { PRODUCT_NAME } from '@overvpn/shared/constants';
 import type { Locale } from '@overvpn/shared/constants';
 import { useAuth } from '@/auth/AuthContext';
 import { SupportButton } from '@/components/SupportButton';
-import { useSetupProgress } from '@/hooks/useSetupProgress';
+import { PanelTour } from '@/components/PanelTour';
+import { usePanelTour } from '@/hooks/usePanelTour';
 import { persistLocale } from '@/i18n';
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 const { Header, Sider, Content } = Layout;
+
+function NavLabel({ tourId, children }: { tourId: string; children: ReactNode }) {
+  return <span data-tour={tourId}>{children}</span>;
+}
 
 function LocaleLogoutBar() {
   const { t, i18n } = useTranslation();
@@ -75,8 +80,13 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const setup = useSetupProgress();
-  const isSetupRoute = location.pathname === '/setup' || location.pathname.startsWith('/setup/');
+  const panelTour = usePanelTour();
+
+  useEffect(() => {
+    if (panelTour.shouldAutoStart) {
+      setCollapsed(false);
+    }
+  }, [panelTour.shouldAutoStart]);
 
   if (bootstrapping) {
     return (
@@ -90,24 +100,54 @@ export function AdminLayout() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  // Soft open guide once for incomplete OWNER setup; sidebar stays available.
-  // Leaving via the menu dismisses so the panel is never a cage.
-  if (setup.shouldShowWizard && !isSetupRoute && !setup.isLoading) {
-    return <Navigate to="/setup" replace />;
-  }
-
   const selected = `/${location.pathname.split('/')[1] || 'dashboard'}`;
 
   const items = [
-    { key: '/dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
-    { key: '/users', icon: <UserOutlined />, label: t('nav.users') },
-    { key: '/inbounds', icon: <CloudServerOutlined />, label: t('nav.inbounds') },
-    { key: '/plans', icon: <ProfileOutlined />, label: t('nav.plans') },
-    { key: '/online', icon: <WifiOutlined />, label: t('nav.online') },
-    { key: '/config', icon: <DeploymentUnitOutlined />, label: t('nav.config') },
-    { key: '/audit', icon: <AuditOutlined />, label: t('nav.audit') },
-    { key: '/system', icon: <SettingOutlined />, label: t('nav.system') },
-    { key: '/backups', icon: <DatabaseOutlined />, label: t('nav.backups') },
+    {
+      key: '/dashboard',
+      icon: <DashboardOutlined />,
+      label: <NavLabel tourId="nav-dashboard">{t('nav.dashboard')}</NavLabel>,
+    },
+    {
+      key: '/users',
+      icon: <UserOutlined />,
+      label: <NavLabel tourId="nav-users">{t('nav.users')}</NavLabel>,
+    },
+    {
+      key: '/inbounds',
+      icon: <CloudServerOutlined />,
+      label: <NavLabel tourId="nav-inbounds">{t('nav.inbounds')}</NavLabel>,
+    },
+    {
+      key: '/plans',
+      icon: <ProfileOutlined />,
+      label: <NavLabel tourId="nav-plans">{t('nav.plans')}</NavLabel>,
+    },
+    {
+      key: '/online',
+      icon: <WifiOutlined />,
+      label: <NavLabel tourId="nav-online">{t('nav.online')}</NavLabel>,
+    },
+    {
+      key: '/config',
+      icon: <DeploymentUnitOutlined />,
+      label: <NavLabel tourId="nav-config">{t('nav.config')}</NavLabel>,
+    },
+    {
+      key: '/audit',
+      icon: <AuditOutlined />,
+      label: <NavLabel tourId="nav-audit">{t('nav.audit')}</NavLabel>,
+    },
+    {
+      key: '/system',
+      icon: <SettingOutlined />,
+      label: <NavLabel tourId="nav-system">{t('nav.system')}</NavLabel>,
+    },
+    {
+      key: '/backups',
+      icon: <DatabaseOutlined />,
+      label: <NavLabel tourId="nav-backups">{t('nav.backups')}</NavLabel>,
+    },
   ];
 
   return (
@@ -122,12 +162,7 @@ export function AdminLayout() {
           mode="inline"
           selectedKeys={[selected === '/' || selected === '/setup' ? '/dashboard' : selected]}
           items={items}
-          onClick={({ key }) => {
-            if (setup.shouldShowWizard && key !== '/setup') {
-              setup.dismissWizard();
-            }
-            navigate(key);
-          }}
+          onClick={({ key }) => navigate(key)}
         />
         <SupportButton collapsed={collapsed} />
       </Sider>
@@ -139,6 +174,7 @@ export function AdminLayout() {
           <Outlet />
         </Content>
       </Layout>
+      <PanelTour />
     </Layout>
   );
 }

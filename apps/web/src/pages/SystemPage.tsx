@@ -5,6 +5,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Space,
   Switch,
   Table,
   Tag,
@@ -29,7 +30,7 @@ import dayjs from 'dayjs';
 
 export function SystemPage() {
   const { t, i18n } = useTranslation();
-  const { canMutate } = useAuth();
+  const { admin, canMutate } = useAuth();
   const showError = useApiErrorHandler();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
@@ -82,6 +83,17 @@ export function SystemPage() {
     mutationFn: updateSettings,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['system-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      message.success(t('app.success'));
+    },
+    onError: showError,
+  });
+
+  const tourFlagMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['system-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
       message.success(t('app.success'));
     },
     onError: showError,
@@ -219,16 +231,20 @@ export function SystemPage() {
                 saveMutation.mutate(payload);
               }}
             >
-              <Form.Item name="panelUrl" label={t('system.panelUrl')}>
-                <Input placeholder={t('system.panelUrlPlaceholder')} />
-              </Form.Item>
-              <Form.Item
-                name="subPublicBaseUrl"
-                label={t('system.subPublicBaseUrl')}
-                rules={[{ required: true }]}
-              >
-                <Input />
-              </Form.Item>
+              <div data-tour="system-panel-url">
+                <Form.Item name="panelUrl" label={t('system.panelUrl')}>
+                  <Input placeholder={t('system.panelUrlPlaceholder')} />
+                </Form.Item>
+              </div>
+              <div data-tour="system-sub-url">
+                <Form.Item
+                  name="subPublicBaseUrl"
+                  label={t('system.subPublicBaseUrl')}
+                  rules={[{ required: true }]}
+                >
+                  <Input />
+                </Form.Item>
+              </div>
               <Form.Item
                 name="profileUpdateIntervalHours"
                 label={t('system.profileUpdateIntervalHours')}
@@ -236,13 +252,15 @@ export function SystemPage() {
               >
                 <InputNumber min={1} max={168} style={{ width: '100%' }} />
               </Form.Item>
-              <Form.Item
-                name="notifyTelegramEnabled"
-                label={t('system.notifyTelegramEnabled')}
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
+              <div data-tour="system-telegram">
+                <Form.Item
+                  name="notifyTelegramEnabled"
+                  label={t('system.notifyTelegramEnabled')}
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
+              </div>
               <Form.Item
                 name="telegramBotToken"
                 label={t('system.telegramBotToken')}
@@ -285,6 +303,29 @@ export function SystemPage() {
           </>
         ) : null}
       </Card>
+
+      {settings && admin?.role === 'OWNER' ? (
+        <Card size="small" title={t('tour.systemToggleTitle')} style={{ marginBottom: 12 }}>
+          <Space align="center">
+            <Switch
+              checked={settings.featureFlags.onboardingTour !== false}
+              disabled={!canMutate || tourFlagMutation.isPending}
+              onChange={(checked) => {
+                tourFlagMutation.mutate({
+                  featureFlags: {
+                    ...settings.featureFlags,
+                    onboardingTour: checked,
+                  },
+                });
+              }}
+            />
+            <Typography.Text>{t('tour.systemToggleLabel')}</Typography.Text>
+          </Space>
+          <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+            {t('tour.systemToggleHint')}
+          </Typography.Paragraph>
+        </Card>
+      ) : null}
 
       <Card size="small" title={t('system.health')} loading={healthQuery.isLoading}>
         {health ? (
