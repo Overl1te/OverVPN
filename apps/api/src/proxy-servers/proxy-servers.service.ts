@@ -196,14 +196,18 @@ export class ProxyServersService {
       },
     });
     if (row.agentBaseUrl) {
-      const pushed = await this.coreApply.pushToAgentBestEffort(
-        row.id,
-        `Wizard apply for proxy ${row.name}`,
-      );
-      if (!pushed) {
-        this.logger.warn(
-          `Wizard saved for ${row.id} but agent push did not complete`,
+      const nodeToken = asObject(row.settings)[NODE_TOKEN_SETTINGS_KEY];
+      // Fresh wizard nodes have no token yet — skip push (agent not registered).
+      if (typeof nodeToken === 'string' && nodeToken.length > 0) {
+        const pushed = await this.coreApply.pushToAgentBestEffort(
+          row.id,
+          `Wizard apply for proxy ${row.name}`,
         );
+        if (!pushed) {
+          this.logger.warn(
+            `Wizard saved for ${row.id} but agent push did not complete`,
+          );
+        }
       }
     }
     return this.toSummary(row);

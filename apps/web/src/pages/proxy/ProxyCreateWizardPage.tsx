@@ -83,6 +83,7 @@ export function ProxyCreateWizardPage() {
   const [step, setStep] = useState(0);
   const [proxyId, setProxyId] = useState<string | null>(null);
   const [isLocal, setIsLocal] = useState(false);
+  const [network, setNetwork] = useState<NetworkValues | null>(null);
   const [selectedProtocols, setSelectedProtocols] = useState<InboundProtocol[]>([]);
   const [dnsResult, setDnsResult] = useState<ProxyDnsCheckResponse | null>(null);
   const [install, setInstall] = useState<ProxyInstallCommandResponse | null>(null);
@@ -232,26 +233,38 @@ export function ProxyCreateWizardPage() {
     } else {
       setDnsResult(null);
     }
+    // Persist outside the Form: step 2 unmounts Form.Item fields, so later
+    // getFieldsValue() would be empty and crash on .trim().
+    setNetwork({
+      clientDomain: domain,
+      ...(serverIp ? { serverIp } : {}),
+    });
     setStep(2);
   };
 
   const goNextFromProtocols = async () => {
     if (!proxyId) {
+      void message.error(t('app.error'));
       return;
     }
     if (selectedProtocols.length === 0) {
       void message.error(t('proxy.protocolsRequired'));
       return;
     }
-    const network = networkForm.getFieldsValue();
+    const clientDomain = network?.clientDomain?.trim();
+    if (!clientDomain) {
+      void message.error(t('proxy.clientDomainRequired'));
+      setStep(1);
+      return;
+    }
     const engines = [
       ...new Set(selectedProtocols.map((protocol) => PROTOCOL_ENGINE_MAP[protocol])),
     ] as CoreEngine[];
-    const agentBaseUrl = buildAgentBaseUrl(isLocal, network.serverIp);
+    const agentBaseUrl = buildAgentBaseUrl(isLocal, network?.serverIp);
     await wizardMutation.mutateAsync({
       id: proxyId,
       body: {
-        publicHost: network.clientDomain.trim(),
+        publicHost: clientDomain,
         enabledEngines: engines,
         enabledProtocols: selectedProtocols,
         heartbeatIntervalSec: DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC,
@@ -421,7 +434,15 @@ export function ProxyCreateWizardPage() {
             <Space>
               <Button onClick={() => setStep(1)}>{t('proxy.wizardBack')}</Button>
               <MutateOnly hint>
-                <Button type="primary" loading={busy} onClick={() => void goNextFromProtocols()}>
+                <Button
+                  type="primary"
+                  loading={busy}
+                  onClick={() => {
+                    void goNextFromProtocols().catch(() => {
+                      // API errors already toasted via mutation onError.
+                    });
+                  }}
+                >
                   {t('proxy.wizardNext')}
                 </Button>
               </MutateOnly>
