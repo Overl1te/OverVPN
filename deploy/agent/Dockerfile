@@ -43,7 +43,8 @@ WORKDIR /app
 COPY --from=build --chown=node:node /out/ ./
 COPY --chmod=755 deploy/agent/entrypoint.sh /usr/local/bin/overvpn-agent-entrypoint
 
-USER node
+# Entrypoint starts as root to chown volume mounts, then drops to `node`.
+USER root
 EXPOSE 7700
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:7700/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
