@@ -2134,7 +2134,24 @@ mark_install_complete() {
   date -u +%Y-%m-%dT%H:%M:%SZ >"$INSTALL_COMPLETE_FILE"
 }
 
+# If the shell's cwd is (or was) inside /opt/overvpn, rm -rf that tree makes
+# getcwd fail with "cannot access parent directories" and breaks the rest of install.
+ensure_safe_cwd() {
+  if ! pwd >/dev/null 2>&1; then
+    cd / || cd /tmp || true
+    return 0
+  fi
+  local cwd
+  cwd="$(pwd -P 2>/dev/null || pwd)"
+  case "$cwd" in
+    "$APP_DIR" | "$APP_DIR"/*)
+      cd / || cd /tmp || true
+      ;;
+  esac
+}
+
 cleanup_partial_install() {
+  ensure_safe_cwd
   colorized_echo yellow "$(cli_t partial_install_cleaning)"
   if [[ -f "$COMPOSE_FILE" && -f "$ENV_FILE" ]]; then
     compose down -v --remove-orphans --rmi all >/dev/null 2>&1 || true
@@ -2145,6 +2162,7 @@ cleanup_partial_install() {
   fi
   remove_overvpn_images
   remove_nginx_site
+  ensure_safe_cwd
   rm -rf "$APP_DIR"
   rm -f "$BIN_PATH"
 }
@@ -2776,6 +2794,7 @@ EOF
 
 fetch_repo() {
   local branch=$1
+  ensure_safe_cwd
   colorized_echo blue "$(cli_t fetching_repo "$branch" "$APP_DIR")"
   mkdir -p "$(dirname "$APP_DIR")"
 
@@ -2784,6 +2803,7 @@ fetch_repo() {
     git -C "$APP_DIR" checkout -B "$branch" "origin/${branch}"
     git -C "$APP_DIR" reset --hard "origin/${branch}"
   else
+    ensure_safe_cwd
     rm -rf "$APP_DIR"
     git clone --depth 1 --branch "$branch" "$REPO_URL" "$APP_DIR"
   fi
@@ -2799,6 +2819,7 @@ fetch_raw_file() {
 
 fetch_deploy_bundle() {
   local branch=$1
+  ensure_safe_cwd
   colorized_echo blue "$(cli_t downloading_bundle "$branch" "$APP_DIR")"
   mkdir -p \
     "$APP_DIR/deploy/landing/assets" \
@@ -3337,6 +3358,7 @@ EOF
 cmd_install() {
   check_root
   detect_os
+  ensure_safe_cwd
 
   local web_port="$DEFAULT_WEB_PORT" branch="$DEFAULT_BRANCH"
   local image_tag="$DEFAULT_IMAGE_TAG" do_build="false"
@@ -3512,6 +3534,7 @@ cmd_install() {
 cmd_install_proxy() {
   check_root
   detect_os
+  ensure_safe_cwd
 
   local branch="$DEFAULT_BRANCH" image_tag="$DEFAULT_IMAGE_TAG" do_build="false"
   local use_ufw="true"
