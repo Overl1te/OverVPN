@@ -233,6 +233,24 @@ export class ProxyServersService {
   }
 
   private panelBaseUrl(): string {
+    // Agent must hit the panel API (/api/agent/...), not the subscription vhost.
+    const cors = this.config.get('CORS_ORIGINS', { infer: true });
+    const fromCors = cors.find((origin) => {
+      try {
+        const url = new URL(origin);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    });
+    if (fromCors) {
+      try {
+        const url = new URL(fromCors);
+        return `${url.protocol}//${url.host}`;
+      } catch {
+        /* fall through */
+      }
+    }
     const sub = this.config.get('SUB_PUBLIC_BASE_URL', { infer: true });
     try {
       const url = new URL(sub);
