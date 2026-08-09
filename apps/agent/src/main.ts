@@ -13,18 +13,23 @@ async function main(): Promise<void> {
 
   const bootstrapLogger = {
     info: (obj: unknown, msg?: string) => {
-      console.info(msg ?? '', obj);
+      console.info(msg ?? '', typeof obj === 'string' ? obj : JSON.stringify(obj));
     },
     warn: (obj: unknown, msg?: string) => {
-      console.warn(msg ?? '', obj);
+      console.warn(msg ?? '', typeof obj === 'string' ? obj : JSON.stringify(obj));
     },
     error: (obj: unknown, msg?: string) => {
-      console.error(msg ?? '', obj);
+      console.error(msg ?? '', typeof obj === 'string' ? obj : JSON.stringify(obj));
     },
   };
 
   const panelLoop = new PanelLoop(env, apply, bootstrapLogger);
   const { app } = await buildServer({ env, apply, panelLoop });
+  panelLoop.setLogger({
+    info: (obj, msg) => app.log.info(obj as object, msg),
+    warn: (obj, msg) => app.log.warn(obj as object, msg),
+    error: (obj, msg) => app.log.error(obj as object, msg),
+  });
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'Shutting down agent');
@@ -42,11 +47,12 @@ async function main(): Promise<void> {
       version: resolveAgentVersion(env),
       panelUrl: env.PANEL_URL,
       skipCoreReload: env.SKIP_CORE_RELOAD,
+      logDir: env.LOG_DIR ?? null,
+      logRetentionDays: env.LOG_RETENTION_DAYS,
     },
     'OverVPN agent listening',
   );
 
-  // Background register/heartbeat/desired pull — failures are logged, not fatal.
   void panelLoop.start().catch((error: unknown) => {
     app.log.warn({ err: error }, 'Panel loop failed to start');
   });

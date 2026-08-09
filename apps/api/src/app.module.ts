@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -13,6 +14,10 @@ import { JwtAuthenticationGuard, RolesGuard } from './common/authorization';
 import { SupportIntegrityGuard } from './common/support-integrity';
 import { SupportIntegrityModule } from './common/support-integrity.module';
 import { BigIntSerializationInterceptor } from './common/bigint-serialization';
+import {
+  redactLogData,
+  shouldLogRequestBody,
+} from './common/log-redact';
 import type { AppEnvironment } from './config/environment';
 import { validateEnvironment } from './config/environment';
 import { CoreModule } from './core/core.module';
@@ -40,6 +45,55 @@ function requestId(request: IncomingMessage, response: ServerResponse): string {
   return id;
 }
 
+type RequestWithBody = IncomingMessage & { body?: unknown };
+
+function buildPinoTransport(
+  nodeEnv: string,
+  logDir: string | undefined,
+  retentionDays: number,
+) {
+  if (nodeEnv === 'development') {
+    return {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        singleLine: true,
+        translateTime: 'SYS:standard',
+      },
+    };
+  }
+
+  const targets: Array<{
+    target: string;
+    options: Record<string, unknown>;
+    level?: string;
+  }> = [
+    {
+      target: 'pino/file',
+      options: { destination: 1 },
+    },
+  ];
+
+  if (logDir) {
+    targets.push({
+      target: 'pino-roll',
+      options: {
+        file: join(logDir, 'api'),
+        frequency: 'daily',
+        mkdir: true,
+        dateFormat: 'yyyy-MM-dd',
+        extension: '.log',
+        limit: {
+          count: Math.max(1, retentionDays - 1),
+          removeOtherLogFiles: true,
+        },
+      },
+    });
+  }
+
+  return { targets };
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -59,6 +113,15 @@ function requestId(request: IncomingMessage, response: ServerResponse): string {
           autoLogging: {
             ignore: (request) =>
               /^\/api\/sub\/[^/?]+(?:\/info)?(?:\?|$)/.test(request.url ?? ''),
+          },
+          customProps: (request: IncomingMessage) => {
+            const withBody = request as RequestWithBody;
+            if (!shouldLogRequestBody(withBody.method)) {
+              return {};
+            }
+            return {
+              reqBody: redactLogData(withBody.body),
+            };
           },
           redact: {
             paths: [
@@ -85,20 +148,23 @@ function requestId(request: IncomingMessage, response: ServerResponse): string {
               'res.body.uri',
               'res.body.password',
               'res.headers["set-cookie"]',
+              'reqBody.password',
+              'reqBody.currentPassword',
+              'reqBody.newPassword',
+              'reqBody.totpCode',
+              'reqBody.secret',
+              'reqBody.accessToken',
+              'reqBody.refreshToken',
+              'reqBody.nodeToken',
+              'reqBody.installToken',
             ],
             censor: '[REDACTED]',
           },
-          transport:
-            config.get('NODE_ENV', { infer: true }) === 'development'
-              ? {
-                  target: 'pino-pretty',
-                  options: {
-                    colorize: true,
-                    singleLine: true,
-                    translateTime: 'SYS:standard',
-                  },
-                }
-              : undefined,
+          transport: buildPinoTransport(
+            config.get('NODE_ENV', { infer: true }),
+            config.get('LOG_DIR', { infer: true }),
+            config.get('LOG_RETENTION_DAYS', { infer: true }),
+          ),
         },
       }),
     }),

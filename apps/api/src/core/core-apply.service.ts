@@ -142,10 +142,21 @@ export class CoreApplyService {
       where: { id: proxyServerId },
     });
     if (!proxy?.agentBaseUrl) {
+      this.logger.log({
+        msg: 'Best-effort agent push skipped (no agentBaseUrl)',
+        proxyServerId,
+        reason,
+      });
       return null;
     }
+    this.logger.log({
+      msg: 'Best-effort agent push starting',
+      proxyServerId,
+      reason,
+      agentBaseUrl: proxy.agentBaseUrl,
+    });
     try {
-      return await this.apply(
+      const summary = await this.apply(
         null,
         { reason },
         'MUTATION',
@@ -156,12 +167,21 @@ export class CoreApplyService {
         },
         { proxyServerId },
       );
+      this.logger.log({
+        msg: 'Best-effort agent push completed',
+        proxyServerId,
+        reason,
+        status: summary.status,
+        applyRecordId: summary.id,
+      });
+      return summary;
     } catch (error: unknown) {
-      this.logger.warn(
-        `Best-effort agent push failed for ${proxyServerId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      this.logger.warn({
+        msg: 'Best-effort agent push failed',
+        proxyServerId,
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
@@ -198,6 +218,20 @@ export class CoreApplyService {
 
     try {
       const desired = await this.buildAgentDesired(proxy);
+      this.logger.log({
+        msg: 'Core apply via agent starting',
+        proxyServerId: proxy.id,
+        agentBaseUrl: proxy.agentBaseUrl,
+        applyRecordId: initial.id.toString(),
+        revision: desired.revision,
+        engines: desired.engines.map((engine) => ({
+          engine: engine.engine,
+          enabled: engine.enabled,
+          configHash: engine.configHash ?? null,
+        })),
+        reason: input.reason,
+        trigger,
+      });
       const push = await this.agentTransport.postApply({
         agentBaseUrl: proxy.agentBaseUrl,
         nodeToken,
@@ -205,6 +239,15 @@ export class CoreApplyService {
       });
       const completedAt = new Date();
       const status: CoreApplyStatus = push.ok ? 'SUCCEEDED' : 'FAILED';
+      this.logger.log({
+        msg: 'Core apply via agent finished',
+        proxyServerId: proxy.id,
+        applyRecordId: initial.id.toString(),
+        status,
+        httpStatus: push.status,
+        error: push.error,
+        result: push.result,
+      });
       const desiredHash =
         push.result?.configHash ??
         compositeHash(

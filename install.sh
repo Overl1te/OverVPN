@@ -777,7 +777,7 @@ cli_t() {
       menu_update_apply) printf '%s' "Обновить сейчас" ;;
       menu_update_back) printf '%s' "Назад" ;;
       menu_not_installed_hint) printf '%s' "OverVPN ещё не установлен. Запустите: overvpn install" ;;
-      menu_logs_hint) printf '%s' "Логи (Ctrl+C — назад). Сервис пусто = все:" ;;
+      menu_logs_hint) printf '%s' "Логи (Ctrl+C — назад). Сервис пусто = все. Файлы также в ${APP_DIR}/logs" ;;
       unsupported_os) printf '%s' "Неподдерживаемая ОС: /etc/os-release не найден." ;;
       os_warning) printf 'Внимание: проверено на Ubuntu/Debian. Обнаружено: %s.' "$1" ;;
       installing_packages) printf '%s' "Устанавливаем необходимые пакеты…" ;;
@@ -884,6 +884,7 @@ cli_t() {
       config_usage) printf 'Использование: %s config show|sync|set-domain|nginx|certs|apply' "$1" ;;
       unknown_command) printf 'Неизвестная команда: %s' "$1" ;;
       info_install_dir) printf 'Каталог установки:  %s' "$1" ;;
+      info_logs_dir) printf 'Файловые логи:     %s (хранение ~7 дней)' "$1" ;;
       info_panel_url) printf 'URL панели:    %s' "$1" ;;
       info_sub_base) printf 'База подписок: %s' "$1" ;;
       info_vpn_host) printf 'VPN-хост:     %s' "$1" ;;
@@ -1014,7 +1015,7 @@ cli_t() {
       menu_update_apply) printf '%s' "Update now" ;;
       menu_update_back) printf '%s' "Back" ;;
       menu_not_installed_hint) printf '%s' "OverVPN is not installed yet. Run: overvpn install" ;;
-      menu_logs_hint) printf '%s' "Logs (Ctrl+C to return). Empty service = all:" ;;
+      menu_logs_hint) printf '%s' "Logs (Ctrl+C to return). Empty service = all. Files also in ${APP_DIR}/logs" ;;
       unsupported_os) printf '%s' "Unsupported OS: /etc/os-release not found." ;;
       os_warning) printf 'Warning: tested on Ubuntu/Debian. Detected: %s.' "$1" ;;
       installing_packages) printf '%s' "Installing required packages..." ;;
@@ -1121,6 +1122,7 @@ cli_t() {
       config_usage) printf 'Use: %s config show|sync|set-domain|nginx|certs|apply' "$1" ;;
       unknown_command) printf 'Unknown command: %s' "$1" ;;
       info_install_dir) printf 'Install dir:  %s' "$1" ;;
+      info_logs_dir) printf 'File logs:     %s (~7 day retention)' "$1" ;;
       info_panel_url) printf 'Panel URL:    %s' "$1" ;;
       info_sub_base) printf 'Sub base:     %s' "$1" ;;
       info_vpn_host) printf 'VPN host:     %s' "$1" ;;
@@ -2827,7 +2829,10 @@ fetch_deploy_bundle() {
     "$APP_DIR/deploy/xray/certs" \
     "$APP_DIR/deploy/mtproxy" \
     "$APP_DIR/deploy/proxy" \
-    "$APP_DIR/deploy/agent"
+    "$APP_DIR/deploy/agent" \
+    "$APP_DIR/deploy/logrotate" \
+    "$APP_DIR/logs/api" \
+    "$APP_DIR/logs/agent"
 
   local -a files=(
     ".env.example"
@@ -2835,6 +2840,7 @@ fetch_deploy_bundle() {
     "deploy/docker-compose.proxy.yml"
     "deploy/agent/Dockerfile"
     "deploy/agent/entrypoint.sh"
+    "deploy/logrotate/overvpn"
     "deploy/landing/index.html"
     "deploy/landing/sub.html"
     "deploy/landing/vpn.html"
@@ -2893,11 +2899,24 @@ apply_deploy_permissions() {
   if [[ ! -d "$APP_DIR" ]]; then
     return 0
   fi
+  mkdir -p "$APP_DIR/logs/api" "$APP_DIR/logs/agent"
   chmod -R a+rX "$APP_DIR"
   [[ -f "$ENV_FILE" ]] && chmod a+r "$ENV_FILE"
   [[ -f "$CREDENTIALS_FILE" ]] && chmod a+r "$CREDENTIALS_FILE"
   [[ -f "$INSTALL_CONF" ]] && chmod a+r "$INSTALL_CONF"
   [[ -f "${APP_DIR}/install.sh" ]] && chmod a+rX "${APP_DIR}/install.sh"
+  install_logrotate
+}
+
+install_logrotate() {
+  local src="${APP_DIR}/deploy/logrotate/overvpn"
+  local dest="/etc/logrotate.d/overvpn"
+  if [[ ! -f "$src" ]]; then
+    return 0
+  fi
+  # Rewrite paths for the actual install dir (default /opt/overvpn).
+  sed "s|/opt/overvpn|${APP_DIR}|g" "$src" >"$dest"
+  chmod 644 "$dest"
 }
 
 set_install_conf_var() {
@@ -3919,6 +3938,7 @@ cmd_info() {
   is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
 
   echo "$(cli_t info_install_dir "$APP_DIR")"
+  echo "$(cli_t info_logs_dir "${APP_DIR}/logs")"
   if [[ -f "$CREDENTIALS_FILE" ]]; then
     echo "$(cli_t info_panel_url "$(get_env_var PANEL_URL "$CREDENTIALS_FILE")")"
     echo "$(cli_t info_sub_base "$(get_env_var SUB_PUBLIC_BASE_URL "$CREDENTIALS_FILE")")"

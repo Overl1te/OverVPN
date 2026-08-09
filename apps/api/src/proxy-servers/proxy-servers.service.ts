@@ -96,6 +96,12 @@ export class ProxyServersService {
         settings: input.note ? { note: input.note } : {},
       },
     });
+    this.logger.log({
+      msg: 'Proxy server created',
+      id: row.id,
+      name: row.name,
+      isLocal: row.isLocal,
+    });
     return this.toSummary(row);
   }
 
@@ -131,6 +137,15 @@ export class ProxyServersService {
         ...(input.status !== undefined ? { status: input.status } : {}),
       },
     });
+    this.logger.log({
+      msg: 'Proxy server updated',
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      publicHost: row.publicHost,
+      agentBaseUrl: row.agentBaseUrl,
+      changes: Object.keys(input),
+    });
     return this.toSummary(row);
   }
 
@@ -159,6 +174,12 @@ export class ProxyServersService {
       `--token ${shellQuote(installToken)}`,
       `--node-id ${shellQuote(id)}`,
     ].join(' ');
+    this.logger.log({
+      msg: 'Proxy install command created',
+      proxyServerId: id,
+      expiresAt: expiresAt.toISOString(),
+      panelUrl,
+    });
     return {
       proxyServerId: id,
       installToken,
@@ -208,8 +229,22 @@ export class ProxyServersService {
             `Wizard saved for ${row.id} but agent push did not complete`,
           );
         }
+      } else {
+        this.logger.log({
+          msg: 'Wizard saved; agent push skipped (no node token yet)',
+          id: row.id,
+        });
       }
     }
+    this.logger.log({
+      msg: 'Proxy wizard applied',
+      id: row.id,
+      name: row.name,
+      publicHost: row.publicHost,
+      agentBaseUrl: row.agentBaseUrl,
+      enabledEngines: input.enabledEngines,
+      enabledProtocols: input.enabledProtocols,
+    });
     return this.toSummary(row);
   }
 
@@ -219,6 +254,7 @@ export class ProxyServersService {
       where: { id },
       data: { status: 'DISABLED', lastError: null },
     });
+    this.logger.log({ msg: 'Proxy server disabled', id: row.id, name: row.name });
     return this.toSummary(row);
   }
 
@@ -228,6 +264,7 @@ export class ProxyServersService {
       where: { id },
       data: { status: 'PENDING', lastError: null },
     });
+    this.logger.log({ msg: 'Proxy server enabled', id: row.id, name: row.name });
     return this.toSummary(row);
   }
 
@@ -262,6 +299,12 @@ export class ProxyServersService {
       }
       await tx.proxyServer.delete({ where: { id } });
       return inboundIds.length;
+    });
+    this.logger.log({
+      msg: 'Proxy server deleted',
+      id,
+      name: existing.name,
+      inboundsRemoved,
     });
     return { id, inboundsRemoved };
   }

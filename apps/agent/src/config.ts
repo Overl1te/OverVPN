@@ -35,6 +35,11 @@ const environmentSchema = z
     PULL_DESIRED_ENABLED: booleanish.default(true),
     SKIP_CORE_RELOAD: booleanish.default(false),
     PANEL_TIMEOUT_MS: positiveInt.default(15_000),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
+    LOG_DIR: z.preprocess(emptyToUndefined, z.string().trim().min(1).optional()),
+    LOG_RETENTION_DAYS: positiveInt.default(7),
 
     SING_BOX_CONFIG_PATH: z.string().default('/var/lib/sing-box/config.json'),
     SING_BOX_LAST_KNOWN_GOOD_PATH: z

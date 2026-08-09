@@ -13,9 +13,16 @@
 # Remote proxy: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy
 # Panel only:   COMPOSE_PROFILES=panel
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '50m'
+    max-file: '20'
+
 x-service-security: &service-security
   security_opt:
     - no-new-privileges:true
+  logging: *default-logging
 
 x-agent-environment: &agent-environment
   NODE_ENV: production
@@ -32,6 +39,8 @@ x-agent-environment: &agent-environment
   PULL_DESIRED_ENABLED: ${PULL_DESIRED_ENABLED:-true}
   SKIP_CORE_RELOAD: ${SKIP_CORE_RELOAD:-false}
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_DIR: ${LOG_DIR:-/var/log/overvpn}
+  LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-7}
   SING_BOX_CONFIG_PATH: /var/lib/sing-box/config.json
   SING_BOX_LAST_KNOWN_GOOD_PATH: /var/lib/sing-box/config.last-known-good.json
   SING_BOX_RELOAD_REQUEST_PATH: /var/lib/overvpn/reload/request
@@ -89,6 +98,7 @@ services:
       - mtproxy_config:/var/lib/mtproxy
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
+      - ../logs/agent:/var/log/overvpn
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777

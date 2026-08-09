@@ -22,6 +22,8 @@ const environment: AppEnvironment = {
   REDIS_URL: 'redis://localhost:6379',
   CORS_ORIGINS: ['http://localhost:5173'],
   LOG_LEVEL: 'silent',
+  LOG_DIR: undefined,
+  LOG_RETENTION_DAYS: 7,
   TRUST_PROXY: false,
   SWAGGER_ENABLED: false,
   JWT_ACCESS_SECRET: 'jwt-test-key-which-is-longer-than-thirty-two-bytes',

@@ -8,6 +8,8 @@ x-api-environment: &api-environment
   REDIS_URL: ${REDIS_URL:?Set REDIS_URL in .env}
   CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env}
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_DIR: ${LOG_DIR:-/var/log/overvpn}
+  LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-7}
   TRUST_PROXY: ${TRUST_PROXY:-true}
   SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
   JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
@@ -122,9 +124,16 @@ x-api-build: &api-build
   args:
     OVERVPN_GIT_SHA: ${OVERVPN_GIT_SHA:-}
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '50m'
+    max-file: '20'
+
 x-service-security: &service-security
   security_opt:
     - no-new-privileges:true
+  logging: *default-logging
 
 # Profiles:
 #   panel  — postgres / redis / migrate / api / web
@@ -446,6 +455,7 @@ services:
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
       - backup_data:/var/lib/overvpn/backups
+      - ../logs/api:/var/log/overvpn
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777

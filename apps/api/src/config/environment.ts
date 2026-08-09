@@ -115,6 +115,11 @@ export const environmentSchema = z
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
+    LOG_DIR: z.preprocess(
+      (value) => (value === '' || value === undefined ? undefined : value),
+      z.string().trim().min(1).optional(),
+    ),
+    LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(90).default(7),
     TRUST_PROXY: booleanFromEnvironment.default(false),
     SWAGGER_ENABLED: booleanFromEnvironment.default(true),
     JWT_ACCESS_SECRET: z.string().min(32),

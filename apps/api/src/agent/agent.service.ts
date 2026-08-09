@@ -55,6 +55,16 @@ export class AgentService {
       },
     });
 
+    this.logger.log({
+      msg: 'Agent registered',
+      proxyServerId: updated.id,
+      hostname: input.hostname,
+      agentVersion: input.agentVersion ?? null,
+      agentBaseUrl: input.agentBaseUrl,
+      heartbeatIntervalSec: updated.heartbeatIntervalSec,
+      status: updated.status,
+    });
+
     return {
       proxyServerId: updated.id,
       nodeToken,
@@ -83,6 +93,14 @@ export class AgentService {
         settings: settings as Prisma.InputJsonValue,
       },
     });
+    this.logger.log({
+      msg: 'Agent heartbeat',
+      proxyServerId: proxyServer.id,
+      status: input.status,
+      engines: input.engines,
+      load: input.load ?? null,
+      errorMessage: input.errorMessage ?? null,
+    });
     return { ok: true, status: updated.status };
   }
 
@@ -105,15 +123,34 @@ export class AgentService {
         settings: settings as Prisma.InputJsonValue,
       },
     });
-    // Full traffic/online ingestion is wired in gate-integrate / workers track.
-    this.logger.debug(
-      `Accepted agent stats for ${proxyServer.id}: traffic=${String(input.traffic.length)} online=${String(input.online.length)}`,
-    );
+    this.logger.log({
+      msg: 'Agent stats accepted',
+      proxyServerId: proxyServer.id,
+      collectedAt: input.collectedAt,
+      trafficCount: input.traffic.length,
+      onlineCount: input.online.length,
+      online: input.online.slice(0, 50),
+      trafficSample: input.traffic.slice(0, 20),
+    });
     return { ok: true };
   }
 
   async desired(proxyServer: ProxyServer): Promise<AgentDesiredState> {
-    return this.buildDesiredState(proxyServer.id, proxyServer.enabledEngines);
+    const desired = await this.buildDesiredState(
+      proxyServer.id,
+      proxyServer.enabledEngines,
+    );
+    this.logger.log({
+      msg: 'Agent desired state served',
+      proxyServerId: proxyServer.id,
+      revision: desired.revision,
+      engines: desired.engines.map((engine) => ({
+        engine: engine.engine,
+        enabled: engine.enabled,
+        configHash: engine.configHash ?? null,
+      })),
+    });
+    return desired;
   }
 
   async applyResult(
@@ -121,6 +158,15 @@ export class AgentService {
     input: AgentApplyResult,
   ): Promise<{ ok: true }> {
     const appliedAt = new Date();
+    this.logger.log({
+      msg: 'Agent apply-result received',
+      proxyServerId: proxyServer.id,
+      revision: input.revision,
+      success: input.success,
+      configHash: input.configHash ?? null,
+      errorMessage: input.errorMessage ?? null,
+      engineResults: input.engineResults,
+    });
     await this.prisma.$transaction(async (tx) => {
       for (const engineResult of input.engineResults) {
         const succeeded = input.success && engineResult.success;

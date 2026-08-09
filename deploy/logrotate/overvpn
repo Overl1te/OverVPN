@@ -1,0 +1,13 @@
+/opt/overvpn/logs/api/*.log
+/opt/overvpn/logs/agent/*.log
+{
+    daily
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}

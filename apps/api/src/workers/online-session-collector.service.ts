@@ -239,6 +239,22 @@ export class OnlineSessionCollectorService {
           } else {
             await this.health.markSuccess(WORKER_NAME, startedAt, details);
           }
+          if (snapshot.clients.length > 0 || result.disconnected > 0) {
+            this.logger.log({
+              msg: 'Online sessions collected',
+              status: degraded ? 'DEGRADED' : 'HEALTHY',
+              observed: snapshot.clients.length,
+              resolved: result.resolved,
+              disconnected: result.disconnected,
+              clients: snapshot.clients.slice(0, 50).map((client) => ({
+                engine: client.engine,
+                panelUserId: client.panelUserId,
+                inboundTag: client.inboundTag,
+                connectionId: client.connectionId,
+              })),
+              warnings: snapshot.warnings.slice(0, 10),
+            });
+          }
           return {
             acquired: true,
             status: degraded ? ('DEGRADED' as const) : ('HEALTHY' as const),

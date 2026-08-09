@@ -23,25 +23,38 @@ export class PanelLoop {
   constructor(
     private readonly env: AgentEnvironment,
     private readonly apply: ApplyService,
-    private readonly logger: {
+    private logger: {
       info: (obj: unknown, msg?: string) => void;
       warn: (obj: unknown, msg?: string) => void;
       error: (obj: unknown, msg?: string) => void;
     },
   ) {
-    this.panel = new PanelClient(env, () => {
-      const id = this.credentials.proxyServerId ?? this.env.NODE_ID;
-      if (!id) {
-        throw new Error('NODE_ID is required for panel API calls');
-      }
-      return id;
-    });
+    this.panel = new PanelClient(
+      env,
+      () => {
+        const id = this.credentials.proxyServerId ?? this.env.NODE_ID;
+        if (!id) {
+          throw new Error('NODE_ID is required for panel API calls');
+        }
+        return id;
+      },
+      this.logger,
+    );
     this.statePath = resolveStatePath(env);
     this.credentials = {
       proxyServerId: env.NODE_ID,
       nodeToken: env.NODE_TOKEN,
       heartbeatIntervalSec: env.HEARTBEAT_INTERVAL_SEC,
     };
+  }
+
+  setLogger(logger: {
+    info: (obj: unknown, msg?: string) => void;
+    warn: (obj: unknown, msg?: string) => void;
+    error: (obj: unknown, msg?: string) => void;
+  }): void {
+    this.logger = logger;
+    this.panel.setLogger(logger);
   }
 
   getCredentials(): RuntimeCredentials {

@@ -9,6 +9,7 @@ import {
 import type { AgentEnvironment } from './config.js';
 import { resolveAgentHostname, resolveAgentVersion } from './config.js';
 import type { ApplyService } from './core/apply.js';
+import { buildAgentLoggerOptions } from './logger.js';
 import type { PanelLoop } from './panel/loop.js';
 
 export type AgentApp = {
@@ -23,7 +24,11 @@ export async function buildServer(input: {
   panelLoop: PanelLoop;
 }): Promise<AgentApp> {
   const app = Fastify({
-    logger: true,
+    logger: buildAgentLoggerOptions({
+      level: input.env.LOG_LEVEL,
+      logDir: input.env.LOG_DIR,
+      retentionDays: input.env.LOG_RETENTION_DAYS,
+    }),
     trustProxy: true,
   });
 
@@ -78,12 +83,34 @@ export async function buildServer(input: {
 
   app.post('/v1/apply', { preHandler: requireNodeToken }, async (request, reply) => {
     const desired = agentApplyRequestSchema.parse(request.body);
+    request.log.info(
+      {
+        revision: desired.revision,
+        engines: desired.engines.map((engine) => ({
+          engine: engine.engine,
+          enabled: engine.enabled,
+          configHash: engine.configHash ?? null,
+        })),
+      },
+      'Apply request received',
+    );
     const result = await input.apply.apply(desired);
+    request.log.info(
+      {
+        revision: result.revision,
+        success: result.success,
+        configHash: result.configHash,
+        errorMessage: result.errorMessage,
+        engineResults: result.engineResults,
+      },
+      'Apply request finished',
+    );
     return reply.code(result.success ? 200 : 500).send(result);
   });
 
   app.post('/v1/cores', { preHandler: requireNodeToken }, async (request) => {
     const command = agentCoresCommandSchema.parse(request.body);
+    request.log.info({ command }, 'Cores command accepted');
     // Stub until gate-integrate wires enable/disable/update lifecycle.
     return {
       ok: true,
@@ -93,12 +120,14 @@ export async function buildServer(input: {
     };
   });
 
-  app.post('/v1/reload', { preHandler: requireNodeToken }, async (_request, reply) => {
+  app.post('/v1/reload', { preHandler: requireNodeToken }, async (request, reply) => {
+    request.log.info('Reload-all request received');
     const result = await input.apply.reloadAllKnown();
+    request.log.info({ result }, 'Reload-all finished');
     return reply.code(result.success ? 200 : 500).send(result);
   });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     if (error && typeof error === 'object' && 'name' in error) {
       const name = (error as { name?: string }).name;
       if (name === 'ZodError') {
@@ -109,7 +138,7 @@ export async function buildServer(input: {
         });
       }
     }
-    requestErrorLog(app, error);
+    request.log.error({ err: error }, 'Unhandled agent error');
     const statusCode =
       typeof error === 'object' &&
       error !== null &&
@@ -128,8 +157,4 @@ export async function buildServer(input: {
     apply: input.apply,
     panelLoop: input.panelLoop,
   };
-}
-
-function requestErrorLog(app: FastifyInstance, error: unknown): void {
-  app.log.error({ err: error }, 'Unhandled agent error');
 }

@@ -4,6 +4,7 @@ import type {
   AgentApplyResult,
 } from '@overvpn/shared/schemas';
 import { agentApplyResultSchema } from '@overvpn/shared/schemas';
+import { redactLogData } from '../common/log-redact';
 
 export interface HttpAgentApplyOutcome {
   ok: boolean;
@@ -29,6 +30,20 @@ export class HttpAgentTransport {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     timeout.unref();
     const startedAt = performance.now();
+    const requestSummary = {
+      revision: options.body.revision,
+      engines: options.body.engines.map((engine) => ({
+        engine: engine.engine,
+        enabled: engine.enabled,
+        configHash: engine.configHash ?? null,
+      })),
+    };
+    this.logger.log({
+      msg: 'Agent apply request',
+      url,
+      timeoutMs,
+      request: requestSummary,
+    });
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -47,18 +62,25 @@ export class HttpAgentTransport {
         try {
           parsed = JSON.parse(text) as unknown;
         } catch {
-          parsed = null;
+          parsed = { raw: text.slice(0, 2000) };
         }
       }
       const resultParse = agentApplyResultSchema.safeParse(parsed);
       const result = resultParse.success ? resultParse.data : null;
       const ok = response.ok && (result?.success ?? true);
-      if (!ok) {
-        this.logger.warn(
-          `Agent apply failed at ${url}: status=${String(response.status)} latencyMs=${String(
-            Math.round(performance.now() - startedAt),
-          )}`,
-        );
+      const latencyMs = Math.round(performance.now() - startedAt);
+      const logPayload = {
+        msg: ok ? 'Agent apply response' : 'Agent apply failed',
+        url,
+        status: response.status,
+        latencyMs,
+        request: requestSummary,
+        response: redactLogData(result ?? parsed),
+      };
+      if (ok) {
+        this.logger.log(logPayload);
+      } else {
+        this.logger.warn(logPayload);
       }
       return {
         ok,
@@ -71,7 +93,13 @@ export class HttpAgentTransport {
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Agent apply transport error at ${url}: ${message}`);
+      this.logger.warn({
+        msg: 'Agent apply transport error',
+        url,
+        latencyMs: Math.round(performance.now() - startedAt),
+        request: requestSummary,
+        error: message,
+      });
       return {
         ok: false,
         status: 0,

@@ -86,6 +86,17 @@ export class AuditService {
         details,
       },
     });
+    this.logger.log({
+      msg: 'Audit event',
+      action: event.action,
+      outcome: event.outcome ?? 'SUCCESS',
+      actorAdminId: event.actorAdminId ?? null,
+      resourceType: event.resourceType ?? null,
+      resourceId: event.resourceId ?? null,
+      requestId: event.requestId ?? null,
+      ipAddress: event.ipAddress ?? null,
+      details,
+    });
   }
 
   async recordFailureSafely(event: AuditEvent): Promise<void> {
