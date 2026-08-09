@@ -2900,6 +2900,9 @@ apply_deploy_permissions() {
     return 0
   fi
   mkdir -p "$APP_DIR/logs/api" "$APP_DIR/logs/agent"
+  # API/agent run as uid 1000; pino-roll crashes the process on EACCES.
+  chown -R 1000:1000 "$APP_DIR/logs" 2>/dev/null || true
+  chmod -R u+rwX "$APP_DIR/logs" 2>/dev/null || true
   chmod -R a+rX "$APP_DIR"
   [[ -f "$ENV_FILE" ]] && chmod a+r "$ENV_FILE"
   [[ -f "$CREDENTIALS_FILE" ]] && chmod a+r "$CREDENTIALS_FILE"
