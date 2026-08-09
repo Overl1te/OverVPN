@@ -200,13 +200,18 @@ export class ProxyServersService {
       },
     });
     const panelUrl = this.panelBaseUrl();
-    const command = [
+    const parts = [
       'curl -fsSL https://raw.githubusercontent.com/overl1te/OverVPN/main/install.sh',
       '| sudo bash -s -- install-proxy',
       `--panel-url ${shellQuote(panelUrl)}`,
       `--token ${shellQuote(installToken)}`,
       `--node-id ${shellQuote(id)}`,
-    ].join(' ');
+    ];
+    const vpnHost = existing.publicHost?.trim();
+    if (vpnHost && isTlsHostname(vpnHost)) {
+      parts.push(`--vpn-host ${shellQuote(vpnHost)}`);
+    }
+    const command = parts.join(' ');
     this.logger.log({
       msg: 'Proxy install command created',
       proxyServerId: id,
@@ -628,6 +633,23 @@ function clearNodeTokenSetting(
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Domain names suitable for Let's Encrypt (reject bare IPs). */
+function isTlsHostname(value: string): boolean {
+  const host = value.trim().toLowerCase();
+  if (!host.includes('.')) {
+    return false;
+  }
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    return false;
+  }
+  if (host.includes(':')) {
+    return false;
+  }
+  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(
+    host,
+  );
 }
 
 function toInputJson(value: unknown): Prisma.InputJsonValue {

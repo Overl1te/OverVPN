@@ -835,7 +835,7 @@
     "coreXray": "Xray",
     "coreMtproxy": "MTProxy",
     "installCommand": "Команда установки",
-    "installCommandHint": "Скопируйте и выполните на удалённом сервере от root. Токен одноразовый.",
+    "installCommandHint": "Скопируйте и выполните на удалённом сервере от root. Токен одноразовый. Если задан домен для клиентов, в команду добавится --vpn-host (Let's Encrypt → deploy/sing-box/certs).",
     "issueInstallCommand": "Сгенерировать команду",
     "installCommandIssued": "Команда установки создана",
     "copyInstallCommand": "Копировать команду",

@@ -835,7 +835,7 @@
     "coreXray": "Xray",
     "coreMtproxy": "MTProxy",
     "installCommand": "Install command",
-    "installCommandHint": "Copy and run as root on the remote server. The token is one-time.",
+    "installCommandHint": "Copy and run as root on the remote server. The token is one-time. When a client domain is set, the command includes --vpn-host (Let's Encrypt → deploy/sing-box/certs).",
     "issueInstallCommand": "Generate install command",
     "installCommandIssued": "Install command generated",
     "copyInstallCommand": "Copy command",

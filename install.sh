@@ -824,6 +824,13 @@ cli_t() {
       downloading_bundle) printf 'Скачиваем deploy-бандл (%s) в %s…' "$1" "$2" ;;
       missing_install_conf) printf 'Отсутствует %s' "$1" ;;
       certbot_missing) printf '%s' "certbot не установлен." ;;
+      installing_certbot) printf '%s' "Устанавливаем Certbot…" ;;
+      requesting_proxy_vpn_cert) printf 'Выпускаем Let'\''s Encrypt (standalone) для VPN-хоста: %s' "$1" ;;
+      proxy_vpn_cert_ready) printf 'VPN TLS готов: %s → deploy/sing-box/certs' "$1" ;;
+      proxy_vpn_cert_failed) printf 'Не удалось выпустить сертификат для %s' "$1" ;;
+      proxy_vpn_cert_hint) printf '%s' "Проверьте DNS A-запись на этот сервер и что TCP :80 свободен/открыт в UFW." ;;
+      proxy_vpn_host_skip) printf 'VPN_HOST=%s не домен — пропускаем Let'\''s Encrypt' "$1" ;;
+      proxy_vpn_host_missing) printf '%s' "На прокси нет VPN_HOST (домен). TLS FILES inbound упадёт без vpn-fullchain.pem — задайте: overvpn config set-domain --vpn-host <host> или install-proxy --vpn-host." ;;
       requesting_expand_cert) printf '%s' "Запрашиваем/расширяем сертификат Let's Encrypt…" ;;
       cert_failed) printf '%s' "Не удалось выпустить сертификат." ;;
       cert_failed_hint2) printf '%s' "Проверьте DNS (серая тучка в Cloudflare), порт 80 и резолв хостов." ;;
@@ -1062,6 +1069,13 @@ cli_t() {
       downloading_bundle) printf 'Downloading deploy bundle (%s) into %s...' "$1" "$2" ;;
       missing_install_conf) printf 'Missing %s' "$1" ;;
       certbot_missing) printf '%s' "certbot is not installed." ;;
+      installing_certbot) printf '%s' "Installing Certbot..." ;;
+      requesting_proxy_vpn_cert) printf 'Issuing Let'\''s Encrypt (standalone) for VPN host: %s' "$1" ;;
+      proxy_vpn_cert_ready) printf 'VPN TLS ready: %s → deploy/sing-box/certs' "$1" ;;
+      proxy_vpn_cert_failed) printf 'Failed to issue certificate for %s' "$1" ;;
+      proxy_vpn_cert_hint) printf '%s' "Check the DNS A record points here and TCP :80 is free/open in UFW." ;;
+      proxy_vpn_host_skip) printf 'VPN_HOST=%s is not a domain — skipping Let'\''s Encrypt' "$1" ;;
+      proxy_vpn_host_missing) printf '%s' "Proxy has no VPN_HOST domain. TLS FILES inbounds will fail without vpn-fullchain.pem — set via: overvpn config set-domain --vpn-host <host> or install-proxy --vpn-host." ;;
       requesting_expand_cert) printf '%s' "Requesting/expanding Let's Encrypt certificate..." ;;
       cert_failed) printf '%s' "Certificate issuance failed." ;;
       cert_failed_hint2) printf '%s' "Check DNS (grey cloud on Cloudflare), port 80, and host resolution." ;;
@@ -2793,6 +2807,135 @@ EOF
   chmod 755 "$CERTBOT_DEPLOY_HOOK"
 }
 
+# Hostname suitable for Let's Encrypt (not bare IP / empty).
+is_tls_hostname() {
+  local host=${1:-}
+  [[ -n "$host" ]] || return 1
+  [[ "$host" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && return 1
+  [[ "$host" == *:* ]] && return 1
+  [[ "$host" == *.* ]] || return 1
+  return 0
+}
+
+vpn_tls_cert_files_present() {
+  [[ -f "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}" && -f "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}" ]]
+}
+
+ensure_certbot_pkg() {
+  if need_cmd certbot; then
+    return 0
+  fi
+  colorized_echo blue "$(cli_t installing_certbot)"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y certbot
+}
+
+# Proxy-only hosts have no panel nginx: issue LE via standalone HTTP-01 and sync FILES TLS.
+issue_proxy_vpn_tls_certs() {
+  local vpn_host=$1
+  local email=$2
+
+  if ! is_tls_hostname "$vpn_host"; then
+    colorized_echo yellow "$(cli_t proxy_vpn_host_skip "$vpn_host")"
+    return 0
+  fi
+  if [[ -z "$email" ]]; then
+    email="admin@${vpn_host#*.}"
+    [[ "$email" == "admin@${vpn_host}" ]] && email="admin@${vpn_host}"
+  fi
+
+  ensure_certbot_pkg
+  if need_cmd ufw; then
+    ufw allow 80/tcp >/dev/null 2>&1 || true
+  fi
+
+  colorized_echo blue "$(cli_t requesting_proxy_vpn_cert "$vpn_host")"
+  # Standalone needs :80. Briefly stop sing-box if it somehow bound it (rare).
+  local core_was_running="false"
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'overvpn-core-1'; then
+    core_was_running="true"
+    compose stop core >/dev/null 2>&1 || true
+  fi
+
+  if ! certbot certonly --standalone \
+    -d "$vpn_host" \
+    --non-interactive \
+    --agree-tos \
+    --email "$email" \
+    --no-eff-email \
+    --cert-name "$vpn_host" \
+    --keep-until-expiring \
+    --preferred-challenges http; then
+    [[ "$core_was_running" == "true" ]] && compose start core >/dev/null 2>&1 || true
+    colorized_echo red "$(cli_t proxy_vpn_cert_failed "$vpn_host")"
+    colorized_echo yellow "$(cli_t proxy_vpn_cert_hint)"
+    return 1
+  fi
+
+  sync_vpn_tls_certs "$vpn_host"
+  if [[ "$core_was_running" == "true" ]]; then
+    compose start core >/dev/null 2>&1 || true
+  fi
+  colorized_echo green "$(cli_t proxy_vpn_cert_ready "$vpn_host")"
+}
+
+# Resolve VPN hostname for proxy TLS from install.conf / .env / CFG_*.
+resolve_proxy_vpn_host() {
+  local host=""
+  host="${CFG_VPN_HOST:-}"
+  [[ -z "$host" && -f "$INSTALL_CONF" ]] && host="$(get_env_var VPN_HOST "$INSTALL_CONF" 2>/dev/null || true)"
+  [[ -z "$host" && -f "$ENV_FILE" ]] && host="$(get_env_var VPN_PUBLIC_HOST "$ENV_FILE" 2>/dev/null || true)"
+  printf '%s' "$host"
+}
+
+resolve_proxy_vpn_email() {
+  local email=""
+  email="${CFG_EMAIL:-}"
+  [[ -z "$email" && -f "$INSTALL_CONF" ]] && email="$(get_env_var EMAIL "$INSTALL_CONF" 2>/dev/null || true)"
+  printf '%s' "$email"
+}
+
+# Before starting/recreating cores on a proxy host: ensure FILES TLS material exists when a domain is configured.
+ensure_proxy_vpn_tls() {
+  is_proxy_host || return 0
+  core_enabled singbox || core_enabled xray || return 0
+
+  local vpn_host email
+  vpn_host="$(resolve_proxy_vpn_host)"
+  email="$(resolve_proxy_vpn_email)"
+
+  if ! is_tls_hostname "$vpn_host"; then
+    if vpn_tls_cert_files_present; then
+      return 0
+    fi
+    colorized_echo yellow "$(cli_t proxy_vpn_host_missing)"
+    return 0
+  fi
+
+  if [[ -f "$INSTALL_CONF" ]]; then
+    set_install_conf_var "VPN_HOST" "$vpn_host"
+    [[ -n "$email" ]] && set_install_conf_var "EMAIL" "$email"
+  fi
+  if [[ -f "$ENV_FILE" ]]; then
+    set_env_var "VPN_PUBLIC_HOST" "$vpn_host"
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
+  fi
+
+  if vpn_tls_cert_files_present; then
+    # Keep renew hook + LE live dir in sync even when pem already present.
+    if [[ -f "/etc/letsencrypt/live/${vpn_host}/fullchain.pem" ]]; then
+      sync_vpn_tls_certs "$vpn_host"
+    else
+      install_vpn_tls_renew_hook "$vpn_host"
+    fi
+    return 0
+  fi
+
+  issue_proxy_vpn_tls_certs "$vpn_host" "$email"
+}
+
 
 fetch_repo() {
   local branch=$1
@@ -3362,6 +3505,8 @@ Options (install-proxy):
   --with-mtproxy | --without-mtproxy
   --no-ufw                 Do not touch UFW
   --agent-port <port>      Agent listen port (default: ${DEFAULT_AGENT_PORT})
+  --vpn-host <host>        Client VPN domain (issues Let'\''s Encrypt into deploy/sing-box/certs)
+  --email <email>          Let'\''s Encrypt email (used with --vpn-host)
 
 Compose profiles:
   panel                    postgres / redis / migrate / api / web
@@ -3564,6 +3709,7 @@ cmd_install_proxy() {
   local use_ufw="true"
   local flag_mtproxy="" flag_depth="" flag_protocols="" flag_cores="" flag_ports=""
   local panel_url="" install_token="" node_id="" agent_port="$DEFAULT_AGENT_PORT"
+  local vpn_host="" email=""
 
   CFG_INSTALL_ROLE="proxy"
   CFG_WITH_PROXY="true"
@@ -3576,6 +3722,8 @@ cmd_install_proxy() {
   CFG_ONBOARDING_SKIP_PROMPT="true"
   CFG_MTPROXY_SKIP_PROMPT="true"
   CFG_DEPTH_SKIP_PROMPT="true"
+  CFG_VPN_HOST=""
+  CFG_EMAIL=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -3583,6 +3731,8 @@ cmd_install_proxy() {
       --token) install_token="${2:-}"; shift 2 ;;
       --node-id) node_id="${2:-}"; shift 2 ;;
       --agent-port) agent_port="${2:-}"; shift 2 ;;
+      --vpn-host) vpn_host="${2:-}"; shift 2 ;;
+      --email) email="${2:-}"; shift 2 ;;
       --branch) branch="${2:-}"; shift 2 ;;
       --tag|--version) image_tag="${2:-}"; shift 2 ;;
       --build) do_build="true"; shift ;;
@@ -3615,6 +3765,8 @@ cmd_install_proxy() {
   CFG_NODE_ID="$node_id"
   CFG_AGENT_PORT="$agent_port"
   CFG_AGENT_BASE_URL="http://$(public_ip):${agent_port}"
+  CFG_VPN_HOST="$vpn_host"
+  CFG_EMAIL="$email"
   CFG_INSTALL_DEPTH="${flag_depth:-simple}"
   initialize_protocol_config
 
@@ -3654,10 +3806,19 @@ cmd_install_proxy() {
   install_cli "${APP_DIR}/install.sh"
   generate_env "$DEFAULT_WEB_PORT" "false" "$image_tag"
 
+  if [[ -n "$CFG_VPN_HOST" ]]; then
+    set_install_conf_var "VPN_HOST" "$CFG_VPN_HOST"
+    [[ -n "$CFG_EMAIL" ]] && set_install_conf_var "EMAIL" "$CFG_EMAIL"
+    set_env_var "VPN_PUBLIC_HOST" "$CFG_VPN_HOST"
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
+  fi
+
   if [[ "$use_ufw" == "true" ]]; then
     configure_firewall "false" "$DEFAULT_WEB_PORT"
   fi
 
+  ensure_proxy_vpn_tls || exit 1
   compose_up "$do_build"
   install_cli "${APP_DIR}/install.sh"
   apply_deploy_permissions
@@ -3830,6 +3991,9 @@ cmd_update() {
     set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
   fi
 
+  # Proxy hosts: ensure LE FILES TLS before force-recreating cores (avoids crash-loop on missing pem).
+  ensure_proxy_vpn_tls || exit 1
+
   compose_up "$do_build"
   if is_panel_host; then
     refresh_nginx
@@ -3911,6 +4075,14 @@ cmd_uninstall() {
       rm -rf "/etc/letsencrypt/live/${panel_host}" \
         "/etc/letsencrypt/archive/${panel_host}" \
         "/etc/letsencrypt/renewal/${panel_host}.conf" || true
+    fi
+    local vpn_host=""
+    [[ -f "$INSTALL_CONF" ]] && vpn_host="$(get_env_var VPN_HOST "$INSTALL_CONF" || true)"
+    if [[ -n "$vpn_host" && "$vpn_host" != "$panel_host" ]] && need_cmd certbot; then
+      certbot delete --cert-name "$vpn_host" --non-interactive 2>/dev/null || true
+      rm -rf "/etc/letsencrypt/live/${vpn_host}" \
+        "/etc/letsencrypt/archive/${vpn_host}" \
+        "/etc/letsencrypt/renewal/${vpn_host}.conf" || true
     fi
   fi
 
@@ -4028,6 +4200,24 @@ cmd_config_set_domain() {
     esac
   done
 
+  # Proxy-only: allow setting just the client VPN domain (no panel nginx).
+  if is_proxy_host && [[ -n "$flag_vpn" && -z "$flag_base" && -z "$flag_panel" && -z "$flag_sub" ]]; then
+    validate_hostname "$flag_vpn"
+    local email="$flag_email"
+    if [[ -z "$email" ]]; then
+      email="$(resolve_proxy_vpn_email)"
+      [[ -z "$email" ]] && email="admin@${flag_vpn#*.}"
+    fi
+    set_install_conf_var "VPN_HOST" "$flag_vpn"
+    set_install_conf_var "EMAIL" "$email"
+    set_env_var "VPN_PUBLIC_HOST" "$flag_vpn"
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
+    colorized_echo green "$(cli_t domains_updated "$APP_NAME")"
+    colorized_echo yellow "Run: ${APP_NAME} config certs"
+    return 0
+  fi
+
   read_install_hosts
   local base="${flag_base:-$INSTALL_BASE_DOMAIN}"
   local panel="${flag_panel:-$INSTALL_PANEL_HOST}"
@@ -4099,6 +4289,40 @@ cmd_config_certs() {
   check_root
   is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
   read_install_hosts
+
+  if is_proxy_host; then
+    local vpn_host email
+    vpn_host="$(resolve_proxy_vpn_host)"
+    email="$(resolve_proxy_vpn_email)"
+    if [[ -n "${1:-}" ]]; then
+      # optional: overvpn config certs --vpn-host x --email y
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --vpn-host) vpn_host="${2:-}"; shift 2 ;;
+          --email) email="${2:-}"; shift 2 ;;
+          *) colorized_echo red "$(cli_t unknown_option "$1")"; exit 1 ;;
+        esac
+      done
+      CFG_VPN_HOST="$vpn_host"
+      CFG_EMAIL="$email"
+    fi
+    if ! is_tls_hostname "$vpn_host"; then
+      colorized_echo red "$(cli_t proxy_vpn_host_missing)"
+      exit 1
+    fi
+    set_install_conf_var "VPN_HOST" "$vpn_host"
+    [[ -n "$email" ]] && set_install_conf_var "EMAIL" "$email"
+    set_env_var "VPN_PUBLIC_HOST" "$vpn_host"
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
+    issue_proxy_vpn_tls_certs "$vpn_host" "$email" || exit 1
+    if core_enabled singbox; then
+      compose up -d --force-recreate --no-deps core >/dev/null 2>&1 || true
+    fi
+    colorized_echo green "$(cli_t certs_issued "$vpn_host")"
+    return 0
+  fi
+
   if [[ "$INSTALL_MODE" != "domain" ]]; then
     colorized_echo yellow "$(cli_t domain_mode_not_configured)"
     return 0
@@ -4139,7 +4363,7 @@ cmd_config() {
     sync) cmd_config_sync ;;
     set-domain) cmd_config_set_domain "$@" ;;
     nginx) cmd_config_nginx ;;
-    certs) cmd_config_certs ;;
+    certs) cmd_config_certs "$@" ;;
     apply) cmd_config_apply ;;
     *)
       colorized_echo red "$(cli_t unknown_config_command "$subcmd")"
