@@ -10,6 +10,10 @@
   <li>Владелец с сильным паролем + TOTP</li>
   <li>Регулярные <code>FULL</code> бэкапы вне сервера</li>
   <li><code>SWAGGER_ENABLED=false</code> в проде</li>
+  <li>
+    На remote-ноде порт агента (<code>7700</code>) не светить всему интернету — лучше restrict по IP
+    панели
+  </li>
 </ul>
 
 <h2>Секреты</h2>
@@ -41,12 +45,17 @@
       <td><code>SING_BOX_CLASH_API_SECRET</code></td>
       <td>Clash API</td>
     </tr>
+    <tr>
+      <td><code>NODE_TOKEN</code> / <code>INSTALL_TOKEN</code></td>
+      <td>Аутентификация агента</td>
+    </tr>
   </tbody>
 </table>
 
 <h2>Сетевая изоляция</h2>
-<pre><code class="language-text">Интернет → Nginx (443) → web:8080 → api
-Интернет → UDP 443 → sing-box
+<pre><code class="language-text">Интернет → Nginx (443) → web → api
+Интернет → UDP/TCP VPN-порты → ядра на ноде
+Панель → TCP 7700 → агент (remote)
 Postgres, Redis → 127.0.0.1</code></pre>
 
 <h2>Обновления</h2>

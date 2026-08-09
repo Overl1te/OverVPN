@@ -1,9 +1,12 @@
 <h1>Введение</h1>
 
 <p>
-  OverVPN — <strong>однонодовая</strong> панель управления VPN на базе
-  <a href="https://sing-box.sagernet.org/" target="_blank" rel="noopener">sing-box</a>. Она не
-  маршрутизирует трафик сама: это control plane над одним VPN-ядром на одной машине.
+  OverVPN — <strong>панель-оркестратор</strong> (control plane) плюс
+  <strong>прокси-ноды</strong> (data plane). Панель не маршрутизирует VPN-трафик сама: она хранит
+  желаемое состояние и применяет конфиги на нодах через агент
+  (<a href="https://github.com/Overl1te/OverVPN/tree/main/apps/agent" target="_blank" rel="noopener"
+    >@overvpn/agent</a
+  >).
 </p>
 
 <h2>Что умеет</h2>
@@ -18,11 +21,13 @@
   <tbody>
     <tr>
       <td><strong>Протоколы</strong></td>
-      <td>Hysteria2, VLESS Reality, Trojan, Shadowsocks</td>
+      <td>
+        Hysteria2, VLESS Reality, Trojan, Shadowsocks, WireGuard, Xray TLS/SS/WireGuard, MTProxy
+      </td>
     </tr>
     <tr>
       <td><strong>Панель</strong></td>
-      <td>Пользователи, inbound'ы, планы, онлайн-сессии, аудит</td>
+      <td>Пользователи, inbound'ы, планы, прокси-серверы, онлайн-сессии, аудит</td>
     </tr>
     <tr>
       <td><strong>Подписки</strong></td>
@@ -30,11 +35,11 @@
     </tr>
     <tr>
       <td><strong>Учёт</strong></td>
-      <td>Трафик, сроки, лимиты устройств и IP, автоматический enforce</td>
+      <td>Трафик, сроки, лимиты устройств, автоматический enforce</td>
     </tr>
     <tr>
       <td><strong>Операции</strong></td>
-      <td>Apply конфига с rollback, бэкапы, Telegram-алерты</td>
+      <td>Apply на ноды с rollback, бэкапы панели, Telegram-алерты</td>
     </tr>
   </tbody>
 </table>
@@ -45,27 +50,59 @@
 
 <div class="flow">
   <div class="flow-step"><span>1.</span> Администратор → HTTPS → Web-панель → API NestJS</div>
-  <div class="flow-step"><span>2.</span> API → PostgreSQL, Redis, sing-box (ядро)</div>
-  <div class="flow-step"><span>3.</span> VPN-клиенты → UDP/TCP → sing-box</div>
+  <div class="flow-step"><span>2.</span> API → PostgreSQL, Redis; apply → агент ноды → ядра</div>
+  <div class="flow-step"><span>3.</span> VPN-клиенты → UDP/TCP → sing-box / Xray / MTProxy на ноде</div>
   <div class="flow-step"><span>4.</span> Клиенты подписок → HTTPS → Subscription URL → API</div>
 </div>
 
 <p>
-  Панель хранит желаемое состояние (пользователи, inbound'ы, assignments), рендерит конфиг ядра и
-  применяет его атомарно. Клиенты получают профили через публичный subscription URL.
+  По умолчанию <code>overvpn install</code> ставит <strong>панель и локальный прокси</strong> на
+  одном хосте (co-located). Удалённые ноды добавляются в разделе
+  <a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a>: визард → install-command →
+  <code>overvpn install-proxy</code>.
 </p>
 
-<div class="callout warning">
-  <strong>Важно</strong>
-  Мульти-нода не поддерживается. Один сервер — одно ядро. Федерация, шардинг и «панель как прокси»
-  вне скоупа проекта.
+<table>
+  <thead>
+    <tr>
+      <th>Зона</th>
+      <th>Engine</th>
+      <th>Протоколы</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Sing-box</td>
+      <td><code>SING_BOX</code></td>
+      <td>HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS, WIREGUARD</td>
+    </tr>
+    <tr>
+      <td>Xray</td>
+      <td><code>XRAY</code></td>
+      <td>
+        VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS, TROJAN_TLS, SHADOWSOCKS_XRAY, WIREGUARD_XRAY
+      </td>
+    </tr>
+    <tr>
+      <td>MTProxy</td>
+      <td><code>MTPROXY</code></td>
+      <td>MTPROXY (Telemt)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout tip">
+  <strong>Hybrid API</strong>
+  Если у ноды задан <code>agentBaseUrl</code>, панель шлёт
+  <code>POST {agentBaseUrl}/v1/apply</code>. Иначе — локальный apply через shared volumes (fallback
+  для seed-ноды без URL).
 </div>
 
 <h2>Кому подходит</h2>
 <ul>
-  <li>Один VPS/VDS с Ubuntu или Debian</li>
-  <li>Нужна своя панель выдачи доступа без сложной инфраструктуры</li>
-  <li>Достаточно одного VPN-endpoint'а на машину</li>
+  <li>Один VPS с панелью и локальным прокси «из коробки»</li>
+  <li>Несколько серверов: панель отдельно, VPN-endpoint'ы на удалённых нодах</li>
+  <li>Своя выдача доступа, подписок и учёта без биллинга «из коробки»</li>
 </ul>
 
 <h2>Что дальше</h2>
@@ -73,6 +110,9 @@
   <li>
     <a href="{{BASE}}guide/installation.html">Установка</a> — одна команда через
     <code>install.sh</code> или ручной Docker Compose
+  </li>
+  <li>
+    <a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a> — локальный и удалённый прокси
   </li>
   <li>
     <a href="{{BASE}}guide/management.html">Управление сервером</a> — CLI <code>overvpn</code>

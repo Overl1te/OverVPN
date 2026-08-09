@@ -17,10 +17,14 @@ overvpn --help  # текстовая справка</code></pre>
 <pre><code class="language-shell">overvpn &lt;команда&gt; [опции]  # общий формат вызова</code></pre>
 
 <h2>Жизненный цикл</h2>
-<pre><code class="language-shell">overvpn install [опции]  # установка Docker-стека, Nginx и TLS (консольный мастер)
+<pre><code class="language-shell">overvpn install [опции]  # панель (+ локальный прокси по умолчанию)
+overvpn install-proxy --panel-url &lt;url&gt; --token &lt;token&gt; --node-id &lt;id&gt; [опции]  # удалённая нода
 overvpn up | down | restart  # запуск, остановка, перезапуск контейнеров
 overvpn status  # статус сервисов Compose
-overvpn logs [service]  # логи: api, web, core, postgres, redis…
+overvpn logs [service]  # логи: api, web, agent, core, postgres, redis…
+overvpn enable-core singbox|xray|mtproxy  # доустановить ядро
+overvpn disable-core singbox|xray|mtproxy  # отключить ядро
+overvpn check-update  # проверить новый тег в GHCR
 overvpn update [--build]  # обновление образов (с локальной сборкой)
 overvpn uninstall  # полное удаление OverVPN с сервера</code></pre>
 
@@ -37,6 +41,34 @@ overvpn config set-domain --base-domain example.com --panel panel.example.com  #
 overvpn config nginx  # применить конфиг Nginx
 overvpn config certs  # обновить сертификаты Let's Encrypt
 overvpn config apply  # применить все изменения конфигурации</code></pre>
+
+<h2>Compose profiles</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Profile</th>
+      <th>Сервисы</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>panel</code></td>
+      <td>postgres, redis, migrate, api, web</td>
+    </tr>
+    <tr>
+      <td><code>proxy</code></td>
+      <td>agent</td>
+    </tr>
+    <tr>
+      <td><code>singbox</code> / <code>xray</code> / <code>mtproxy</code></td>
+      <td>VPN-ядра</td>
+    </tr>
+    <tr>
+      <td><code>tools</code></td>
+      <td>bootstrap one-shots</td>
+    </tr>
+  </tbody>
+</table>
 
 <h2>Файлы установки</h2>
 <table>

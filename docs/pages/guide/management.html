@@ -11,14 +11,18 @@
 overvpn status  # статус всех сервисов
 overvpn logs  # логи всех контейнеров
 overvpn logs api  # логи только API
+overvpn logs agent  # логи агента (если proxy profile)
 overvpn info  # URL панели, подписок, учётка владельца
 overvpn edit  # открыть .env
+overvpn enable-core singbox|xray|mtproxy  # доустановить ядро
+overvpn disable-core singbox|xray|mtproxy  # отключить (если нет inbound'ов)
 overvpn restart  # перезапуск стека
 overvpn up  # запустить контейнеры
 overvpn down  # остановить контейнеры</code></pre>
 
 <h2>Обновление</h2>
-<pre><code class="language-shell">overvpn update  # подтянуть образы из GHCR
+<pre><code class="language-shell">overvpn check-update  # есть ли новый образ в GHCR
+overvpn update  # подтянуть образы из GHCR
 overvpn update --build  # собрать образы локально на сервере</code></pre>
 
 <h2>Nginx и сертификаты</h2>
@@ -28,6 +32,12 @@ overvpn config apply  # применить конфигурацию</code></pre>
 
 <h2>Bootstrap владельца</h2>
 <pre><code class="language-shell">overvpn bootstrap  # создать учётку владельца панели</code></pre>
+
+<h2>Удалённая нода</h2>
+<pre><code class="language-shell">overvpn install-proxy --panel-url … --token … --node-id …  # на сервере прокси</code></pre>
+<p>
+  Подробности — <a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a>.
+</p>
 
 <h2>Удаление</h2>
 <pre><code class="language-shell">overvpn uninstall  # удалить OverVPN и данные установки</code></pre>
@@ -50,6 +60,10 @@ overvpn config apply  # применить конфигурацию</code></pre>
       <td>внутри Compose</td>
     </tr>
     <tr>
+      <td>Агент</td>
+      <td><code>7700</code> (на remote — снаружи для панели)</td>
+    </tr>
+    <tr>
       <td>PostgreSQL</td>
       <td><code>5432</code> → <code>127.0.0.1</code></td>
     </tr>
@@ -58,20 +72,30 @@ overvpn config apply  # применить конфигурацию</code></pre>
       <td><code>6379</code> → <code>127.0.0.1</code></td>
     </tr>
     <tr>
-      <td>VPN UDP</td>
-      <td><code>443</code></td>
+      <td>VPN UDP (Hysteria2)</td>
+      <td><code>SING_BOX_UDP_PORT</code> (443)</td>
+    </tr>
+    <tr>
+      <td>VPN TCP Reality / Trojan / SS / WG</td>
+      <td>см. <code>.env</code> / README</td>
+    </tr>
+    <tr>
+      <td>Xray / MTProxy</td>
+      <td>см. <a href="{{BASE}}reference/env.html">env</a></td>
     </tr>
   </tbody>
 </table>
 
 <div class="callout warning">
   <strong>Внимание</strong>
-  Не публикуйте Postgres, Redis и API напрямую в интернет.
+  Не публикуйте Postgres, Redis и API напрямую в интернет. Порт агента на remote-ноде нужен панели
+  для apply — ограничьте доступ firewall'ом по IP панели, если возможно.
 </div>
 
 <h2>Диагностика</h2>
 <pre><code class="language-shell">overvpn status  # контейнеры запущены?
 overvpn logs api  # ошибки API
+overvpn logs agent  # регистрация / heartbeat / apply
 overvpn logs core  # ошибки sing-box</code></pre>
 
 <p>

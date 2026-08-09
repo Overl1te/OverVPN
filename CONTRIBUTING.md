@@ -29,13 +29,13 @@
 
 ## 1. Что это за система
 
-OverVPN — **control plane** над VPN data plane на одной машине. Сейчас поддержаны **два независимых ядра** на одной ноде:
+OverVPN — **control plane** (панель) плюс **прокси-ноды** (data plane с агентом). Ядра на ноде:
 
 - **sing-box** — HYSTERIA2, VLESS_REALITY, TROJAN, SHADOWSOCKS, WIREGUARD
 - **Xray** — VLESS_XHTTP_TLS, VLESS_GRPC_TLS, VLESS_TCP_TLS, TROJAN_TLS, SHADOWSOCKS_XRAY, WIREGUARD_XRAY
 - **MTProxy** — MTPROXY (optional Compose profile)
 
-Ядра опциональны (`SING_BOX_ENABLED` / `XRAY_ENABLED` / `MTPROXY_ENABLED` + Compose profiles `singbox` / `xray` / `mtproxy`). Inbound всегда принадлежит ровно одному engine (`PROTOCOL_ENGINE_MAP` в `@overvpn/shared`).
+Ядра опциональны (`SING_BOX_ENABLED` / `XRAY_ENABLED` / `MTPROXY_ENABLED` + Compose profiles `singbox` / `xray` / `mtproxy`). Inbound всегда принадлежит ровно одному engine (`PROTOCOL_ENGINE_MAP` в `@overvpn/shared`) и одной ноде (`proxyServerId`).
 
 ```mermaid
 flowchart LR
@@ -43,19 +43,21 @@ flowchart LR
   web -->|"/api/*"| api["api NestJS"]
   api --> postgres[(postgres)]
   api --> redis[(redis locks)]
-  api --> core["sing-box core"]
-  api --> coreXray["xray core"]
+  api -->|"HTTP apply"| agent["agent :7700"]
+  agent --> core["sing-box"]
+  agent --> coreXray["xray"]
+  agent --> mtproxy["mtproxy"]
 ```
 
 Панель **не** маршрутизирует клиентский VPN-трафик сама. Она:
 
-- хранит пользователей, inbound’ы, планы, assignments;
-- рендерит desired-конфиг **каждого** ядра и применяет его изолированно;
-- отдаёт subscription-профили клиентам (endpoints со всех engines);
-- собирает трафик/онлайн с обоих ядер и суммирует в usage;
+- хранит пользователей, inbound’ы, планы, ProxyServer’ы, assignments;
+- рендерит desired-конфиг **каждого** ядра на ноде и применяет через агент (`HttpAgentTransport`) или local shared-volume fallback;
+- отдаёт subscription-профили клиентам (endpoints со всех engines/нод плана);
+- собирает трафик/онлайн и суммирует в usage;
 - enforce’ит лимиты и пишет audit.
 
-**Не делаем:** федерация панелей, шардинг БД, «панель как прокси без агента», замена sing-box на Xray как единственное ядро.
+**Не делаем:** федерация панелей, шардинг БД, биллинг, автоматический failover между нодами.
 
 ---
 
@@ -156,10 +158,11 @@ Workspace (`pnpm-workspace.yaml`):
 | `postgres`        | `postgres:18-alpine`           | состояние панели                           |
 | `redis`           | `redis:8-alpine`               | throttle, distributed locks воркеров/apply |
 | `migrate`         | api image, one-shot            | `prisma migrate deploy`                    |
-| `api`             | `ghcr.io/overl1te/overvpn-api` | NestJS                                     |
-| `web`             | `ghcr.io/overl1te/overvpn-web` | Nginx + SPA, proxy `/api`                  |
-| `core`            | VPN core container             | data plane                                 |
-| `bootstrap-admin` | profile `tools`                | создать OWNER                              |
+| `api`             | `ghcr.io/overl1te/overvpn-api`   | NestJS                                     |
+| `web`             | `ghcr.io/overl1te/overvpn-web`   | Nginx + SPA, proxy `/api`                  |
+| `agent`           | `ghcr.io/overl1te/overvpn-agent` | proxy-node agent (`proxy` profile)         |
+| `core`            | VPN core container               | data plane                                 |
+| `bootstrap-admin` | profile `tools`                  | создать OWNER                              |
 
 ---
 
@@ -167,14 +170,15 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Потоки данных
 
-| Поток         | Путь                                                                           | Примечание                                           |
-| ------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                 | JWT access + httpOnly refresh cookie                 |
-| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                           | без админ-JWT; rate-limit по IP и fingerprint токена |
-| Apply конфига | Admin mutation / auto-after-save → CoreModule → файл + reload handshake → core | Redis lock `CORE_APPLY_LOCK_TTL_MS`                  |
-| Трафик        | Worker → V2Ray Stats gRPC → ledger → агрегация UsageDaily                      | epoch/generation после reload                        |
-| Онлайн        | Worker → Clash API → OnlineSession                                             | best-effort device id                                |
-| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости     |                                                      |
+| Поток         | Путь                                                                                          | Примечание                                           |
+| ------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                                | JWT access + httpOnly refresh cookie                 |
+| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                                          | без админ-JWT; rate-limit по IP и fingerprint токена |
+| Apply конфига | Admin mutation → CoreModule → agent `POST /v1/apply` (или local volumes) → cores              | Redis lock; hybrid transport                         |
+| Агент ↔ API   | `/api/agent/nodes/:id/{register,heartbeat,stats,desired,apply-result}`                        | Bearer `NODE_TOKEN`                                  |
+| Трафик        | Worker → stats (локально / agent) → ledger → UsageDaily                                       | epoch/generation после reload                        |
+| Онлайн        | Worker → Clash API / agent stats → OnlineSession                                              | best-effort device id                                |
+| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости                    |                                                      |
 
 ### Сети Compose (упрощённо)
 
@@ -212,7 +216,9 @@ Env валидируется при старте API в `apps/api/src/config/env
 | **Plans**          | `plans/`          | тарифы / шаблоны лимитов и привязка inbound’ов                        |
 | **Inbounds**       | `inbounds/`       | протоколы Hysteria2 / VLESS Reality / Trojan / SS, settings           |
 | **Subscriptions**  | `subscriptions/`  | публичные профили `sing-box` / `clash` / `links` / `info`             |
-| **Core**           | `core/`           | абстракция `CoreProvider`, `SingBoxProvider`, diff/apply/health/stats |
+| **Core**           | `core/`           | абстракция `CoreProvider`, dual-engine apply, health/stats, transport к агенту |
+| **Agent**          | `agent/`          | register / heartbeat / desired / stats / apply-result для нод                  |
+| **ProxyServers**   | `proxy-servers/`  | CRUD нод, install-command, wizard, dns-check, enable/disable                   |
 | **Workers**        | `workers/`        | фоновые циклы (см. ниже)                                              |
 | **System**         | `system/`         | dashboard snapshots, health агрегаты                                  |
 | **Settings**       | `settings/`       | SystemConfig (Telegram и пр.; секреты не отдаются наружу)             |
@@ -319,7 +325,8 @@ acquire Redis lock
 | `AdminUser` / `RefreshToken`                           | админы и сессии                             |
 | `User`                                                 | VPN-пользователь, лимиты, статус, sub token |
 | `Plan` / `PlanInbound`                                 | тариф и набор inbound’ов                    |
-| `Inbound`                                              | слушатель протокола + encrypted settings    |
+| `Inbound`                                              | слушатель протокола + encrypted settings + `proxyServerId` |
+| `ProxyServer`                                          | прокси-нода (local seed / remote), token, agentBaseUrl     |
 | `UserInboundAssignment`                                | credentials пользователя на inbound         |
 | `UsageDaily`                                           | дневная агрегация трафика                   |
 | `TrafficCursor` / `TrafficDelta` / `TrafficCheckpoint` | ledger с учётом reload epoch                |
@@ -365,6 +372,7 @@ src/
 | `/users`, `/users/:id` | список / карточка + sub QR |
 | `/inbounds`            | inbound’ы                  |
 | `/plans`               | планы                      |
+| `/proxy`, `/proxy/new` | список нод / визард создания   |
 | `/online`              | сессии                     |
 | `/config`              | preview/apply              |
 | `/audit`               | журнал                     |
@@ -571,21 +579,26 @@ sudo systemctl restart "$SERVICE"
 
 Прод-путь для пользователей. Делает примерно:
 
-1. Интерактивный сбор доменов / email / DNS
-2. Клон/обновление дерева в `/opt/overvpn` (или аналог)
-3. Генерация `.env` + credentials file
+1. Интерактивный сбор доменов / email / DNS / local proxy
+2. Скачивание deploy-файлов в `/opt/overvpn` (или `--build` / git)
+3. Генерация `.env` + credentials file + `COMPOSE_PROFILES`
 4. Docker pull **или** `--build`
-5. Compose up + migrate + bootstrap
-6. Nginx + certbot (+ UFW)
-7. Установку CLI-симлинка `overvpn`
+5. Compose up (`panel` + опционально `proxy` + cores) + migrate + bootstrap-admin
+6. При `--with-proxy`: `bootstrap-local-proxy` (NODE_TOKEN + `AGENT_BASE_URL`) + restart agent
+7. Nginx + certbot (+ UFW)
+8. Установку CLI-симлинка `overvpn`
 
-Подкоманды CLI соответствуют `cmd_*` внизу скрипта (`install`, `update`, `nginx`, `bootstrap`, …).
+Отдельно: `overvpn install-proxy --panel-url … --token … --node-id …` — только `proxy` + cores на удалённом хосте.
+
+Подкоманды CLI соответствуют `cmd_*` внизу скрипта (`install`, `install-proxy`, `update`, `enable-core`, `nginx`, `bootstrap`, …).
 
 Если меняешь поведение установки:
 
 - держи **idempotent** update path;
 - не ломай `.install.conf` / credentials format без миграции;
-- синхронизируй help (`usage()`) и README.
+- синхронизируй help (`usage()`), README и `docs/pages/`.
+
+Пользовательская документация: `docs/` → `pnpm docs:build` → GitHub Pages (`https://overl1te.github.io/OverVPN/`).
 
 ---
 
@@ -617,9 +630,10 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 | Двойной подсчёт трафика после reload | `workers/traffic-*`, `TrafficCursor` per engine, provider generation                       |
 | Пользователь не режется по квоте     | `limit-enforcer` / `limit-enforcement.ts`                                                  |
 | Не логинится / cookie                | `auth/`, `AUTH_COOKIE_*`, `CORS_ORIGINS`                                                   |
-| Apply откатывается                   | логи api + `CoreApplyRecord`, entrypoint reload handshake                                  |
+| Apply откатывается                   | логи api/agent + `CoreApplyRecord`, entrypoint reload handshake                            |
+| Нода не online                       | `proxy-servers/`, agent env (`PANEL_URL`/`NODE_*`/`AGENT_BASE_URL`), порт 7700             |
 | Нет кнопки в UI у readonly           | `MutateOnly` + RolesGuard                                                                  |
-| Установка на сервере                 | `install.sh`, не Nest                                                                      |
+| Установка на сервере                 | `install.sh` (`install` / `install-proxy`), не Nest                                        |
 
 ---
 

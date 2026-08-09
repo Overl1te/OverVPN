@@ -5,22 +5,40 @@
 <h2>1. Конфигурация</h2>
 <pre><code class="language-shell">cp .env.example .env  # создать локальный конфиг</code></pre>
 <p>Замените все <code>REPLACE_*</code>. Секреты генерируйте независимо:</p>
-<pre><code class="language-shell">openssl rand -hex 32  # JWT-секрет
-openssl rand -hex 32  # секрет подписок
-openssl rand -base64 36  # пароль Postgres</code></pre>
+<pre><code class="language-shell">openssl rand -hex 32  # JWT / пароли
+openssl rand -hex 32  # SECRETS_MASTER_KEY — ровно 64 hex
+openssl rand -base64 36  # пароль владельца (≥ 16 символов)</code></pre>
+
+<p>
+  Profiles в <code>COMPOSE_PROFILES</code>: <code>panel</code>, <code>proxy</code>,
+  <code>singbox</code> / <code>xray</code> / <code>mtproxy</code>, <code>tools</code>. Для
+  co-located по умолчанию: <code>panel,proxy,singbox,xray,mtproxy</code>.
+</p>
 
 <h2>2. Старт</h2>
 <pre><code class="language-shell">pnpm install  # зависимости монорепо
-pnpm compose-up  # поднять стек из GHCR
+pnpm compose-up  # поднять стек из GHCR (panel + proxy compose)
 pnpm compose-build  # или: собрать образы локально</code></pre>
 
-<h2>3. Владелец</h2>
-<pre><code class="language-shell">pnpm bootstrap:admin  # создать владельца панели</code></pre>
+<p>
+  Команды <code>pnpm compose-*</code> поднимают оба файла:
+  <code>deploy/docker-compose.yml</code> и <code>deploy/docker-compose.proxy.yml</code>.
+</p>
+
+<h2>3. Владелец и локальный прокси</h2>
+<pre><code class="language-shell">docker compose --env-file .env -f deploy/docker-compose.yml --profile tools run --rm bootstrap-admin
+# затем (если нужен локальный ProxyServer + NODE_TOKEN):
+docker compose --env-file .env -f deploy/docker-compose.yml --profile tools run --rm \
+  -e AGENT_BASE_URL=http://agent:7700 \
+  api node apps/api/dist/scripts/bootstrap-local-proxy.js</code></pre>
+
+<p>Либо <code>pnpm bootstrap:admin</code> для владельца без Compose one-shot.</p>
 
 <h2>4. Проверка</h2>
 <ul>
   <li>Панель: <code>http://localhost:8080</code></li>
   <li>Health: <code>curl -s http://localhost:8080/api/health</code></li>
+  <li>Агент (если proxy): <code>curl -s http://127.0.0.1:7700/health</code></li>
 </ul>
 
 <h2>5. Остановка</h2>

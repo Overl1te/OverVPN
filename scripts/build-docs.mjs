@@ -14,6 +14,7 @@ const sidebar = [
     items: [
       { id: 'guide-introduction', label: 'Введение', href: 'guide/introduction.html' },
       { id: 'guide-installation', label: 'Установка', href: 'guide/installation.html' },
+      { id: 'guide-proxy-nodes', label: 'Прокси-ноды', href: 'guide/proxy-nodes.html' },
       { id: 'guide-management', label: 'Управление сервером', href: 'guide/management.html' },
     ],
   },
@@ -65,6 +66,12 @@ const pages = [
     title: 'Установка',
     out: 'guide/installation.html',
     content: 'pages/guide/installation.html',
+  },
+  {
+    id: 'guide-proxy-nodes',
+    title: 'Прокси-ноды',
+    out: 'guide/proxy-nodes.html',
+    content: 'pages/guide/proxy-nodes.html',
   },
   {
     id: 'guide-management',

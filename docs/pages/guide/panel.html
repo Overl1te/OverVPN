@@ -1,26 +1,41 @@
 <h1>Работа в панели</h1>
 
-<p>Типичный порядок: <strong>inbound → пользователь → подписка → мониторинг</strong>.</p>
+<p>
+  Типичный порядок:
+  <strong>прокси-нода → inbound → план → пользователь → подписка → мониторинг</strong>.
+</p>
+
+<h2>0. Прокси-нода</h2>
+<p>
+  При обычном install локальная нода уже есть. Удалённую добавьте через
+  <strong>Прокси</strong> → визард. Подробнее:
+  <a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a>.
+</p>
 
 <h2>1. Создать inbound</h2>
 <ol>
   <li><strong>Inbounds</strong> → создать протокол</li>
-  <li>Укажите <code>tag</code>, listen / public host и port</li>
-  <li>TLS-файлы — в каталог сертификатов ядра</li>
-  <li>После сохранения панель сразу применяет конфиг</li>
+  <li>Выберите <strong>прокси-сервер</strong>, <code>tag</code>, listen / public host и port</li>
+  <li>TLS-файлы — в каталог сертификатов ядра на ноде</li>
+  <li>После сохранения панель сразу применяет конфиг на ноду</li>
 </ol>
 <pre><code class="language-text">validate → write → reload → verify → rollback при ошибке</code></pre>
 
 <div class="callout warning">
   <strong>Важно</strong>
-  <code>SING_BOX_UDP_PORT</code> в <code>.env</code> должен совпадать с портом inbound'а (обычно
-  <code>443</code>).
+  Порт в inbound должен совпадать с опубликованным портом ядра в <code>.env</code> / Compose на этой
+  ноде (например <code>SING_BOX_UDP_PORT</code> для Hysteria2).
 </div>
 
-<h2>2. Создать пользователя</h2>
+<h2>2. Создать план и пользователя</h2>
 <ol>
-  <li><strong>Users</strong> → имя, лимит трафика, срок, лимиты устройств/IP</li>
-  <li>Назначьте inbound (assignments)</li>
+  <li>
+    <strong>Plans</strong> → создать план и привязать хотя бы один inbound (иначе подписка будет
+    пустой)
+  </li>
+  <li>
+    <strong>Users</strong> → имя и план. Срок, лимиты и assignments берутся из плана
+  </li>
   <li>Скопируйте subscription URL или QR</li>
 </ol>
 
@@ -46,10 +61,15 @@
     </tr>
     <tr>
       <td><code>LIMITED</code></td>
-      <td>квота / устройство / IP</td>
+      <td>квота / устройства</td>
     </tr>
   </tbody>
 </table>
+
+<p>
+  Лимит устройств = максимум одновременных онлайн-клиентов. Без HWID «устройство» ≈ публичный source
+  IP. Причина отключения видна в UI (<code>statusReason</code>).
+</p>
 
 <h2>3. Применить конфиг вручную</h2>
 <p><strong>Config</strong> → Preview → Apply с причиной. При сбое — rollback.</p>
@@ -57,6 +77,7 @@
 <h2>4. Мониторинг</h2>
 <ul>
   <li><strong>Dashboard</strong> — CPU / RAM / сеть, онлайн, здоровье ядра, throughput</li>
+  <li><strong>Прокси</strong> — статус нод, heartbeat, install-command</li>
   <li><strong>Online sessions</strong> — активные сессии</li>
   <li><strong>Audit</strong> — журнал действий</li>
 </ul>
@@ -76,7 +97,7 @@
     </tr>
     <tr>
       <td><code>ADMIN</code></td>
-      <td>users / inbounds / apply / backups</td>
+      <td>users / inbounds / proxy / apply / backups</td>
     </tr>
     <tr>
       <td><code>READONLY</code></td>

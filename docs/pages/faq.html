@@ -18,6 +18,9 @@
   <li><code>overvpn config certs</code> или <code>overvpn nginx</code></li>
 </ul>
 
+<h3>Нужна только панель без VPN на этом сервере</h3>
+<p><code>overvpn install --no-proxy</code>, затем добавьте удалённые ноды через визард.</p>
+
 <h2>Панель и API</h2>
 
 <h3>Не могу войти</h3>
@@ -33,19 +36,41 @@
 overvpn restart  # перезапуск стека
 overvpn logs web  # логи фронтенда за прокси</code></pre>
 
+<h2>Прокси-ноды</h2>
+
+<h3>Агент не становится online</h3>
+<ol>
+  <li><code>PANEL_URL</code> доступен с ноды</li>
+  <li><code>NODE_ID</code> / токен совпадают с записью в панели</li>
+  <li>С панели доступен <code>AGENT_BASE_URL</code> (порт 7700)</li>
+  <li><code>overvpn logs agent</code> на ноде</li>
+</ol>
+
+<h3>Как добавить второй сервер</h3>
+<p>
+  <a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a>: визард →
+  <code>install-proxy</code>.
+</p>
+
 <h2>VPN и ядро</h2>
 
 <h3>Клиент не подключается</h3>
 <ol>
-  <li>Inbound создан, apply успешен</li>
+  <li>Inbound создан на нужной ноде, apply успешен</li>
   <li>Пользователь <code>ACTIVE</code></li>
-  <li>Inbound назначен (assignment)</li>
-  <li>UDP/TCP порт открыт в firewall</li>
-  <li><code>SING_BOX_UDP_PORT</code> совпадает с inbound</li>
+  <li>Inbound назначен (assignment / план)</li>
+  <li>UDP/TCP порт открыт в firewall на ноде</li>
+  <li>Порт inbound совпадает с publish в Compose</li>
 </ol>
 
+<h3>Нет inbound'ов после install</h3>
+<p>
+  Это ожидаемо: default inbounds выключены. Создайте вручную или
+  <code>--create-default-inbounds</code>.
+</p>
+
 <h3>Apply откатывается (rollback)</h3>
-<p>Смотрите Config в UI и <code>overvpn logs core</code>.</p>
+<p>Смотрите Config в UI и <code>overvpn logs core</code> / <code>overvpn logs agent</code>.</p>
 
 <h2>Подписки</h2>
 

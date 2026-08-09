@@ -94,6 +94,8 @@ curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o
 | `--build`                      | Собрать образы локально                              |
 | `--with-mtproxy`               | Включить MTProxy / Telemt (по умолчанию в simple)    |
 | `--without-mtproxy`            | Не ставить MTProxy                                   |
+| `--with-proxy`                 | Локальный агент+ядра (по умолчанию)                  |
+| `--no-proxy`                   | Только панель, без локального прокси                 |
 | `--skip-dns`                   | Не ждать DNS перед сертификатами                     |
 | `--no-nginx`                   | Без Nginx/TLS                                        |
 | `--no-ufw`                     | Не трогать UFW                                       |
@@ -137,6 +139,7 @@ overvpn info                   # URL, хосты, bootstrap-учётка
 overvpn edit                   # открыть .env в $EDITOR
 overvpn enable-core singbox|xray|mtproxy   # доустановить ядро
 overvpn disable-core singbox|xray|mtproxy  # отключить (если нет inbound’ов)
+overvpn install-proxy --panel-url … --token … --node-id …  # удалённая нода
 overvpn restart                # перезапуск стека
 overvpn check-update           # есть ли новый образ в GHCR (без установки)
 overvpn update                 # pull новых образов из GHCR
@@ -179,11 +182,12 @@ overvpn uninstall              # удалить установку
 
 ### 1. Создать inbound
 
-1. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks / WireGuard / Xray VLESS, Trojan TLS, Shadowsocks или WireGuard / MTProxy).
-2. Укажите `tag`, listen / public host и port.
-3. TLS-файлы кладите в каталог сертификатов ядра (`deploy/sing-box/certs`, в контейнере — `/var/lib/sing-box-certs`).
+1. Убедитесь, что есть **прокси-нода** (локальная после install или удалённая через **Прокси** → визард).
+2. **Inbounds** → создать протокол (Hysteria2 / VLESS Reality / Trojan / Shadowsocks / WireGuard / Xray VLESS, Trojan TLS, Shadowsocks или WireGuard / MTProxy).
+3. Укажите прокси-сервер, `tag`, listen / public host и port.
+4. TLS-файлы кладите в каталог сертификатов ядра (`deploy/sing-box/certs`, в контейнере — `/var/lib/sing-box-certs`).
 
-При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_`* — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. 4. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
+При установке **с доменами и Nginx** установщик сам копирует Let’s Encrypt сертификаты в этот каталог и выставляет `VPN_TLS_`* — новый inbound по умолчанию использует **FILES** (не встроенный ACME). Встроенный ACME за Nginx на 80/443 без отдельного прокси challenge не работает. После сохранения панель **сразу** применяет конфиг: validate → write → reload → verify → **rollback** при ошибке.
 
 Порты в режиме **Простой** подставляются из установки: `SING_BOX_UDP_PORT` (Hysteria2), `SING_BOX_TCP_PORT` (Reality), `SING_BOX_TROJAN_PORT` (Trojan), `SING_BOX_SS_PORT` (Shadowsocks), `SING_BOX_WG_PORT` (WireGuard), `XRAY_LISTEN_PORT` (xHTTP), `XRAY_GRPC_PORT` (gRPC), `XRAY_TCP_TLS_PORT` (TCP TLS), `XRAY_TROJAN_PORT`, `XRAY_SS_PORT`, `XRAY_WG_PORT`, `MTPROXY_PORT_MIN`…`MAX` (MTProxy). Не выбирайте другие порты без правки `.env` и publish в Compose.
 
@@ -415,7 +419,8 @@ curl -s http://localhost:8080/api/health/ready
 1. Трафик через stats API — **суммарный по пользователю**, не «пользователь × inbound».
 2. Идентификация устройства онлайн — best-effort (часто `ip:порт`).
 3. После reload счётчики ядра пересоздаются; панель учитывает это через epoch/generation.
-4. **Одна машина, одно ядро** — мульти-нода вне скоупа.
+4. Старые однонодовые инсталлы без ProxyServer/агента **не мигрируются** — нужен свежий install.
+5. Полный сбор stats только через агент ещё в развитии; см. docs → Ограничения.
 
 ---
 

@@ -1,0 +1,123 @@
+<h1>Прокси-ноды</h1>
+
+<p>
+  Прокси-нода — сервер с агентом и VPN-ядрами. Панель хранит список нод
+  (<code>ProxyServer</code>), привязывает к ним inbound'ы и применяет конфиг через агент.
+</p>
+
+<h2>Два сценария</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Сценарий</th>
+      <th>Как поставить</th>
+      <th>Compose profiles</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Co-located</strong> (по умолчанию)</td>
+      <td><code>overvpn install</code> (<code>--with-proxy</code>)</td>
+      <td><code>panel,proxy,singbox,xray,mtproxy</code></td>
+    </tr>
+    <tr>
+      <td><strong>Только панель</strong></td>
+      <td><code>overvpn install --no-proxy</code></td>
+      <td><code>panel</code></td>
+    </tr>
+    <tr>
+      <td><strong>Удалённый прокси</strong></td>
+      <td>Визард в панели → <code>overvpn install-proxy …</code></td>
+      <td><code>proxy</code> + ядра</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout tip">
+  <strong>Локальная seed-нода</strong>
+  При co-install создаётся локальный <code>ProxyServer</code> с фиксированным id
+  <code>00000000-0000-4000-8000-000000000001</code>. Его нельзя удалить из UI.
+</div>
+
+<h2>Удалённая нода: пошагово</h2>
+
+<ol>
+  <li>
+    В панели откройте <strong>Прокси</strong> → <strong>Создать</strong>
+    (<code>/proxy/new</code>).
+  </li>
+  <li>
+    Пройдите визард (5 шагов):
+    <strong>основы → сеть → протоколы → установка → проверка</strong>.
+  </li>
+  <li>
+    На шаге установки скопируйте команду
+    <code>overvpn install-proxy --panel-url … --token … --node-id …</code>.
+  </li>
+  <li>Выполните её <strong>на сервере ноды</strong> (root/sudo, Ubuntu/Debian).</li>
+  <li>Дождитесь online / heartbeat на шаге проверки.</li>
+</ol>
+
+<pre><code class="language-shell"># пример (токен и node-id выдаёт панель)
+curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh
+sudo bash /tmp/overvpn-install.sh @ install-proxy \
+  --panel-url https://panel.example.com \
+  --token '&lt;INSTALL_TOKEN&gt;' \
+  --node-id '&lt;PROXY_SERVER_UUID&gt;'</code></pre>
+
+<p>
+  Установщик remote-ноды выставляет
+  <code>AGENT_BASE_URL=http://&lt;public-ip&gt;:7700</code> (порт агента по умолчанию
+  <code>7700</code>, флаг <code>--agent-port</code>).
+</p>
+
+<h2>Связь панель ↔ агент</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Направление</th>
+      <th>Эндпоинты</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Агент → панель</td>
+      <td>
+        <code>/api/agent/nodes/:id/{register,heartbeat,stats,desired,apply-result}</code>
+      </td>
+    </tr>
+    <tr>
+      <td>Панель → агент</td>
+      <td><code>POST {agentBaseUrl}/v1/apply</code> (и status/cores/reload)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Агент слушает Bearer <code>NODE_TOKEN</code>. При первом старте remote-ноды допустим
+  <code>INSTALL_TOKEN</code> (одноразовый) для register.
+</p>
+
+<h2>Inbound'ы и нода</h2>
+<ul>
+  <li>Каждый inbound привязан к <code>proxyServerId</code>.</li>
+  <li>Порты VPN не должны пересекаться на одной ноде между inbound'ами.</li>
+  <li>
+    Default inbounds при install <strong>не создаются</strong> — только вручную в UI или флаг
+    <code>--create-default-inbounds</code>.
+  </li>
+</ul>
+
+<div class="callout warning">
+  <strong>Важно</strong>
+  Старые однонодовые инсталлы без модели ProxyServer не мигрируются автоматически — нужен свежий
+  <code>overvpn install</code>.
+</div>
+
+<p>
+  См. также: <a href="{{BASE}}guide/installation.html">установка</a>,
+  <a href="{{BASE}}reference/cli.html">CLI</a>,
+  <a href="{{BASE}}reference/env.html">переменные агента</a>.
+</p>
