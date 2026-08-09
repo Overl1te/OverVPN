@@ -12,16 +12,24 @@ mkdir -p \
   "$(dirname "${MTPROXY_RELOAD_REQUEST_PATH:-/var/lib/overvpn/mtproxy-reload/request}")" \
   "$state_dir"
 
-# Named volumes are root-owned on first create; agent runs as `node` and must write state.
+# Named volumes are root-owned on first create; agent prefers to run as `node`.
 if [ "$(id -u)" = "0" ]; then
   chown -R node:node "$state_dir" 2>/dev/null || true
-  # Reload request dirs must be writable for apply push.
   chown -R node:node \
     "$(dirname "${SING_BOX_RELOAD_REQUEST_PATH:-/var/lib/overvpn/reload/request}")" \
     "$(dirname "${XRAY_RELOAD_REQUEST_PATH:-/var/lib/overvpn/xray-reload/request}")" \
     "$(dirname "${MTPROXY_RELOAD_REQUEST_PATH:-/var/lib/overvpn/mtproxy-reload/request}")" \
     2>/dev/null || true
-  exec runuser -u node -- "$@"
+
+  # Prefer dropping privileges. runuser needs CAP_SETGID for supplementary groups
+  # and fails with "cannot set groups" on some hosts — fall back to setpriv / root.
+  if command -v runuser >/dev/null 2>&1 && runuser -u node -- true >/dev/null 2>&1; then
+    exec runuser -u node -- "$@"
+  fi
+  if command -v setpriv >/dev/null 2>&1; then
+    exec setpriv --reuid=1000 --regid=1000 --clear-groups -- "$@"
+  fi
+  exec "$@"
 fi
 
 exec "$@"
