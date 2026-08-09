@@ -618,6 +618,8 @@
     "engineGroupXray": "Xray",
     "engineGroupMtproxy": "MTProxy",
     "engineDisabled": "ядро выключено — overvpn enable-core",
+    "protocolFilteredByProxy": "Список ограничен протоколами, включёнными на выбранном прокси",
+    "protocolNoneForProxy": "На этом прокси нет доступных протоколов — отметьте их в карточке прокси",
     "installPortRangeHint": "Установка публикует TCP-порты {{range}} для MTProxy. Выберите свободный порт в этом диапазоне.",
     "mtproxySecretMode": "Режим секрета",
     "mtproxySecretMode.CLASSIC": "Classic",

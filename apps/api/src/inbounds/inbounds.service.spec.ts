@@ -110,6 +110,14 @@ describe('InboundsService VLESS Reality create', () => {
     const inboundFindFirst = jest.fn().mockResolvedValue(null);
     const prisma = {
       inbound: { findFirst: inboundFindFirst },
+      proxyServer: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: '00000000-0000-4000-8000-000000000001',
+          name: 'local',
+          enabledProtocols: [],
+          enabledEngines: [],
+        }),
+      },
       $transaction: jest.fn(
         async (callback: (tx: unknown) => Promise<unknown>) =>
           callback({
@@ -176,6 +184,14 @@ describe('InboundsService VLESS Reality create', () => {
     const service = new InboundsService(
       {
         inbound: { findFirst: jest.fn() },
+        proxyServer: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: '00000000-0000-4000-8000-000000000001',
+            name: 'local',
+            enabledProtocols: [],
+            enabledEngines: [],
+          }),
+        },
         $transaction: jest.fn(),
       } as unknown as PrismaService,
       {

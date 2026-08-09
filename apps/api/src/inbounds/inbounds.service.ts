@@ -230,6 +230,10 @@ export class InboundsService {
     try {
       const engine = this.resolveEngine(input.protocol);
       this.assertEngineEnabled(engine);
+      await this.assertProtocolAllowedOnProxy(
+        input.proxyServerId,
+        input.protocol,
+      );
       if (input.protocol === 'MTPROXY') {
         await this.assertMtproxyInboundLimit();
       }
@@ -1190,6 +1194,61 @@ export class InboundsService {
           'MTProxy is disabled on this install. Enable it with: overvpn enable-core mtproxy',
         messageRu:
           'MTProxy отключён на этой установке. Включите: overvpn enable-core mtproxy',
+      });
+    }
+  }
+
+  private async assertProtocolAllowedOnProxy(
+    proxyServerId: string,
+    protocol: InboundProtocol,
+  ): Promise<void> {
+    const proxy = await this.prisma.proxyServer.findUnique({
+      where: { id: proxyServerId },
+      select: {
+        id: true,
+        name: true,
+        enabledProtocols: true,
+        enabledEngines: true,
+      },
+    });
+    if (!proxy) {
+      throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND, {
+        reason: 'proxy_server_not_found',
+      });
+    }
+    const engine = this.resolveEngine(protocol);
+    const enabledProtocols = Array.isArray(proxy.enabledProtocols)
+      ? proxy.enabledProtocols.filter(
+          (item): item is InboundProtocol => typeof item === 'string',
+        )
+      : [];
+    if (enabledProtocols.length > 0 && !enabledProtocols.includes(protocol)) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'proxy_protocol_not_enabled',
+        message: `Protocol ${protocol} is not enabled on proxy "${proxy.name}"`,
+        messageRu: `Протокол ${protocol} не включён на прокси «${proxy.name}»`,
+        protocol,
+        proxyServerId,
+        enabledProtocols,
+      });
+    }
+    const enabledEngines = Array.isArray(proxy.enabledEngines)
+      ? proxy.enabledEngines.filter(
+          (item): item is CoreEngine => typeof item === 'string',
+        )
+      : [];
+    if (
+      enabledProtocols.length === 0 &&
+      enabledEngines.length > 0 &&
+      !enabledEngines.includes(engine)
+    ) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'proxy_engine_not_enabled',
+        message: `Engine ${engine} is not enabled on proxy "${proxy.name}"`,
+        messageRu: `Ядро ${engine} не включено на прокси «${proxy.name}»`,
+        engine,
+        proxyServerId,
+        enabledEngines,
       });
     }
   }

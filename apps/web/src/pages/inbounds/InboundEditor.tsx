@@ -1059,6 +1059,7 @@ export function InboundEditor({
   const onError = useApiErrorHandler(form);
   const protocol = Form.useWatch('protocol', form);
   const settings = Form.useWatch('settings', form);
+  const selectedProxyServerId = Form.useWatch('proxyServerId', form);
   const [editorMode, setEditorMode] = useState<EditorMode>('simple');
   const [advancedJson, setAdvancedJson] = useState('');
   const [advancedTouched, setAdvancedTouched] = useState(false);
@@ -1091,13 +1092,24 @@ export function InboundEditor({
     [proxyServersQuery.data, t],
   );
 
+  const selectedProxy = useMemo(() => {
+    const id = inbound?.proxyServerId ?? selectedProxyServerId;
+    if (!id) {
+      return null;
+    }
+    return proxyServersQuery.data?.items.find((server) => server.id === id) ?? null;
+  }, [inbound?.proxyServerId, selectedProxyServerId, proxyServersQuery.data]);
+
   const defaultsContext = useMemo((): InboundDefaultsContext | null => {
     if (!settingsQuery.isSuccess) {
       return null;
     }
     const readOnly = settingsQuery.data.readOnly;
+    const panelHost = readOnly.vpnPublicHost?.trim() ?? '';
+    const proxyHost = selectedProxy?.publicHost?.trim() ?? '';
+    const publicHost = inbound?.settings.publicHost?.trim() || proxyHost || panelHost || '';
     return {
-      publicHost: inbound?.settings.publicHost ?? readOnly.vpnPublicHost?.trim() ?? '',
+      publicHost,
       acmeHttpPort: readOnly.acmeHttpPort,
       acmeTlsPort: readOnly.acmeTlsPort,
       singBoxUdpPort: readOnly.singBoxUdpPort,
@@ -1116,7 +1128,7 @@ export function InboundEditor({
       tlsCertificatePath: readOnly.tlsCertificatePath,
       tlsKeyPath: readOnly.tlsKeyPath,
     };
-  }, [inbound, settingsQuery.data, settingsQuery.isSuccess]);
+  }, [inbound, selectedProxy?.publicHost, settingsQuery.data, settingsQuery.isSuccess]);
 
   const installPortInfo = useMemo(() => {
     if (!defaultsContext || !protocol) {
@@ -1147,6 +1159,43 @@ export function InboundEditor({
     [settingsQuery.data],
   );
 
+  const allowedProtocols = useMemo(() => {
+    const panelAllowed = new Set<InboundProtocol>();
+    if (engineEnabled.SING_BOX) {
+      for (const value of SING_BOX_PROTOCOLS) {
+        panelAllowed.add(value);
+      }
+    }
+    if (engineEnabled.XRAY) {
+      for (const value of XRAY_PROTOCOLS) {
+        panelAllowed.add(value);
+      }
+    }
+    if (engineEnabled.MTPROXY) {
+      for (const value of MTPROXY_PROTOCOLS) {
+        panelAllowed.add(value);
+      }
+    }
+
+    if (!selectedProxy) {
+      return panelAllowed;
+    }
+
+    const proxyProtocols = selectedProxy.enabledProtocols;
+    if (proxyProtocols.length > 0) {
+      return new Set(proxyProtocols.filter((value) => panelAllowed.has(value)));
+    }
+
+    const proxyEngines = new Set(selectedProxy.enabledEngines);
+    if (proxyEngines.size > 0) {
+      return new Set(
+        [...panelAllowed].filter((value) => proxyEngines.has(PROTOCOL_ENGINE_MAP[value])),
+      );
+    }
+
+    return panelAllowed;
+  }, [engineEnabled, selectedProxy]);
+
   const protocolSelectOptions = useMemo(() => {
     const labelFor = (value: InboundProtocol) =>
       t(`enums.protocol.${value}`, {
@@ -1156,62 +1205,36 @@ export function InboundEditor({
       label: string;
       options: Array<{ value: InboundProtocol; label: string; disabled?: boolean }>;
     }> = [];
-    if (engineEnabled.SING_BOX) {
-      groups.push({
-        label: t('inbounds.engineGroupSingBox'),
-        options: SING_BOX_PROTOCOLS.map((value) => ({
+
+    const pushGroup = (
+      engineKey: 'SING_BOX' | 'XRAY' | 'MTPROXY',
+      groupLabel: string,
+      protocols: InboundProtocol[],
+    ) => {
+      const options = protocols
+        .filter((value) => allowedProtocols.has(value))
+        .map((value) => ({
           value,
           label: labelFor(value),
-        })),
-      });
-    } else {
-      groups.push({
-        label: `${t('inbounds.engineGroupSingBox')} (${t('inbounds.engineDisabled')})`,
-        options: SING_BOX_PROTOCOLS.map((value) => ({
-          value,
-          label: labelFor(value),
-          disabled: true,
-        })),
-      });
-    }
-    if (engineEnabled.XRAY) {
-      groups.push({
-        label: t('inbounds.engineGroupXray'),
-        options: XRAY_PROTOCOLS.map((value) => ({
-          value,
-          label: labelFor(value),
-        })),
-      });
-    } else {
-      groups.push({
-        label: `${t('inbounds.engineGroupXray')} (${t('inbounds.engineDisabled')})`,
-        options: XRAY_PROTOCOLS.map((value) => ({
-          value,
-          label: labelFor(value),
-          disabled: true,
-        })),
-      });
-    }
-    if (engineEnabled.MTPROXY) {
-      groups.push({
-        label: t('inbounds.engineGroupMtproxy'),
-        options: MTPROXY_PROTOCOLS.map((value) => ({
-          value,
-          label: labelFor(value),
-        })),
-      });
-    } else {
-      groups.push({
-        label: `${t('inbounds.engineGroupMtproxy')} (${t('inbounds.engineDisabled')})`,
-        options: MTPROXY_PROTOCOLS.map((value) => ({
-          value,
-          label: labelFor(value),
-          disabled: true,
-        })),
-      });
-    }
+        }));
+      if (options.length === 0) {
+        return;
+      }
+      if (!engineEnabled[engineKey]) {
+        groups.push({
+          label: `${groupLabel} (${t('inbounds.engineDisabled')})`,
+          options: options.map((option) => ({ ...option, disabled: true })),
+        });
+        return;
+      }
+      groups.push({ label: groupLabel, options });
+    };
+
+    pushGroup('SING_BOX', t('inbounds.engineGroupSingBox'), SING_BOX_PROTOCOLS);
+    pushGroup('XRAY', t('inbounds.engineGroupXray'), XRAY_PROTOCOLS);
+    pushGroup('MTPROXY', t('inbounds.engineGroupMtproxy'), MTPROXY_PROTOCOLS);
     return groups;
-  }, [engineEnabled, t]);
+  }, [allowedProtocols, engineEnabled, t]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: InboundEditorForm) => {
@@ -1449,11 +1472,50 @@ export function InboundEditor({
     }
   };
 
+  useEffect(() => {
+    if (inbound || !open || !defaultsContext || !protocol) {
+      return;
+    }
+    if (allowedProtocols.has(protocol)) {
+      return;
+    }
+    const fallback = [...allowedProtocols][0];
+    if (!fallback || fallback === protocol) {
+      return;
+    }
+    handleProtocolChange(fallback);
+    // Intentionally omit handleProtocolChange — recreate defaults when allow-list shrinks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedProtocols, defaultsContext, inbound, open, protocol]);
+
   const handlePublicHostChange = (host: string) => {
     const current = form.getFieldValue('settings') as InboundEditorForm['settings'];
     const next = syncTlsPublicHost({ ...current, publicHost: host }, host);
     form.setFields([{ name: 'settings', value: next }]);
   };
+
+  useEffect(() => {
+    if (inbound || !open || !selectedProxy?.publicHost) {
+      return;
+    }
+    const proxyHost = selectedProxy.publicHost.trim();
+    if (!proxyHost) {
+      return;
+    }
+    const panelHost = settingsQuery.data?.readOnly.vpnPublicHost?.trim() ?? '';
+    const current = form.getFieldValue('settings') as InboundEditorForm['settings'] | undefined;
+    const currentHost =
+      current && typeof current.publicHost === 'string' ? current.publicHost.trim() : '';
+    // Only auto-fill when empty or still the panel-wide default (common create mistake).
+    if (currentHost && currentHost !== panelHost && currentHost !== proxyHost) {
+      return;
+    }
+    if (currentHost === proxyHost) {
+      return;
+    }
+    handlePublicHostChange(proxyHost);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inbound, open, selectedProxy?.id, selectedProxy?.publicHost, settingsQuery.data]);
 
   const applyAdvancedJson = () => {
     try {
@@ -1565,12 +1627,19 @@ export function InboundEditor({
           <Form.Item
             name="protocol"
             label={t('inbounds.protocol')}
-            extra={protocolResetKey > 0 ? t('inbounds.protocolReset') : undefined}
+            extra={
+              protocolResetKey > 0
+                ? t('inbounds.protocolReset')
+                : selectedProxy
+                  ? t('inbounds.protocolFilteredByProxy')
+                  : undefined
+            }
           >
             <Select
               disabled={!!inbound}
               options={protocolSelectOptions}
               onChange={handleProtocolChange}
+              notFoundContent={t('inbounds.protocolNoneForProxy')}
             />
           </Form.Item>
           {protocol ? (

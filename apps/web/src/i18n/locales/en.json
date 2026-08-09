@@ -618,6 +618,8 @@
     "engineGroupXray": "Xray",
     "engineGroupMtproxy": "MTProxy",
     "engineDisabled": "core disabled — run overvpn enable-core",
+    "protocolFilteredByProxy": "List is limited to protocols enabled on the selected proxy",
+    "protocolNoneForProxy": "No protocols available on this proxy — enable them on the proxy card",
     "installPortRangeHint": "Install publishes TCP ports {{range}} for MTProxy. Pick a free port in that range.",
     "mtproxySecretMode": "Secret mode",
     "mtproxySecretMode.CLASSIC": "Classic",
