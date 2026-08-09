@@ -28,7 +28,13 @@ import { TOUR_ASSIST_EVENT, type TourAssistDetail } from '@/hooks/usePanelTour';
 import { notifyCoreApply } from '@/utils/notifyCoreApply';
 import { InboundEditor } from './InboundEditor';
 
-function AssignmentsPanel({ inboundId }: { inboundId: string }) {
+function AssignmentsPanel({
+  inboundId,
+  proxyServerId,
+}: {
+  inboundId: string;
+  proxyServerId: string;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -71,7 +77,7 @@ function AssignmentsPanel({ inboundId }: { inboundId: string }) {
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['assignments', inboundId] });
       setUserId(undefined);
-      notifyCoreApply(result.apply, { t, messageApi, navigate });
+      notifyCoreApply(result.apply, { t, messageApi, navigate, proxyServerId });
     },
     onError: onError,
   });
@@ -80,7 +86,7 @@ function AssignmentsPanel({ inboundId }: { inboundId: string }) {
     mutationFn: (assignmentId: string) => removeAssignment(inboundId, assignmentId),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['assignments', inboundId] });
-      notifyCoreApply(result.apply, { t, messageApi, navigate });
+      notifyCoreApply(result.apply, { t, messageApi, navigate, proxyServerId });
     },
     onError: onError,
   });
@@ -89,7 +95,7 @@ function AssignmentsPanel({ inboundId }: { inboundId: string }) {
     mutationFn: (assignmentId: string) => rotateAssignmentCredential(inboundId, assignmentId, {}),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['assignments', inboundId] });
-      notifyCoreApply(result.apply, { t, messageApi, navigate });
+      notifyCoreApply(result.apply, { t, messageApi, navigate, proxyServerId });
     },
     onError: onError,
   });
@@ -258,7 +264,12 @@ export function InboundsListPage() {
       enabled ? enableInbound(id) : disableInbound(id),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
-      notifyCoreApply(result.apply, { t, messageApi, navigate });
+      notifyCoreApply(result.apply, {
+        t,
+        messageApi,
+        navigate,
+        proxyServerId: result.inbound?.proxyServerId,
+      });
     },
     onError: onError,
   });
@@ -269,7 +280,12 @@ export function InboundsListPage() {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
       void queryClient.invalidateQueries({ queryKey: ['plans'] });
       void queryClient.invalidateQueries({ queryKey: ['setup'] });
-      notifyCoreApply(result.apply, { t, messageApi, navigate });
+      notifyCoreApply(result.apply, {
+        t,
+        messageApi,
+        navigate,
+        proxyServerId: result.inbound?.proxyServerId,
+      });
     },
     onError: onError,
   });
@@ -315,7 +331,9 @@ export function InboundsListPage() {
         loading={query.isLoading}
         dataSource={query.data?.items ?? []}
         expandable={{
-          expandedRowRender: (row) => <AssignmentsPanel inboundId={row.id} />,
+          expandedRowRender: (row) => (
+            <AssignmentsPanel inboundId={row.id} proxyServerId={row.proxyServerId} />
+          ),
           rowExpandable: () => true,
         }}
         pagination={{

@@ -6,7 +6,6 @@ import {
   ClusterOutlined,
   ProfileOutlined,
   WifiOutlined,
-  DeploymentUnitOutlined,
   AuditOutlined,
   SettingOutlined,
   DatabaseOutlined,
@@ -133,11 +132,6 @@ export function AdminLayout() {
       key: '/online',
       icon: <WifiOutlined />,
       label: <NavLabel tourId="nav-online">{t('nav.online')}</NavLabel>,
-    },
-    {
-      key: '/config',
-      icon: <DeploymentUnitOutlined />,
-      label: <NavLabel tourId="nav-config">{t('nav.config')}</NavLabel>,
     },
     {
       key: '/audit',

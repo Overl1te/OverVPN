@@ -5,7 +5,7 @@ export type PanelTourStepId =
   | 'nav-plans'
   | 'nav-users'
   | 'nav-online'
-  | 'nav-config'
+  | 'nav-proxy'
   | 'nav-system'
   | 'nav-backups'
   | 'page-inbounds'
@@ -37,7 +37,7 @@ export const PANEL_TOUR_STEPS: PanelTourStepDef[] = [
   { id: 'nav-plans', target: '[data-tour="nav-plans"]' },
   { id: 'nav-users', target: '[data-tour="nav-users"]' },
   { id: 'nav-online', target: '[data-tour="nav-online"]' },
-  { id: 'nav-config', target: '[data-tour="nav-config"]' },
+  { id: 'nav-proxy', target: '[data-tour="nav-proxy"]' },
   { id: 'nav-system', target: '[data-tour="nav-system"]' },
   { id: 'nav-backups', target: '[data-tour="nav-backups"]' },
   {

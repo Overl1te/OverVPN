@@ -10,6 +10,7 @@ import {
   Popconfirm,
   Space,
   Spin,
+  Table,
   Tag,
   Typography,
   message,
@@ -28,12 +29,15 @@ import {
 } from '@overvpn/shared/constants';
 import type { ProxyInstallCommandResponse, ProxyServerWizard } from '@overvpn/shared/schemas';
 import {
+  applyProxyConfig,
   applyProxyServerWizard,
   createProxyInstallCommand,
   deleteProxyServer,
   disableProxyServer,
   enableProxyServer,
   getProxyServer,
+  listProxyConfigApplies,
+  previewProxyConfig,
 } from '@/api/proxy-servers';
 import { CopyButton } from '@/components/CopyButton';
 import { MutateOnly } from '@/components/MutateOnly';
@@ -55,6 +59,8 @@ export function ProxyServerDetailPage() {
   const [settingsForm] = Form.useForm<ProxyServerWizard>();
   const [install, setInstall] = useState<ProxyInstallCommandResponse | null>(null);
   const [selectedProtocols, setSelectedProtocols] = useState<InboundProtocol[]>([]);
+  const [applyReason, setApplyReason] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const query = useQuery({
     queryKey: ['proxy-servers', id],
@@ -95,7 +101,31 @@ export function ProxyServerDetailPage() {
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['proxy-servers'] });
+    void queryClient.invalidateQueries({ queryKey: ['proxy-config', id] });
   };
+
+  const previewQuery = useQuery({
+    queryKey: ['proxy-config', id, 'preview'],
+    queryFn: () => previewProxyConfig(id!),
+    enabled: !!id,
+  });
+
+  const historyQuery = useQuery({
+    queryKey: ['proxy-config', id, 'apply', historyPage],
+    queryFn: () => listProxyConfigApplies(id!, { page: historyPage, pageSize: 25 }),
+    enabled: !!id,
+  });
+
+  const reasonText = applyReason ?? t('config.defaultApplyReason');
+
+  const applyConfigMutation = useMutation({
+    mutationFn: () => applyProxyConfig(id!, { reason: reasonText }),
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('coreApply.succeeded'));
+    },
+    onError,
+  });
 
   const wizardMutation = useMutation({
     mutationFn: (body: ProxyServerWizard) => applyProxyServerWizard(id!, body),
@@ -262,6 +292,125 @@ export function ProxyServerDetailPage() {
             </Descriptions.Item>
           ) : null}
         </Descriptions>
+      </Card>
+
+      <Card
+        size="small"
+        title={t('proxy.configTitle')}
+        style={{ marginBottom: 12 }}
+        extra={
+          <Button onClick={() => void previewQuery.refetch()} loading={previewQuery.isFetching}>
+            {t('app.refresh')}
+          </Button>
+        }
+        loading={previewQuery.isLoading}
+      >
+        <Typography.Paragraph type="secondary">{t('proxy.configHint')}</Typography.Paragraph>
+        {proxy.pendingApplyCount > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('proxy.pendingApply', { count: proxy.pendingApplyCount })}
+          />
+        ) : null}
+        {previewQuery.data ? (
+          <>
+            <Space wrap style={{ marginBottom: 8 }}>
+              <Tag color={previewQuery.data.valid ? 'green' : 'red'}>
+                {previewQuery.data.valid ? t('config.valid') : t('config.invalid')}
+              </Tag>
+              <Typography.Text code>
+                {t('config.hash')}: {previewQuery.data.hash}
+              </Typography.Text>
+              {previewQuery.data.previousHash ? (
+                <Typography.Text code>
+                  {t('config.previousHash')}: {previewQuery.data.previousHash}
+                </Typography.Text>
+              ) : null}
+            </Space>
+            {previewQuery.data.validationError ? (
+              <Alert
+                type="error"
+                showIcon
+                style={{ marginBottom: 8 }}
+                message={t('config.validationError')}
+                description={previewQuery.data.validationError}
+              />
+            ) : null}
+            <Typography.Title level={5}>{t('config.diff')}</Typography.Title>
+            <pre className="code-block">{previewQuery.data.diff || '—'}</pre>
+          </>
+        ) : null}
+
+        <MutateOnly hint>
+          <Form layout="vertical" style={{ marginTop: 12 }}>
+            <Form.Item label={t('config.applyReason')} required>
+              <Input.TextArea
+                rows={2}
+                value={reasonText}
+                onChange={(e) => setApplyReason(e.target.value)}
+              />
+            </Form.Item>
+            <Popconfirm
+              title={t('config.confirmApply')}
+              onConfirm={() => applyConfigMutation.mutate()}
+              disabled={!previewQuery.data?.valid || reasonText.trim().length < 3}
+            >
+              <Button
+                type="primary"
+                loading={applyConfigMutation.isPending}
+                disabled={!previewQuery.data?.valid || reasonText.trim().length < 3}
+              >
+                {t('app.apply')}
+              </Button>
+            </Popconfirm>
+          </Form>
+        </MutateOnly>
+
+        <Typography.Title level={5} style={{ marginTop: 16 }}>
+          {t('config.history')}
+        </Typography.Title>
+        <Table
+          size="small"
+          rowKey="id"
+          loading={historyQuery.isLoading}
+          dataSource={historyQuery.data?.items ?? []}
+          pagination={{
+            current: historyPage,
+            pageSize: 25,
+            total: historyQuery.data?.pagination.total ?? 0,
+            onChange: setHistoryPage,
+          }}
+          columns={[
+            {
+              title: t('app.status'),
+              dataIndex: 'status',
+              render: (status: string) => (
+                <Tag>{t(`enums.coreApplyStatus.${status}`, { defaultValue: status })}</Tag>
+              ),
+            },
+            {
+              title: t('config.trigger'),
+              dataIndex: 'trigger',
+              render: (trigger: string) =>
+                t(`enums.coreApplyTrigger.${trigger}`, { defaultValue: trigger }),
+            },
+            { title: t('config.actor'), dataIndex: 'actorUsername' },
+            { title: t('config.applyReason'), dataIndex: 'reason', ellipsis: true },
+            {
+              title: t('app.createdAt'),
+              dataIndex: 'createdAt',
+              render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+            },
+            {
+              title: t('app.error'),
+              dataIndex: 'error',
+              ellipsis: true,
+              render: (v: string | null) => v || '—',
+            },
+          ]}
+        />
       </Card>
 
       <Card size="small" title={t('proxy.installCommand')} style={{ marginBottom: 12 }}>

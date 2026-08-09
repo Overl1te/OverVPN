@@ -1324,6 +1324,7 @@ export function InboundEditor({
         t,
         messageApi,
         navigate,
+        proxyServerId: result.inbound?.proxyServerId,
       });
       if (ok) {
         onClose();

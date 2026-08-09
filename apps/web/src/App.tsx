@@ -10,7 +10,6 @@ import { ProxyCreateWizardPage } from '@/pages/proxy/ProxyCreateWizardPage';
 import { ProxyServerDetailPage } from '@/pages/proxy/ProxyServerDetailPage';
 import { PlansPage } from '@/pages/PlansPage';
 import { OnlineSessionsPage } from '@/pages/OnlineSessionsPage';
-import { ConfigPage } from '@/pages/ConfigPage';
 import { AuditPage } from '@/pages/AuditPage';
 import { SystemPage } from '@/pages/SystemPage';
 import { BackupsPage } from '@/pages/BackupsPage';
@@ -32,7 +31,7 @@ export default function App() {
         <Route path="inbounds" element={<InboundsListPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="online" element={<OnlineSessionsPage />} />
-        <Route path="config" element={<ConfigPage />} />
+        <Route path="config" element={<Navigate to="/proxy" replace />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="system" element={<SystemPage />} />
         <Route path="backups" element={<BackupsPage />} />

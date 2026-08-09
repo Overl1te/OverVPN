@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Patch,
   Post,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -14,6 +15,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type {
+  ConfigApplyRequest,
+  CoreApplyListQuery,
   CreateProxyServer,
   ProxyDeleteResponse,
   ProxyDnsCheckRequest,
@@ -25,6 +28,8 @@ import type {
   UpdateProxyServer,
 } from '@overvpn/shared/schemas';
 import {
+  configApplyRequestSchema,
+  coreApplyListQuerySchema,
   createProxyServerSchema,
   idSchema,
   proxyDnsCheckRequestSchema,
@@ -32,7 +37,13 @@ import {
   proxyServerWizardSchema,
   updateProxyServerSchema,
 } from '@overvpn/shared/schemas';
-import { Roles } from '../common/authorization';
+import {
+  CurrentAdmin,
+  getRequestMetadata,
+  Roles,
+  type AuthenticatedAdmin,
+  type AuthenticatedRequest,
+} from '../common/authorization';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation';
 import { ProxyServersService } from './proxy-servers.service';
 
@@ -64,6 +75,40 @@ export class ProxyServersController {
   @Roles('OWNER', 'ADMIN', 'READONLY')
   get(@ZodParam('id', idSchema) id: string): Promise<ProxyServerSummary> {
     return this.proxyServers.get(id);
+  }
+
+  @Get(':id/config/preview')
+  @ApiOkResponse({ description: 'Preview desired core config for this proxy' })
+  @Roles('OWNER', 'ADMIN', 'READONLY')
+  previewConfig(@ZodParam('id', idSchema) id: string) {
+    return this.proxyServers.previewConfig(id);
+  }
+
+  @Post(':id/config/apply')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ description: 'Apply core config to this proxy node' })
+  applyConfig(
+    @ZodParam('id', idSchema) id: string,
+    @ZodBody(configApplyRequestSchema) body: ConfigApplyRequest,
+    @CurrentAdmin() actor: AuthenticatedAdmin,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.proxyServers.applyConfig(
+      id,
+      body,
+      actor,
+      getRequestMetadata(request),
+    );
+  }
+
+  @Get(':id/config/apply')
+  @ApiOkResponse({ description: 'List core apply history for this proxy' })
+  @Roles('OWNER', 'ADMIN', 'READONLY')
+  listConfigApplies(
+    @ZodParam('id', idSchema) id: string,
+    @ZodQuery(coreApplyListQuerySchema) query: CoreApplyListQuery,
+  ) {
+    return this.proxyServers.listConfigApplies(id, query);
   }
 
   @Post()

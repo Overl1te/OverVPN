@@ -378,6 +378,12 @@ export function DashboardPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card size="small">
             <Typography.Text type="secondary">{t('dashboard.coreHealth')}</Typography.Text>
+            <Typography.Paragraph
+              type="secondary"
+              style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}
+            >
+              {t('dashboard.coreHealthHint')}
+            </Typography.Paragraph>
             <div style={{ marginTop: 8 }}>
               <Tag color={(health?.core.healthy ?? data?.core.healthy) ? 'green' : 'red'}>
                 {(health?.core.healthy ?? data?.core.healthy)
@@ -420,25 +426,33 @@ export function DashboardPage() {
       </Row>
 
       <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
-        <Col xs={24} sm={12} lg={8}>
-          <Card size="small" loading={proxyQuery.isLoading}>
-            <Typography.Text type="secondary">{t('proxy.dashboardTitle')}</Typography.Text>
-            <Row gutter={8} style={{ marginTop: 8 }}>
-              <Col span={8}>
+        <Col span={24}>
+          <Card
+            size="small"
+            loading={proxyQuery.isLoading}
+            title={t('proxy.dashboardTitle')}
+            extra={
+              <Link to="/proxy">
+                <Button size="small">{t('nav.proxy')}</Button>
+              </Link>
+            }
+          >
+            <Row gutter={8} style={{ marginBottom: 12 }}>
+              <Col xs={8} sm={6} md={4}>
                 <Statistic
                   title={t('proxy.dashboardOnline')}
                   value={proxyCounts.online}
                   valueStyle={{ fontSize: 20 }}
                 />
               </Col>
-              <Col span={8}>
+              <Col xs={8} sm={6} md={4}>
                 <Statistic
                   title={t('proxy.dashboardOffline')}
                   value={proxyCounts.other}
                   valueStyle={{ fontSize: 20 }}
                 />
               </Col>
-              <Col span={8}>
+              <Col xs={8} sm={6} md={4}>
                 <Statistic
                   title={t('proxy.dashboardTotal')}
                   value={proxyCounts.total}
@@ -446,26 +460,81 @@ export function DashboardPage() {
                 />
               </Col>
             </Row>
-            <Space size={4} wrap style={{ marginTop: 8 }}>
-              {(['ONLINE', 'PENDING', 'OFFLINE', 'ERROR', 'DISABLED'] as const).map((status) =>
-                (proxyCounts.byStatus[status] ?? 0) > 0 ? (
-                  <span
-                    key={status}
-                    style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}
-                  >
-                    <ProxyServerStatusTag status={status} />
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {proxyCounts.byStatus[status]}
-                    </Typography.Text>
-                  </span>
-                ) : null,
-              )}
-            </Space>
-            <div style={{ marginTop: 8 }}>
-              <Link to="/proxy">
-                <Button size="small">{t('nav.proxy')}</Button>
-              </Link>
-            </div>
+            <Table
+              size="small"
+              rowKey="id"
+              pagination={false}
+              dataSource={proxyQuery.data?.items ?? []}
+              columns={[
+                {
+                  title: t('app.name'),
+                  dataIndex: 'name',
+                  render: (name: string, row) => (
+                    <Space wrap>
+                      <Link to={`/proxy/${row.id}`}>{name}</Link>
+                      {row.isLocal ? <Tag>{t('proxy.local')}</Tag> : null}
+                    </Space>
+                  ),
+                },
+                {
+                  title: t('app.status'),
+                  dataIndex: 'status',
+                  render: (status: ProxyServerStatus) => <ProxyServerStatusTag status={status} />,
+                },
+                {
+                  title: t('proxy.publicHost'),
+                  dataIndex: 'publicHost',
+                  render: (value: string | null) => value || '—',
+                },
+                {
+                  title: t('proxy.lastSeenAt'),
+                  dataIndex: 'lastSeenAt',
+                  render: (value: string | null) =>
+                    value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—',
+                },
+                {
+                  title: t('proxy.enginesRunning'),
+                  render: (_, row) => {
+                    const engines = row.lastHeartbeat?.engines ?? [];
+                    if (engines.length === 0) {
+                      return (
+                        <Typography.Text type="secondary">{t('proxy.noHeartbeat')}</Typography.Text>
+                      );
+                    }
+                    return (
+                      <Space size={4} wrap>
+                        {engines.map((engine) => (
+                          <Tag key={engine.engine} color={engine.running ? 'green' : 'default'}>
+                            {t(`enums.coreEngine.${engine.engine}`)}
+                            {engine.running ? '' : ' · off'}
+                          </Tag>
+                        ))}
+                      </Space>
+                    );
+                  },
+                },
+                {
+                  title: t('proxy.pendingApplyCol'),
+                  dataIndex: 'pendingApplyCount',
+                  render: (count: number) => (count > 0 ? <Tag color="orange">{count}</Tag> : '—'),
+                },
+                {
+                  title: t('app.error'),
+                  dataIndex: 'lastError',
+                  ellipsis: true,
+                  render: (value: string | null) =>
+                    value ? <Typography.Text type="danger">{value}</Typography.Text> : '—',
+                },
+                {
+                  title: t('app.actions'),
+                  render: (_, row) => (
+                    <Link to={`/proxy/${row.id}`}>
+                      <Button size="small">{t('proxy.openDetail')}</Button>
+                    </Link>
+                  ),
+                },
+              ]}
+            />
           </Card>
         </Col>
       </Row>

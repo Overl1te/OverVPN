@@ -18,10 +18,23 @@ export function notifyCoreApply(
     t: TFunction;
     messageApi: MessageInstance;
     navigate?: NavigateFunction;
+    proxyServerId?: string | null;
   },
 ): NotifyCoreApplyResult {
-  const { t, messageApi, navigate } = options;
+  const { t, messageApi, navigate, proxyServerId } = options;
   const errorDetail = apply.error?.trim() || apply.rollbackOutcome?.trim() || '';
+  const target = proxyServerId ? `/proxy/${proxyServerId}` : '/proxy';
+
+  const openLink = navigate ? (
+    <a
+      onClick={(event) => {
+        event.preventDefault();
+        navigate(target);
+      }}
+    >
+      {t('coreApply.openConfig')}
+    </a>
+  ) : null;
 
   if (apply.status === 'SUCCEEDED') {
     void messageApi.success(t('coreApply.succeeded'));
@@ -35,17 +48,7 @@ export function notifyCoreApply(
     void messageApi.warning({
       content: (
         <span>
-          {text}{' '}
-          {navigate ? (
-            <a
-              onClick={(event) => {
-                event.preventDefault();
-                navigate('/config');
-              }}
-            >
-              {t('coreApply.openConfig')}
-            </a>
-          ) : null}
+          {text} {openLink}
         </span>
       ),
       duration: 10,
@@ -60,17 +63,7 @@ export function notifyCoreApply(
     void messageApi.error({
       content: (
         <span>
-          {text}{' '}
-          {navigate ? (
-            <a
-              onClick={(event) => {
-                event.preventDefault();
-                navigate('/config');
-              }}
-            >
-              {t('coreApply.openConfig')}
-            </a>
-          ) : null}
+          {text} {openLink}
         </span>
       ),
       duration: 12,
@@ -81,17 +74,7 @@ export function notifyCoreApply(
   void messageApi.warning({
     content: (
       <span>
-        {t('coreApply.pending', { status: apply.status })}{' '}
-        {navigate ? (
-          <a
-            onClick={(event) => {
-              event.preventDefault();
-              navigate('/config');
-            }}
-          >
-            {t('coreApply.openConfig')}
-          </a>
-        ) : null}
+        {t('coreApply.pending', { status: apply.status })} {openLink}
       </span>
     ),
     duration: 8,

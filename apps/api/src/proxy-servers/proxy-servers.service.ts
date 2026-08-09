@@ -9,19 +9,30 @@ import {
   LOCAL_PROXY_SERVER_ID,
 } from '@overvpn/shared/constants';
 import type {
+  ConfigApplyRequest,
+  ConfigPreviewResult,
+  CoreApplyListQuery,
+  CoreApplyRecordResult,
+  CoreApplySummary,
   CreateProxyServer,
   ProxyDeleteResponse,
   ProxyDnsCheckRequest,
   ProxyDnsCheckResponse,
   ProxyInstallCommandResponse,
+  ProxyServerLastHeartbeat,
   ProxyServerListQuery,
   ProxyServerSummary,
   ProxyServerWizard,
   UpdateProxyServer,
 } from '@overvpn/shared/schemas';
+import type { CoreEngine } from '@overvpn/shared/constants';
 import type { Prisma } from '../generated/prisma/client';
 import { hashOpaqueToken } from '../auth/auth-crypto';
 import { ApiException } from '../common/api-error';
+import type {
+  AuthenticatedAdmin,
+  RequestMetadata,
+} from '../common/authorization';
 import type { AppEnvironment } from '../config/environment';
 import { CoreApplyService } from '../core/core-apply.service';
 import { PrismaService } from '../infrastructure/infrastructure.module';
@@ -69,6 +80,13 @@ export class ProxyServersService {
         orderBy: [{ [query.sortBy]: query.sortOrder }, { id: query.sortOrder }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
+        include: {
+          _count: {
+            select: {
+              inbounds: { where: { needsApply: true } },
+            },
+          },
+        },
       }),
     ]);
     return {
@@ -83,7 +101,22 @@ export class ProxyServersService {
   }
 
   async get(id: string): Promise<ProxyServerSummary> {
-    return this.toSummary(await this.require(id));
+    const row = await this.prisma.proxyServer.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            inbounds: { where: { needsApply: true } },
+          },
+        },
+      },
+    });
+    if (!row) {
+      throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND, {
+        reason: 'proxy_server_not_found',
+      });
+    }
+    return this.toSummary(row);
   }
 
   async create(input: CreateProxyServer): Promise<ProxyServerSummary> {
@@ -102,7 +135,7 @@ export class ProxyServersService {
       name: row.name,
       isLocal: row.isLocal,
     });
-    return this.toSummary(row);
+    return this.get(row.id);
   }
 
   async update(
@@ -146,7 +179,7 @@ export class ProxyServersService {
       agentBaseUrl: row.agentBaseUrl,
       changes: Object.keys(input),
     });
-    return this.toSummary(row);
+    return this.get(id);
   }
 
   async createInstallCommand(id: string): Promise<ProxyInstallCommandResponse> {
@@ -245,35 +278,33 @@ export class ProxyServersService {
       enabledEngines: input.enabledEngines,
       enabledProtocols: input.enabledProtocols,
     });
-    return this.toSummary(row);
+    return this.get(row.id);
   }
 
   async disable(id: string): Promise<ProxyServerSummary> {
     await this.require(id);
-    const row = await this.prisma.proxyServer.update({
+    await this.prisma.proxyServer.update({
       where: { id },
       data: { status: 'DISABLED', lastError: null },
     });
     this.logger.log({
       msg: 'Proxy server disabled',
-      id: row.id,
-      name: row.name,
+      id,
     });
-    return this.toSummary(row);
+    return this.get(id);
   }
 
   async enable(id: string): Promise<ProxyServerSummary> {
     await this.require(id);
-    const row = await this.prisma.proxyServer.update({
+    await this.prisma.proxyServer.update({
       where: { id },
       data: { status: 'PENDING', lastError: null },
     });
     this.logger.log({
       msg: 'Proxy server enabled',
-      id: row.id,
-      name: row.name,
+      id,
     });
-    return this.toSummary(row);
+    return this.get(id);
   }
 
   async delete(id: string): Promise<ProxyDeleteResponse> {
@@ -373,6 +404,39 @@ export class ProxyServersService {
     };
   }
 
+  async previewConfig(id: string): Promise<ConfigPreviewResult> {
+    await this.require(id);
+    return this.coreApply.preview(id);
+  }
+
+  async applyConfig(
+    id: string,
+    input: ConfigApplyRequest,
+    actor: AuthenticatedAdmin,
+    metadata: RequestMetadata,
+  ): Promise<CoreApplySummary> {
+    await this.require(id);
+    return this.coreApply.apply(actor, input, 'MANUAL', metadata, {
+      proxyServerId: id,
+    });
+  }
+
+  async listConfigApplies(
+    id: string,
+    query: CoreApplyListQuery,
+  ): Promise<{
+    items: CoreApplyRecordResult[];
+    pagination: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    await this.require(id);
+    return this.coreApply.list({ ...query, proxyServerId: id });
+  }
+
   async findByInstallToken(token: string) {
     const tokenHash = hashOpaqueToken(token);
     return this.prisma.proxyServer.findFirst({
@@ -391,7 +455,16 @@ export class ProxyServersService {
   }
 
   private async require(id: string) {
-    const row = await this.prisma.proxyServer.findUnique({ where: { id } });
+    const row = await this.prisma.proxyServer.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            inbounds: { where: { needsApply: true } },
+          },
+        },
+      },
+    });
     if (!row) {
       throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND, {
         reason: 'proxy_server_not_found',
@@ -446,7 +519,9 @@ export class ProxyServersService {
     isLocal: boolean;
     createdAt: Date;
     updatedAt: Date;
+    _count?: { inbounds: number };
   }): ProxyServerSummary {
+    const settings = asObject(row.settings);
     return {
       id: row.id,
       name: row.name,
@@ -463,8 +538,10 @@ export class ProxyServersService {
       lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
       lastError: row.lastError,
       heartbeatIntervalSec: row.heartbeatIntervalSec,
-      settings: asObject(row.settings),
+      settings,
       isLocal: row.isLocal,
+      pendingApplyCount: row._count?.inbounds ?? 0,
+      lastHeartbeat: parseLastHeartbeat(settings),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -486,6 +563,59 @@ function asObject(value: Prisma.JsonValue): Record<string, unknown> {
     return result;
   }
   return {};
+}
+
+function parseLastHeartbeat(
+  settings: Record<string, unknown>,
+): ProxyServerLastHeartbeat | null {
+  const raw = settings.lastHeartbeat;
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const hb = raw as Record<string, unknown>;
+  const enginesRaw = Array.isArray(hb.engines) ? hb.engines : [];
+  const engines: ProxyServerLastHeartbeat['engines'] = [];
+  for (const item of enginesRaw) {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const entry = item as Record<string, unknown>;
+    if (
+      typeof entry.engine !== 'string' ||
+      typeof entry.running !== 'boolean'
+    ) {
+      continue;
+    }
+    engines.push({
+      engine: entry.engine as CoreEngine,
+      running: entry.running,
+      ...(typeof entry.version === 'string' ? { version: entry.version } : {}),
+    });
+  }
+  let load: ProxyServerLastHeartbeat['load'] = null;
+  if (
+    hb.load !== null &&
+    typeof hb.load === 'object' &&
+    !Array.isArray(hb.load)
+  ) {
+    const loadRaw = hb.load as Record<string, unknown>;
+    load = {
+      ...(typeof loadRaw.cpuPercent === 'number'
+        ? { cpuPercent: loadRaw.cpuPercent }
+        : {}),
+      ...(typeof loadRaw.memoryPercent === 'number'
+        ? { memoryPercent: loadRaw.memoryPercent }
+        : {}),
+      ...(typeof loadRaw.diskPercent === 'number'
+        ? { diskPercent: loadRaw.diskPercent }
+        : {}),
+    };
+  }
+  return {
+    at: typeof hb.at === 'string' ? hb.at : null,
+    engines,
+    load,
+  };
 }
 
 function clearNodeTokenSetting(

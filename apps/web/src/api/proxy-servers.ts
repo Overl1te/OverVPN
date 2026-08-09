@@ -1,4 +1,9 @@
 import type {
+  ConfigApplyRequest,
+  ConfigPreviewResult,
+  CoreApplyListQuery,
+  CoreApplyRecordResult,
+  CoreApplySummary,
   CreateProxyServer,
   ProxyDeleteResponse,
   ProxyDnsCheckRequest,
@@ -13,6 +18,16 @@ import { apiRequest } from './client';
 
 export type ProxyServerListResponse = {
   items: ProxyServerSummary[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type ProxyConfigApplyListResponse = {
+  items: CoreApplyRecordResult[];
   pagination: {
     page: number;
     pageSize: number;
@@ -86,5 +101,25 @@ export function checkProxyDns(body: ProxyDnsCheckRequest): Promise<ProxyDnsCheck
   return apiRequest<ProxyDnsCheckResponse>('/admin/proxy-servers/dns-check', {
     method: 'POST',
     body,
+  });
+}
+
+export function previewProxyConfig(id: string): Promise<ConfigPreviewResult> {
+  return apiRequest<ConfigPreviewResult>(`/admin/proxy-servers/${id}/config/preview`);
+}
+
+export function applyProxyConfig(id: string, body: ConfigApplyRequest): Promise<CoreApplySummary> {
+  return apiRequest<CoreApplySummary>(`/admin/proxy-servers/${id}/config/apply`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export function listProxyConfigApplies(
+  id: string,
+  query: Partial<CoreApplyListQuery> = {},
+): Promise<ProxyConfigApplyListResponse> {
+  return apiRequest<ProxyConfigApplyListResponse>(`/admin/proxy-servers/${id}/config/apply`, {
+    query,
   });
 }

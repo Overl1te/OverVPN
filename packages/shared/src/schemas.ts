@@ -2438,6 +2438,7 @@ export const coreApplyListQuerySchema = paginationQuerySchema
   .extend({
     status: z.enum(CORE_APPLY_STATUSES).optional(),
     trigger: z.enum(CORE_APPLY_TRIGGERS).optional(),
+    proxyServerId: idSchema.optional(),
   })
   .strict();
 export type CoreApplyListQuery = z.infer<typeof coreApplyListQuerySchema>;
@@ -2773,6 +2774,30 @@ function isHttpUrlWithoutCredentials(value: string, requireHttps = false): boole
 
 // --- Proxy servers & agent hybrid protocol ---
 
+export const proxyServerLastHeartbeatSchema = z
+  .object({
+    at: isoDateTimeSchema.nullable(),
+    engines: z.array(
+      z
+        .object({
+          engine: coreEngineSchema,
+          running: z.boolean(),
+          version: z.string().optional(),
+        })
+        .strict(),
+    ),
+    load: z
+      .object({
+        cpuPercent: z.number().nonnegative().optional(),
+        memoryPercent: z.number().nonnegative().optional(),
+        diskPercent: z.number().nonnegative().optional(),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type ProxyServerLastHeartbeat = z.infer<typeof proxyServerLastHeartbeatSchema>;
+
 export const proxyServerSummarySchema = z
   .object({
     id: idSchema,
@@ -2788,6 +2813,8 @@ export const proxyServerSummarySchema = z
     heartbeatIntervalSec: z.number().int().positive(),
     settings: z.record(z.string(), z.unknown()),
     isLocal: z.boolean(),
+    pendingApplyCount: z.number().int().nonnegative(),
+    lastHeartbeat: proxyServerLastHeartbeatSchema.nullable(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
   })

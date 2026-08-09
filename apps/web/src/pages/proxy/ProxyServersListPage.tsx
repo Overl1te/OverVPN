@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { PROXY_SERVER_STATUSES, type ProxyServerStatus } from '@overvpn/shared/constants';
 import type { ProxyServerSummary } from '@overvpn/shared/schemas';
 import {
+  applyProxyConfig,
   deleteProxyServer,
   disableProxyServer,
   enableProxyServer,
@@ -70,6 +71,16 @@ export function ProxyServersListPage() {
     onError,
   });
 
+  const applyMutation = useMutation({
+    mutationFn: (proxyId: string) =>
+      applyProxyConfig(proxyId, { reason: t('config.defaultApplyReason') }),
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('coreApply.succeeded'));
+    },
+    onError,
+  });
+
   const statusOptions = useMemo(
     () =>
       PROXY_SERVER_STATUSES.map((value) => ({
@@ -80,7 +91,10 @@ export function ProxyServersListPage() {
   );
 
   const actionBusy =
-    enableMutation.isPending || disableMutation.isPending || deleteMutation.isPending;
+    enableMutation.isPending ||
+    disableMutation.isPending ||
+    deleteMutation.isPending ||
+    applyMutation.isPending;
 
   return (
     <div>
@@ -161,6 +175,12 @@ export function ProxyServersListPage() {
               value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '—',
           },
           {
+            title: t('proxy.pendingApplyCol'),
+            dataIndex: 'pendingApplyCount',
+            render: (count: number) =>
+              count > 0 ? <Tag color="orange">{count}</Tag> : <span>—</span>,
+          },
+          {
             title: t('app.actions'),
             render: (_, row) => (
               <Space wrap size={4}>
@@ -168,6 +188,16 @@ export function ProxyServersListPage() {
                   <Button size="small">{t('app.edit')}</Button>
                 </Link>
                 <MutateOnly>
+                  {row.pendingApplyCount > 0 ? (
+                    <Popconfirm
+                      title={t('config.confirmApply')}
+                      onConfirm={() => applyMutation.mutate(row.id)}
+                    >
+                      <Button size="small" type="primary" disabled={actionBusy}>
+                        {t('app.apply')}
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
                   {row.status === 'DISABLED' ? (
                     <Button
                       size="small"

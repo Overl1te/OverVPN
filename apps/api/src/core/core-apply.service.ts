@@ -91,10 +91,13 @@ export class CoreApplyService {
     return this.configPaths[engine];
   }
 
-  async preview(): Promise<ConfigPreviewResult> {
+  async preview(proxyServerId?: string): Promise<ConfigPreviewResult> {
     const engines: Partial<Record<CoreEngine, ConfigPreviewEngine>> = {};
     for (const provider of this.registry.all()) {
-      engines[provider.engine] = await this.previewEngine(provider);
+      engines[provider.engine] = await this.previewEngine(
+        provider,
+        proxyServerId,
+      );
     }
     const primary =
       engines.SING_BOX ??
@@ -620,6 +623,7 @@ export class CoreApplyService {
     const where: Prisma.CoreApplyRecordWhereInput = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.trigger ? { trigger: query.trigger } : {}),
+      ...(query.proxyServerId ? { proxyServerId: query.proxyServerId } : {}),
     };
     const [total, records] = await this.prisma.$transaction([
       this.prisma.coreApplyRecord.count({ where }),
@@ -668,11 +672,16 @@ export class CoreApplyService {
 
   private async previewEngine(
     provider: EngineProvider,
+    proxyServerId?: string,
   ): Promise<ConfigPreviewEngine> {
-    const state = await this.stateLoader.load(provider.engine);
+    const state = await this.stateLoader.load(provider.engine, {
+      proxyServerId,
+    });
     const rendered = provider.renderConfig(state);
     const validation = await provider.validate(rendered);
-    const current = await this.currentRedacted(provider.engine);
+    const current = proxyServerId
+      ? await this.currentRedactedForProxy(provider.engine, proxyServerId)
+      : await this.currentRedacted(provider.engine);
     return {
       valid: validation.valid,
       hash: rendered.hash,
@@ -797,6 +806,29 @@ export class CoreApplyService {
       }
       throw error;
     }
+  }
+
+  /** Remote nodes have no panel-local config file; compare against last applied hash. */
+  private async currentRedactedForProxy(
+    engine: CoreEngine,
+    proxyServerId: string,
+  ): Promise<{
+    hash: string | null;
+    canonical: string;
+    path: string;
+  }> {
+    const path = this.configPathFor(engine);
+    const state = await this.prisma.proxyCoreState.findUnique({
+      where: {
+        proxyServerId_engine: { proxyServerId, engine },
+      },
+    });
+    const hash = state?.appliedConfigHash ?? null;
+    return {
+      hash,
+      canonical: hash ? `{"_appliedHash":"${hash}"}\n` : '{}\n',
+      path,
+    };
   }
 
   private async markInboundRevisionsApplied(

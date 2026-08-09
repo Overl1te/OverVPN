@@ -67,7 +67,7 @@
     "failed": "Saved in the panel, but applying the config to the core failed",
     "failedWithError": "Saved in the panel, but applying the config failed: {{error}}",
     "pending": "Saved, but core apply is still {{status}}",
-    "openConfig": "Open Config"
+    "openConfig": "Open proxy"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -100,7 +100,8 @@
     "throughput": "Throughput",
     "throughputUnavailable": "Throughput unavailable",
     "usersByStatus": "Users by status",
-    "coreHealth": "Core health",
+    "coreHealth": "Panel cores (local)",
+    "coreHealthHint": "Health of sing-box/Xray/MTProxy on the panel host, not remote proxies",
     "workers": "Workers",
     "healthy": "Healthy",
     "unhealthy": "Unhealthy",
@@ -165,9 +166,9 @@
         "title": "Online sessions",
         "body": "Who is connected right now."
       },
-      "nav-config": {
-        "title": "Core config",
-        "body": "Raw VPN core config and apply status after changes."
+      "nav-proxy": {
+        "title": "Proxies",
+        "body": "Local and remote nodes: status, config apply, and agent install."
       },
       "nav-system": {
         "title": "System",
@@ -871,6 +872,12 @@
     "verifyOnline": "Node is online — you can create entry points.",
     "verifyTimeout": "Still not ONLINE. Check the install command, firewall (port 7700), and panel URL.",
     "verifyStatus": "Status: {{status}}",
-    "openDetail": "Open details"
+    "openDetail": "Open details",
+    "configTitle": "Core config for this node",
+    "configHint": "Preview and apply the desired config on this proxy (local volumes or agent).",
+    "pendingApply": "Pending apply: {{count}} entry points",
+    "pendingApplyCol": "Needs apply",
+    "enginesRunning": "Engines (heartbeat)",
+    "noHeartbeat": "No heartbeat"
   }
 }
