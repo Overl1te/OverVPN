@@ -99,6 +99,8 @@ services:
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
       - ../logs/agent:/var/log/overvpn
+      # Override image entrypoint so deploy-bundle fixes apply without rebuilding GHCR.
+      - ./agent/entrypoint.sh:/usr/local/bin/overvpn-agent-entrypoint:ro
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777
@@ -108,6 +110,11 @@ services:
       - '7700'
     cap_drop:
       - ALL
+    # Needed so entrypoint can drop root->node after chown'ing volumes.
+    # Without these, setpriv/runuser fail and we fall back to root (still OK).
+    cap_add:
+      - SETUID
+      - SETGID
     healthcheck:
       test:
         [
@@ -124,6 +131,11 @@ services:
       - backend
       - core
     <<: *service-security
+    # Allow entrypoint to drop root->node. With no-new-privileges, setpriv/runuser
+    # fail and the old image crash-looped (exit 127) instead of falling back.
+    security_opt:
+      - no-new-privileges:false
+    logging: *default-logging
 
 volumes:
   agent_state:
