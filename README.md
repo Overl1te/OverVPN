@@ -82,8 +82,8 @@ curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o
 | `--protocols <list>`           | Список протоколов (детальный / non-interactive)   |
 | `--cores singbox,xray,mtproxy` | Ядра (без `--protocols` → все протоколы ядер)     |
 | `--ports key=value,…`          | Порты протоколов (`hysteria2=443`, `wg=51820`, …) |
-| `--create-default-inbounds`    | Создать inbound на каждый выбранный протокол      |
-| `--no-default-inbounds`        | Не создавать стартовые inbound’ы                  |
+| `--create-default-inbounds`    | Opt-in: создать inbound на каждый выбранный протокол |
+| `--no-default-inbounds`        | Не создавать стартовые inbound’ы (по умолчанию)      |
 | `--base-domain <host>`         | Базовый домен (лендинг + TLS)                     |
 | `--panel <host>`               | Хост панели                                       |
 | `--subscription <spec>`        | Хост или `хост/путь` для подписок                 |
@@ -107,7 +107,7 @@ curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o
 3. **Режим** — с доменом (Nginx + TLS) или только IP (`http://IP:8000`)
 4. **Домены** — базовый, панель, подписки, VPN-хост, email Let’s Encrypt
 5. **DNS** — список A-записей; проверить сейчас (ожидание до ~15 мин) или пропустить
-6. **Simple:** MTProxy да/нет · **Detailed:** чеклист протоколов, пресет портов, порты, default inbounds, UFW
+6. **Simple:** MTProxy да/нет · **Detailed:** чеклист протоколов, пресет портов, порты, UFW (default inbounds — только по явному согласию, по умолчанию нет)
 7. **Подтверждение** — summary и старт
 
 Дальше скрипт без пауз ставит Docker, образы, Nginx и сертификаты. В конце — экран с URL и логином владельца.

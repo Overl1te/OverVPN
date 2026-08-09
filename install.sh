@@ -1271,7 +1271,7 @@ set_protocol_port() {
 initialize_protocol_config() {
   local protocol var
   CFG_INSTALL_DEPTH="${CFG_INSTALL_DEPTH:-simple}"
-  CFG_CREATE_DEFAULT_INBOUNDS="${CFG_CREATE_DEFAULT_INBOUNDS:-true}"
+  CFG_CREATE_DEFAULT_INBOUNDS="${CFG_CREATE_DEFAULT_INBOUNDS:-false}"
   CFG_ENABLED_PROTOCOLS="${CFG_ENABLED_PROTOCOLS:-$ALL_PROTOCOLS}"
   for protocol in ${ALL_PROTOCOLS//,/ }; do
     var="$(protocol_port_var "$protocol")"
@@ -1383,7 +1383,7 @@ prompt_detailed_ports() {
     value="$(ui_prompt "$(cli_t prompt_protocol_port "$protocol")" "$(protocol_default_port "$protocol" "$CFG_PORT_PRESET")")"
     set_protocol_port "$protocol" "$value"
   done
-  if ui_confirm y "$(cli_t prompt_default_inbounds)"; then
+  if ui_confirm n "$(cli_t prompt_default_inbounds)"; then
     CFG_CREATE_DEFAULT_INBOUNDS="true"
   else
     CFG_CREATE_DEFAULT_INBOUNDS="false"
@@ -3289,8 +3289,8 @@ Options (install):
   --cores <list>           singbox,xray,mtproxy; enables all protocols for each core
   --ports <pairs>          Comma-separated PROTOCOL=PORT pairs
   --create-default-inbounds
-                           Request default inbounds after bootstrap (default)
-  --no-default-inbounds    Do not request default inbounds
+                           Opt-in: create one inbound per selected protocol after bootstrap
+  --no-default-inbounds    Do not create starter inbounds (default)
   --with-mtproxy           Enable MTProxy / Telemt (default)
   --without-mtproxy        Skip MTProxy / Telemt
   --with-proxy             Co-install local proxy agent+cores (default)
@@ -3350,7 +3350,7 @@ cmd_install() {
   CFG_WITH_PROXY="true"
   CFG_INSTALL_ROLE="panel"
   CFG_ONBOARDING_TOUR="true"
-  CFG_CREATE_DEFAULT_INBOUNDS="true"
+  CFG_CREATE_DEFAULT_INBOUNDS="false"
   CFG_USE_UFW="true"
 
   while [[ $# -gt 0 ]]; do
