@@ -21,6 +21,12 @@ import { Column } from '@ant-design/charts';
 import { getDashboard, getHostStats, getSystemHealth, getUpdateStatus } from '@/api/system';
 import { listProxyServers } from '@/api/proxy-servers';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  formatLoadNetwork,
+  formatLoadPercent,
+  ProxyHeartbeatEngines,
+  proxyLoadFromRow,
+} from '@/components/ProxyHeartbeat';
 import { ProxyServerStatusTag } from '@/components/StatusTag';
 import { useSetupProgress, type SetupStepId } from '@/hooks/useSetupProgress';
 import { usePanelTour } from '@/hooks/usePanelTour';
@@ -28,6 +34,7 @@ import { formatBytes, formatBytesPerSecond } from '@/utils/format';
 import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
 import type { ProxyServerStatus } from '@overvpn/shared/constants';
+import type { ProxyServerSummary } from '@overvpn/shared/schemas';
 
 function memoryPercent(used: string | undefined, total: string | undefined): number {
   if (!used || !total) {
@@ -81,7 +88,7 @@ export function DashboardPage() {
   const proxyQuery = useQuery({
     queryKey: ['proxy-servers', 'dashboard'],
     queryFn: () => listProxyServers({ page: 1, pageSize: 100 }),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 
   const data = dashboardQuery.data;
@@ -493,25 +500,28 @@ export function DashboardPage() {
                     value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—',
                 },
                 {
+                  title: t('proxy.loadCpu'),
+                  render: (_: unknown, row: ProxyServerSummary) =>
+                    formatLoadPercent(proxyLoadFromRow(row)?.cpuPercent),
+                },
+                {
+                  title: t('proxy.loadMemory'),
+                  render: (_: unknown, row: ProxyServerSummary) =>
+                    formatLoadPercent(proxyLoadFromRow(row)?.memoryPercent),
+                },
+                {
+                  title: t('proxy.loadNetwork'),
+                  render: (_: unknown, row: ProxyServerSummary) =>
+                    formatLoadNetwork(proxyLoadFromRow(row)),
+                },
+                {
                   title: t('proxy.enginesRunning'),
-                  render: (_, row) => {
-                    const engines = row.lastHeartbeat?.engines ?? [];
-                    if (engines.length === 0) {
-                      return (
-                        <Typography.Text type="secondary">{t('proxy.noHeartbeat')}</Typography.Text>
-                      );
-                    }
-                    return (
-                      <Space size={4} wrap>
-                        {engines.map((engine) => (
-                          <Tag key={engine.engine} color={engine.running ? 'green' : 'default'}>
-                            {t(`enums.coreEngine.${engine.engine}`)}
-                            {engine.running ? '' : ' · off'}
-                          </Tag>
-                        ))}
-                      </Space>
-                    );
-                  },
+                  render: (_: unknown, row: ProxyServerSummary) => (
+                    <ProxyHeartbeatEngines
+                      enabledEngines={row.enabledEngines}
+                      heartbeat={row.lastHeartbeat}
+                    />
+                  ),
                 },
                 {
                   title: t('proxy.pendingApplyCol'),

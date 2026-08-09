@@ -2791,6 +2791,8 @@ export const proxyServerLastHeartbeatSchema = z
         cpuPercent: z.number().nonnegative().optional(),
         memoryPercent: z.number().nonnegative().optional(),
         diskPercent: z.number().nonnegative().optional(),
+        networkInboundBytesPerSecond: z.number().nonnegative().optional(),
+        networkOutboundBytesPerSecond: z.number().nonnegative().optional(),
       })
       .strict()
       .nullable(),
@@ -2964,6 +2966,8 @@ export const agentHeartbeatRequestSchema = z
         cpuPercent: z.number().nonnegative().optional(),
         memoryPercent: z.number().nonnegative().optional(),
         diskPercent: z.number().nonnegative().optional(),
+        networkInboundBytesPerSecond: z.number().nonnegative().optional(),
+        networkOutboundBytesPerSecond: z.number().nonnegative().optional(),
       })
       .strict()
       .optional(),

@@ -41,6 +41,7 @@ x-agent-environment: &agent-environment
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_DIR: ${LOG_DIR:-/var/log/overvpn}
   LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-7}
+  HOST_PROC: /host/proc
   SING_BOX_CONFIG_PATH: /var/lib/sing-box/config.json
   SING_BOX_LAST_KNOWN_GOOD_PATH: /var/lib/sing-box/config.last-known-good.json
   SING_BOX_RELOAD_REQUEST_PATH: /var/lib/overvpn/reload/request
@@ -99,6 +100,8 @@ services:
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
       - ../logs/agent:/var/log/overvpn
+      # Host procfs for CPU/RAM/NIC in heartbeat (same pattern as panel api).
+      - /proc:/host/proc:ro
       # Override image entrypoint so deploy-bundle fixes apply without rebuilding GHCR.
       - ./agent/entrypoint.sh:/usr/local/bin/overvpn-agent-entrypoint:ro
     read_only: true

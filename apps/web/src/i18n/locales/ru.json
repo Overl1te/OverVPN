@@ -115,11 +115,11 @@
     "version": "Версия",
     "lastSuccess": "Последний успех",
     "workerState": "Состояние",
-    "cpu": "Процессор",
+    "cpu": "Процессор (панель)",
     "cpuCores": "{{count}} ядер",
-    "memory": "Оперативка",
+    "memory": "Оперативка (панель)",
     "memoryOf": "из {{total}}",
-    "network": "Сеть",
+    "network": "Сеть (панель)",
     "networkIn": "Входящая",
     "networkOut": "Исходящая",
     "networkTotal": "Всего",
@@ -880,6 +880,12 @@
     "pendingApply": "Ожидают применения: {{count}} точек входа",
     "pendingApplyCol": "Нужен apply",
     "enginesRunning": "Ядра (heartbeat)",
-    "noHeartbeat": "Нет heartbeat"
+    "noHeartbeat": "Нет heartbeat",
+    "engineOff": "off",
+    "loadCpu": "CPU",
+    "loadMemory": "RAM",
+    "loadNetwork": "Сеть",
+    "hostAndCores": "Хост и ядра",
+    "heartbeatAt": "Heartbeat"
   }
 }

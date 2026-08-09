@@ -3,13 +3,17 @@ import {
   Button,
   Card,
   Checkbox,
+  Col,
   Descriptions,
   Form,
   Input,
   InputNumber,
   Popconfirm,
+  Progress,
+  Row,
   Space,
   Spin,
+  Statistic,
   Table,
   Tag,
   Typography,
@@ -42,6 +46,11 @@ import {
 import { CopyButton } from '@/components/CopyButton';
 import { MutateOnly } from '@/components/MutateOnly';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  formatLoadNetwork,
+  formatLoadPercent,
+  ProxyHeartbeatEngines,
+} from '@/components/ProxyHeartbeat';
 import { ProxyServerStatusTag } from '@/components/StatusTag';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 import dayjs from 'dayjs';
@@ -66,6 +75,7 @@ export function ProxyServerDetailPage() {
     queryKey: ['proxy-servers', id],
     queryFn: () => getProxyServer(id!),
     enabled: !!id,
+    refetchInterval: 15_000,
   });
 
   const proxy = query.data;
@@ -292,6 +302,58 @@ export function ProxyServerDetailPage() {
             </Descriptions.Item>
           ) : null}
         </Descriptions>
+      </Card>
+
+      <Card size="small" title={t('proxy.hostAndCores')} style={{ marginBottom: 12 }}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={8}>
+            <Statistic
+              title={t('proxy.loadCpu')}
+              value={formatLoadPercent(proxy.lastHeartbeat?.load?.cpuPercent)}
+            />
+            {proxy.lastHeartbeat?.load?.cpuPercent !== undefined ? (
+              <Progress
+                percent={Math.min(100, proxy.lastHeartbeat.load.cpuPercent)}
+                size="small"
+                showInfo={false}
+                strokeColor="#14b8a6"
+              />
+            ) : null}
+          </Col>
+          <Col xs={24} sm={8}>
+            <Statistic
+              title={t('proxy.loadMemory')}
+              value={formatLoadPercent(proxy.lastHeartbeat?.load?.memoryPercent)}
+            />
+            {proxy.lastHeartbeat?.load?.memoryPercent !== undefined ? (
+              <Progress
+                percent={Math.min(100, proxy.lastHeartbeat.load.memoryPercent)}
+                size="small"
+                showInfo={false}
+                strokeColor="#22d3ee"
+              />
+            ) : null}
+          </Col>
+          <Col xs={24} sm={8}>
+            <Statistic
+              title={t('proxy.loadNetwork')}
+              value={formatLoadNetwork(proxy.lastHeartbeat?.load ?? null)}
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+        </Row>
+        <div style={{ marginTop: 16 }}>
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            {t('proxy.enginesRunning')}
+            {proxy.lastHeartbeat?.at
+              ? ` · ${t('proxy.heartbeatAt')}: ${dayjs(proxy.lastHeartbeat.at).format('YYYY-MM-DD HH:mm:ss')}`
+              : null}
+          </Typography.Text>
+          <ProxyHeartbeatEngines
+            enabledEngines={proxy.enabledEngines}
+            heartbeat={proxy.lastHeartbeat}
+          />
+        </div>
       </Card>
 
       <Card

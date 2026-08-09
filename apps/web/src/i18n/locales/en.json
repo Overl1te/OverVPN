@@ -115,11 +115,11 @@
     "version": "Version",
     "lastSuccess": "Last success",
     "workerState": "State",
-    "cpu": "CPU",
+    "cpu": "CPU (panel)",
     "cpuCores": "{{count}} cores",
-    "memory": "RAM",
+    "memory": "RAM (panel)",
     "memoryOf": "of {{total}}",
-    "network": "Network",
+    "network": "Network (panel)",
     "networkIn": "Inbound",
     "networkOut": "Outbound",
     "networkTotal": "Total",
@@ -880,6 +880,12 @@
     "pendingApply": "Pending apply: {{count}} entry points",
     "pendingApplyCol": "Needs apply",
     "enginesRunning": "Engines (heartbeat)",
-    "noHeartbeat": "No heartbeat"
+    "noHeartbeat": "No heartbeat",
+    "engineOff": "off",
+    "loadCpu": "CPU",
+    "loadMemory": "RAM",
+    "loadNetwork": "Network",
+    "hostAndCores": "Host and cores",
+    "heartbeatAt": "Heartbeat"
   }
 }

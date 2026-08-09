@@ -40,6 +40,8 @@ const environmentSchema = z
       .default('info'),
     LOG_DIR: z.preprocess(emptyToUndefined, z.string().trim().min(1).optional()),
     LOG_RETENTION_DAYS: positiveInt.default(7),
+    /** Host procfs root (bind-mount `/proc` → `/host/proc` in Docker). */
+    HOST_PROC: z.string().trim().min(1).default('/proc'),
 
     SING_BOX_CONFIG_PATH: z.string().default('/var/lib/sing-box/config.json'),
     SING_BOX_LAST_KNOWN_GOOD_PATH: z

@@ -12,7 +12,8 @@
     "start:prod": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "lint:fix": "tsc -p tsconfig.json --noEmit"
+    "lint:fix": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/host-metrics.test.js"
   },
   "dependencies": {
     "@overvpn/shared": "workspace:*",

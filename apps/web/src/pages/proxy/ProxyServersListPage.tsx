@@ -12,6 +12,11 @@ import {
   enableProxyServer,
   listProxyServers,
 } from '@/api/proxy-servers';
+import {
+  formatLoadPercent,
+  ProxyHeartbeatEngines,
+  proxyLoadFromRow,
+} from '@/components/ProxyHeartbeat';
 import { MutateOnly } from '@/components/MutateOnly';
 import { PageHeader } from '@/components/PageHeader';
 import { ProxyServerStatusTag } from '@/components/StatusTag';
@@ -38,6 +43,7 @@ export function ProxyServersListPage() {
         search: search || undefined,
         status,
       }),
+    refetchInterval: 15_000,
   });
 
   const invalidate = () => {
@@ -173,6 +179,25 @@ export function ProxyServersListPage() {
             dataIndex: 'lastSeenAt',
             render: (value: string | null) =>
               value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '—',
+          },
+          {
+            title: t('proxy.loadCpu'),
+            render: (_: unknown, row: ProxyServerSummary) =>
+              formatLoadPercent(proxyLoadFromRow(row)?.cpuPercent),
+          },
+          {
+            title: t('proxy.loadMemory'),
+            render: (_: unknown, row: ProxyServerSummary) =>
+              formatLoadPercent(proxyLoadFromRow(row)?.memoryPercent),
+          },
+          {
+            title: t('proxy.enginesRunning'),
+            render: (_: unknown, row: ProxyServerSummary) => (
+              <ProxyHeartbeatEngines
+                enabledEngines={row.enabledEngines}
+                heartbeat={row.lastHeartbeat}
+              />
+            ),
           },
           {
             title: t('proxy.pendingApplyCol'),

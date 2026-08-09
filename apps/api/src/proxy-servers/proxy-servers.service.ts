@@ -614,6 +614,17 @@ function parseLastHeartbeat(
       ...(typeof loadRaw.diskPercent === 'number'
         ? { diskPercent: loadRaw.diskPercent }
         : {}),
+      ...(typeof loadRaw.networkInboundBytesPerSecond === 'number'
+        ? {
+            networkInboundBytesPerSecond: loadRaw.networkInboundBytesPerSecond,
+          }
+        : {}),
+      ...(typeof loadRaw.networkOutboundBytesPerSecond === 'number'
+        ? {
+            networkOutboundBytesPerSecond:
+              loadRaw.networkOutboundBytesPerSecond,
+          }
+        : {}),
     };
   }
   return {

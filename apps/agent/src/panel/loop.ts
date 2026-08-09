@@ -3,6 +3,7 @@ import type { AgentApplyRequest } from '@overvpn/shared/schemas';
 import type { AgentEnvironment } from '../config.js';
 import { resolveAgentHostname, resolveAgentVersion, resolveStatePath } from '../config.js';
 import type { ApplyService } from '../core/apply.js';
+import { HostLoadSampler } from '../host-load-sampler.js';
 import { PanelClient, PanelClientError } from './client.js';
 import { loadAgentState, saveAgentState, type AgentState } from '../state.js';
 
@@ -15,6 +16,7 @@ export type RuntimeCredentials = {
 export class PanelLoop {
   private readonly panel: PanelClient;
   private readonly statePath: string;
+  private readonly hostLoad: HostLoadSampler;
   private credentials: RuntimeCredentials;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
@@ -41,6 +43,7 @@ export class PanelLoop {
       this.logger,
     );
     this.statePath = resolveStatePath(env);
+    this.hostLoad = new HostLoadSampler(env.HOST_PROC);
     this.credentials = {
       proxyServerId: env.NODE_ID,
       nodeToken: env.NODE_TOKEN,
@@ -122,14 +125,16 @@ export class PanelLoop {
     }
 
     const engines = await this.collectEngineStatus();
+    const load = this.hostLoad.sample();
     try {
       await this.panel.heartbeat(token, {
         status: this.lastError ? 'ERROR' : 'ONLINE',
         engines,
+        load,
         errorMessage: this.lastError,
       });
       this.lastError = null;
-      this.logger.info({ engines: engines.length }, 'Heartbeat sent');
+      this.logger.info({ engines: engines.length, load }, 'Heartbeat sent');
     } catch (error: unknown) {
       this.lastError = error instanceof Error ? error.message : 'Heartbeat failed';
       this.logger.warn({ err: error }, 'Heartbeat failed (will retry)');
