@@ -76,27 +76,27 @@ curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o
 
 **Флаги установщика**
 
-| Флаг                           | Назначение                                        |
-| ------------------------------ | ------------------------------------------------- |
-| `--simple` / `--detailed`      | Простой или детальный мастер                      |
-| `--protocols <list>`           | Список протоколов (детальный / non-interactive)   |
-| `--cores singbox,xray,mtproxy` | Ядра (без `--protocols` → все протоколы ядер)     |
-| `--ports key=value,…`          | Порты протоколов (`hysteria2=443`, `wg=51820`, …) |
+| Флаг                           | Назначение                                           |
+| ------------------------------ | ---------------------------------------------------- |
+| `--simple` / `--detailed`      | Простой или детальный мастер                         |
+| `--protocols <list>`           | Список протоколов (детальный / non-interactive)      |
+| `--cores singbox,xray,mtproxy` | Ядра (без `--protocols` → все протоколы ядер)        |
+| `--ports key=value,…`          | Порты протоколов (`hysteria2=443`, `wg=51820`, …)    |
 | `--create-default-inbounds`    | Opt-in: создать inbound на каждый выбранный протокол |
 | `--no-default-inbounds`        | Не создавать стартовые inbound’ы (по умолчанию)      |
-| `--base-domain <host>`         | Базовый домен (лендинг + TLS)                     |
-| `--panel <host>`               | Хост панели                                       |
-| `--subscription <spec>`        | Хост или `хост/путь` для подписок                 |
-| `--vpn-host <host>`            | Публичный VPN-endpoint для клиентов               |
-| `--email <email>`              | Let’s Encrypt                                     |
-| `--port <port>`                | Порт панели без домена (по умолчанию `8000`)      |
-| `--tag <tag>`                  | Тег образов GHCR                                  |
-| `--build`                      | Собрать образы локально                           |
-| `--with-mtproxy`               | Включить MTProxy / Telemt (по умолчанию в simple) |
-| `--without-mtproxy`            | Не ставить MTProxy                                |
-| `--skip-dns`                   | Не ждать DNS перед сертификатами                  |
-| `--no-nginx`                   | Без Nginx/TLS                                     |
-| `--no-ufw`                     | Не трогать UFW                                    |
+| `--base-domain <host>`         | Базовый домен (лендинг + TLS)                        |
+| `--panel <host>`               | Хост панели                                          |
+| `--subscription <spec>`        | Хост или `хост/путь` для подписок                    |
+| `--vpn-host <host>`            | Публичный VPN-endpoint для клиентов                  |
+| `--email <email>`              | Let’s Encrypt                                        |
+| `--port <port>`                | Порт панели без домена (по умолчанию `8000`)         |
+| `--tag <tag>`                  | Тег образов GHCR                                     |
+| `--build`                      | Собрать образы локально                              |
+| `--with-mtproxy`               | Включить MTProxy / Telemt (по умолчанию в simple)    |
+| `--without-mtproxy`            | Не ставить MTProxy                                   |
+| `--skip-dns`                   | Не ждать DNS перед сертификатами                     |
+| `--no-nginx`                   | Без Nginx/TLS                                        |
+| `--no-ufw`                     | Не трогать UFW                                       |
 
 ### Что спросит мастер
 

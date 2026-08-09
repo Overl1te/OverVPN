@@ -1,12 +1,18 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { promises as dns } from 'node:dns';
+import { isIP } from 'node:net';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC,
   DEFAULT_PROXY_INSTALL_TOKEN_TTL_SEC,
+  LOCAL_PROXY_SERVER_ID,
 } from '@overvpn/shared/constants';
 import type {
   CreateProxyServer,
+  ProxyDeleteResponse,
+  ProxyDnsCheckRequest,
+  ProxyDnsCheckResponse,
   ProxyInstallCommandResponse,
   ProxyServerListQuery,
   ProxyServerSummary,
@@ -201,6 +207,115 @@ export class ProxyServersService {
       }
     }
     return this.toSummary(row);
+  }
+
+  async disable(id: string): Promise<ProxyServerSummary> {
+    await this.require(id);
+    const row = await this.prisma.proxyServer.update({
+      where: { id },
+      data: { status: 'DISABLED', lastError: null },
+    });
+    return this.toSummary(row);
+  }
+
+  async enable(id: string): Promise<ProxyServerSummary> {
+    await this.require(id);
+    const row = await this.prisma.proxyServer.update({
+      where: { id },
+      data: { status: 'PENDING', lastError: null },
+    });
+    return this.toSummary(row);
+  }
+
+  async delete(id: string): Promise<ProxyDeleteResponse> {
+    const existing = await this.require(id);
+    if (existing.id === LOCAL_PROXY_SERVER_ID || existing.isLocal) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'local_proxy_cannot_delete',
+        message: 'The local proxy node cannot be deleted',
+        messageRu: 'Локальный прокси-узел нельзя удалить',
+      });
+    }
+    const inboundsRemoved = await this.prisma.$transaction(async (tx) => {
+      const inbounds = await tx.inbound.findMany({
+        where: { proxyServerId: id },
+        select: { id: true },
+      });
+      const inboundIds = inbounds.map((row) => row.id);
+      if (inboundIds.length > 0) {
+        // Match inbound remove(): clear history FKs before deleting entry points.
+        await tx.onlineSession.deleteMany({
+          where: { inboundId: { in: inboundIds } },
+        });
+        await tx.trafficCheckpoint.deleteMany({
+          where: { inboundId: { in: inboundIds } },
+        });
+        await tx.usageDaily.updateMany({
+          where: { inboundId: { in: inboundIds } },
+          data: { inboundId: null },
+        });
+        await tx.inbound.deleteMany({ where: { id: { in: inboundIds } } });
+      }
+      await tx.proxyServer.delete({ where: { id } });
+      return inboundIds.length;
+    });
+    return { id, inboundsRemoved };
+  }
+
+  async checkDns(input: ProxyDnsCheckRequest): Promise<ProxyDnsCheckResponse> {
+    const domain = input.domain.trim().replace(/\.$/, '');
+    let resolvedAddresses: string[];
+    try {
+      const result = await dns.lookup(domain, { all: true, verbatim: true });
+      resolvedAddresses = [
+        ...new Set(result.map((entry) => entry.address).filter(Boolean)),
+      ];
+    } catch (error: unknown) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: unknown }).code)
+          : 'DNS_ERROR';
+      return {
+        domain,
+        resolvedAddresses: [],
+        matchesExpected: input.expectedIp ? false : null,
+        warning: `DNS lookup failed (${code})`,
+      };
+    }
+
+    const expected = input.expectedIp?.trim();
+    if (!expected) {
+      return {
+        domain,
+        resolvedAddresses,
+        matchesExpected: null,
+        warning:
+          resolvedAddresses.length === 0
+            ? 'Domain did not resolve to any address'
+            : null,
+      };
+    }
+
+    if (isIP(expected) === 0) {
+      return {
+        domain,
+        resolvedAddresses,
+        matchesExpected: false,
+        warning: 'Expected value is not a valid IP address',
+      };
+    }
+
+    const matchesExpected = resolvedAddresses.includes(expected);
+    return {
+      domain,
+      resolvedAddresses,
+      matchesExpected,
+      warning: matchesExpected
+        ? null
+        : resolvedAddresses.length === 0
+          ? 'Domain did not resolve to any address'
+          : `Domain resolves to ${resolvedAddresses.join(', ')}, not ${expected}`,
+    };
   }
 
   async findByInstallToken(token: string) {

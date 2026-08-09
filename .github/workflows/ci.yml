@@ -208,6 +208,9 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           CACHE_ROOT: ${{ env.BUILDX_CACHE_ROOT }}
         with:
+          # Path context: bake-action v6 defaults to Git remote, which cannot see
+          # metadata-action bake files under runner _temp (nor local CACHE_ROOT).
+          source: .
           files: |
             ./docker-bake.hcl
             ${{ steps.meta-api.outputs.bake-file }}

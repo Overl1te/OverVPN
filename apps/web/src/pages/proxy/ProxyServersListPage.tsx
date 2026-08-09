@@ -1,11 +1,16 @@
-import { Button, Form, Input, Modal, Select, Space, Switch, Table, Tag } from 'antd';
+import { Button, Input, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PROXY_SERVER_STATUSES, type ProxyServerStatus } from '@overvpn/shared/constants';
-import type { CreateProxyServer, ProxyServerSummary } from '@overvpn/shared/schemas';
-import { createProxyServer, listProxyServers } from '@/api/proxy-servers';
+import type { ProxyServerSummary } from '@overvpn/shared/schemas';
+import {
+  deleteProxyServer,
+  disableProxyServer,
+  enableProxyServer,
+  listProxyServers,
+} from '@/api/proxy-servers';
 import { MutateOnly } from '@/components/MutateOnly';
 import { PageHeader } from '@/components/PageHeader';
 import { ProxyServerStatusTag } from '@/components/StatusTag';
@@ -22,8 +27,6 @@ export function ProxyServersListPage() {
   const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ProxyServerStatus | undefined>();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form] = Form.useForm<CreateProxyServer>();
 
   const query = useQuery({
     queryKey: ['proxy-servers', page, pageSize, search, status],
@@ -36,13 +39,33 @@ export function ProxyServersListPage() {
       }),
   });
 
-  const createMutation = useMutation({
-    mutationFn: createProxyServer,
-    onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ['proxy-servers'] });
-      setCreateOpen(false);
-      form.resetFields();
-      navigate(`/proxy/${created.id}`);
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['proxy-servers'] });
+  };
+
+  const enableMutation = useMutation({
+    mutationFn: enableProxyServer,
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('proxy.enabledOk'));
+    },
+    onError,
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: disableProxyServer,
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('proxy.disabledOk'));
+    },
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteProxyServer,
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('proxy.deleted'));
     },
     onError,
   });
@@ -56,13 +79,16 @@ export function ProxyServersListPage() {
     [t],
   );
 
+  const actionBusy =
+    enableMutation.isPending || disableMutation.isPending || deleteMutation.isPending;
+
   return (
     <div>
       <PageHeader
         title={t('proxy.title')}
         extra={
           <MutateOnly>
-            <Button type="primary" onClick={() => setCreateOpen(true)}>
+            <Button type="primary" onClick={() => navigate('/proxy/new')}>
               {t('proxy.create')}
             </Button>
           </MutateOnly>
@@ -137,46 +163,45 @@ export function ProxyServersListPage() {
           {
             title: t('app.actions'),
             render: (_, row) => (
-              <Link to={`/proxy/${row.id}`}>
-                <Button size="small">{t('app.edit')}</Button>
-              </Link>
+              <Space wrap size={4}>
+                <Link to={`/proxy/${row.id}`}>
+                  <Button size="small">{t('app.edit')}</Button>
+                </Link>
+                <MutateOnly>
+                  {row.status === 'DISABLED' ? (
+                    <Button
+                      size="small"
+                      disabled={actionBusy}
+                      onClick={() => enableMutation.mutate(row.id)}
+                    >
+                      {t('proxy.enable')}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      disabled={actionBusy}
+                      onClick={() => disableMutation.mutate(row.id)}
+                    >
+                      {t('proxy.disable')}
+                    </Button>
+                  )}
+                  {!row.isLocal ? (
+                    <Popconfirm
+                      title={t('proxy.deleteConfirmTitle')}
+                      description={t('proxy.deleteConfirm', { name: row.name })}
+                      onConfirm={() => deleteMutation.mutate(row.id)}
+                    >
+                      <Button size="small" danger disabled={actionBusy}>
+                        {t('app.delete')}
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
+                </MutateOnly>
+              </Space>
             ),
           },
         ]}
       />
-
-      <Modal
-        title={t('proxy.create')}
-        open={createOpen}
-        onCancel={() => {
-          setCreateOpen(false);
-          form.resetFields();
-        }}
-        onOk={() => form.submit()}
-        confirmLoading={createMutation.isPending}
-        destroyOnClose
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{ isLocal: false }}
-          onFinish={(values) => createMutation.mutate(values)}
-        >
-          <Form.Item
-            name="name"
-            label={t('app.name')}
-            rules={[{ required: true, message: t('proxy.nameRequired') }]}
-          >
-            <Input autoComplete="off" maxLength={100} />
-          </Form.Item>
-          <Form.Item name="note" label={t('proxy.note')}>
-            <Input.TextArea rows={3} maxLength={1000} />
-          </Form.Item>
-          <Form.Item name="isLocal" label={t('proxy.isLocal')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 }

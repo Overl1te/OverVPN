@@ -6,6 +6,7 @@ import { UsersListPage } from '@/pages/users/UsersListPage';
 import { UserDetailPage } from '@/pages/users/UserDetailPage';
 import { InboundsListPage } from '@/pages/inbounds/InboundsListPage';
 import { ProxyServersListPage } from '@/pages/proxy/ProxyServersListPage';
+import { ProxyCreateWizardPage } from '@/pages/proxy/ProxyCreateWizardPage';
 import { ProxyServerDetailPage } from '@/pages/proxy/ProxyServerDetailPage';
 import { PlansPage } from '@/pages/PlansPage';
 import { OnlineSessionsPage } from '@/pages/OnlineSessionsPage';
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="users" element={<UsersListPage />} />
         <Route path="users/:id" element={<UserDetailPage />} />
         <Route path="proxy" element={<ProxyServersListPage />} />
+        <Route path="proxy/new" element={<ProxyCreateWizardPage />} />
         <Route path="proxy/:id" element={<ProxyServerDetailPage />} />
         <Route path="inbounds" element={<InboundsListPage />} />
         <Route path="plans" element={<PlansPage />} />

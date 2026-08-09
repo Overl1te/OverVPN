@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -14,6 +15,9 @@ import {
 } from '@nestjs/swagger';
 import type {
   CreateProxyServer,
+  ProxyDeleteResponse,
+  ProxyDnsCheckRequest,
+  ProxyDnsCheckResponse,
   ProxyInstallCommandResponse,
   ProxyServerListQuery,
   ProxyServerSummary,
@@ -23,6 +27,7 @@ import type {
 import {
   createProxyServerSchema,
   idSchema,
+  proxyDnsCheckRequestSchema,
   proxyServerListQuerySchema,
   proxyServerWizardSchema,
   updateProxyServerSchema,
@@ -43,6 +48,15 @@ export class ProxyServersController {
   @Roles('OWNER', 'ADMIN', 'READONLY')
   list(@ZodQuery(proxyServerListQuerySchema) query: ProxyServerListQuery) {
     return this.proxyServers.list(query);
+  }
+
+  @Post('dns-check')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ description: 'Soft DNS check for wizard domain/IP' })
+  dnsCheck(
+    @ZodBody(proxyDnsCheckRequestSchema) body: ProxyDnsCheckRequest,
+  ): Promise<ProxyDnsCheckResponse> {
+    return this.proxyServers.checkDns(body);
   }
 
   @Get(':id')
@@ -68,6 +82,29 @@ export class ProxyServersController {
     @ZodBody(updateProxyServerSchema) body: UpdateProxyServer,
   ): Promise<ProxyServerSummary> {
     return this.proxyServers.update(id, body);
+  }
+
+  @Post(':id/disable')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ description: 'Disable proxy server' })
+  disable(@ZodParam('id', idSchema) id: string): Promise<ProxyServerSummary> {
+    return this.proxyServers.disable(id);
+  }
+
+  @Post(':id/enable')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    description: 'Enable proxy server (PENDING until heartbeat)',
+  })
+  enable(@ZodParam('id', idSchema) id: string): Promise<ProxyServerSummary> {
+    return this.proxyServers.enable(id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ description: 'Delete proxy server and its inbounds' })
+  remove(@ZodParam('id', idSchema) id: string): Promise<ProxyDeleteResponse> {
+    return this.proxyServers.delete(id);
   }
 
   @Post(':id/install-command')

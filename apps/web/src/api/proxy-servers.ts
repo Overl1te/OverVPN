@@ -1,5 +1,8 @@
 import type {
   CreateProxyServer,
+  ProxyDeleteResponse,
+  ProxyDnsCheckRequest,
+  ProxyDnsCheckResponse,
   ProxyInstallCommandResponse,
   ProxyServerListQuery,
   ProxyServerSummary,
@@ -45,6 +48,24 @@ export function updateProxyServer(
   });
 }
 
+export function deleteProxyServer(id: string): Promise<ProxyDeleteResponse> {
+  return apiRequest<ProxyDeleteResponse>(`/admin/proxy-servers/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export function disableProxyServer(id: string): Promise<ProxyServerSummary> {
+  return apiRequest<ProxyServerSummary>(`/admin/proxy-servers/${id}/disable`, {
+    method: 'POST',
+  });
+}
+
+export function enableProxyServer(id: string): Promise<ProxyServerSummary> {
+  return apiRequest<ProxyServerSummary>(`/admin/proxy-servers/${id}/enable`, {
+    method: 'POST',
+  });
+}
+
 export function createProxyInstallCommand(id: string): Promise<ProxyInstallCommandResponse> {
   return apiRequest<ProxyInstallCommandResponse>(`/admin/proxy-servers/${id}/install-command`, {
     method: 'POST',
@@ -56,6 +77,13 @@ export function applyProxyServerWizard(
   body: ProxyServerWizard,
 ): Promise<ProxyServerSummary> {
   return apiRequest<ProxyServerSummary>(`/admin/proxy-servers/${id}/wizard`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export function checkProxyDns(body: ProxyDnsCheckRequest): Promise<ProxyDnsCheckResponse> {
+  return apiRequest<ProxyDnsCheckResponse>('/admin/proxy-servers/dns-check', {
     method: 'POST',
     body,
   });

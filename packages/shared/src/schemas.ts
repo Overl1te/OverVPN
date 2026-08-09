@@ -2864,6 +2864,32 @@ export const proxyServerWizardSchema = z
   .strict();
 export type ProxyServerWizard = z.infer<typeof proxyServerWizardSchema>;
 
+export const proxyDnsCheckRequestSchema = z
+  .object({
+    domain: z.string().trim().min(1).max(255),
+    expectedIp: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict();
+export type ProxyDnsCheckRequest = z.infer<typeof proxyDnsCheckRequestSchema>;
+
+export const proxyDnsCheckResponseSchema = z
+  .object({
+    domain: z.string(),
+    resolvedAddresses: z.array(z.string()),
+    matchesExpected: z.boolean().nullable(),
+    warning: z.string().nullable(),
+  })
+  .strict();
+export type ProxyDnsCheckResponse = z.infer<typeof proxyDnsCheckResponseSchema>;
+
+export const proxyDeleteResponseSchema = z
+  .object({
+    id: idSchema,
+    inboundsRemoved: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ProxyDeleteResponse = z.infer<typeof proxyDeleteResponseSchema>;
+
 export const agentRegisterRequestSchema = z
   .object({
     hostname: z.string().trim().min(1).max(255),

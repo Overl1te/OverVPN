@@ -2,11 +2,12 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Descriptions,
   Form,
   Input,
   InputNumber,
-  Select,
+  Popconfirm,
   Space,
   Spin,
   Tag,
@@ -15,12 +16,13 @@ import {
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   CORE_ENGINES,
   DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC,
   INBOUND_PROTOCOLS,
+  PROTOCOL_ENGINE_MAP,
   type CoreEngine,
   type InboundProtocol,
 } from '@overvpn/shared/constants';
@@ -28,6 +30,9 @@ import type { ProxyInstallCommandResponse, ProxyServerWizard } from '@overvpn/sh
 import {
   applyProxyServerWizard,
   createProxyInstallCommand,
+  deleteProxyServer,
+  disableProxyServer,
+  enableProxyServer,
   getProxyServer,
 } from '@/api/proxy-servers';
 import { CopyButton } from '@/components/CopyButton';
@@ -37,13 +42,19 @@ import { ProxyServerStatusTag } from '@/components/StatusTag';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 import dayjs from 'dayjs';
 
+function protocolsForEngine(engine: CoreEngine): InboundProtocol[] {
+  return INBOUND_PROTOCOLS.filter((protocol) => PROTOCOL_ENGINE_MAP[protocol] === engine);
+}
+
 export function ProxyServerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const onError = useApiErrorHandler();
-  const [wizardForm] = Form.useForm<ProxyServerWizard>();
+  const [settingsForm] = Form.useForm<ProxyServerWizard>();
   const [install, setInstall] = useState<ProxyInstallCommandResponse | null>(null);
+  const [selectedProtocols, setSelectedProtocols] = useState<InboundProtocol[]>([]);
 
   const query = useQuery({
     queryKey: ['proxy-servers', id],
@@ -57,39 +68,39 @@ export function ProxyServerDetailPage() {
     if (!proxy) {
       return;
     }
-    wizardForm.setFieldsValue({
+    settingsForm.setFieldsValue({
       publicHost: proxy.publicHost ?? '',
       agentBaseUrl: proxy.agentBaseUrl ?? undefined,
-      enabledEngines: proxy.enabledEngines.length > 0 ? proxy.enabledEngines : ['SING_BOX'],
-      enabledProtocols: proxy.enabledProtocols.length > 0 ? proxy.enabledProtocols : ['HYSTERIA2'],
       heartbeatIntervalSec: proxy.heartbeatIntervalSec || DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC,
     });
-  }, [proxy, wizardForm]);
+    setSelectedProtocols(
+      proxy.enabledProtocols.length > 0 ? proxy.enabledProtocols : ['HYSTERIA2'],
+    );
+  }, [proxy, settingsForm]);
 
-  const engineOptions = useMemo(
+  const engineBlocks = useMemo(
     () =>
-      CORE_ENGINES.map((value) => ({
-        value,
-        label: t(`enums.coreEngine.${value}`),
+      CORE_ENGINES.map((engine) => ({
+        engine,
+        label:
+          engine === 'SING_BOX'
+            ? t('proxy.coreSingBox')
+            : engine === 'XRAY'
+              ? t('proxy.coreXray')
+              : t('proxy.coreMtproxy'),
+        protocols: protocolsForEngine(engine),
       })),
     [t],
   );
 
-  const protocolOptions = useMemo(
-    () =>
-      INBOUND_PROTOCOLS.map((value) => ({
-        value,
-        label: t(`enums.protocol.${value}`, {
-          defaultValue: t(`enums.inboundProtocol.${value}`, { defaultValue: value }),
-        }),
-      })),
-    [t],
-  );
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['proxy-servers'] });
+  };
 
   const wizardMutation = useMutation({
     mutationFn: (body: ProxyServerWizard) => applyProxyServerWizard(id!, body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['proxy-servers'] });
+      invalidate();
       void message.success(t('app.success'));
     },
     onError,
@@ -103,6 +114,43 @@ export function ProxyServerDetailPage() {
     },
     onError,
   });
+
+  const enableMutation = useMutation({
+    mutationFn: () => enableProxyServer(id!),
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('proxy.enabledOk'));
+    },
+    onError,
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: () => disableProxyServer(id!),
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('proxy.disabledOk'));
+    },
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProxyServer(id!),
+    onSuccess: () => {
+      invalidate();
+      void message.success(t('proxy.deleted'));
+      navigate('/proxy');
+    },
+    onError,
+  });
+
+  const toggleProtocol = (protocol: InboundProtocol, checked: boolean) => {
+    setSelectedProtocols((current) => {
+      if (checked) {
+        return current.includes(protocol) ? current : [...current, protocol];
+      }
+      return current.filter((item) => item !== protocol);
+    });
+  };
 
   if (!id) {
     return <Navigate to="/proxy" replace />;
@@ -125,6 +173,12 @@ export function ProxyServerDetailPage() {
     );
   }
 
+  const actionBusy =
+    enableMutation.isPending ||
+    disableMutation.isPending ||
+    deleteMutation.isPending ||
+    wizardMutation.isPending;
+
   return (
     <div>
       <PageHeader
@@ -135,12 +189,38 @@ export function ProxyServerDetailPage() {
             {proxy.isLocal ? <Tag>{t('proxy.local')}</Tag> : null}
           </Space>
         }
-        extra={<Link to="/proxy">{t('app.back')}</Link>}
+        extra={
+          <Space wrap>
+            <MutateOnly>
+              {proxy.status === 'DISABLED' ? (
+                <Button disabled={actionBusy} onClick={() => enableMutation.mutate()}>
+                  {t('proxy.enable')}
+                </Button>
+              ) : (
+                <Button disabled={actionBusy} onClick={() => disableMutation.mutate()}>
+                  {t('proxy.disable')}
+                </Button>
+              )}
+              {!proxy.isLocal ? (
+                <Popconfirm
+                  title={t('proxy.deleteConfirmTitle')}
+                  description={t('proxy.deleteConfirm', { name: proxy.name })}
+                  onConfirm={() => deleteMutation.mutate()}
+                >
+                  <Button danger disabled={actionBusy}>
+                    {t('app.delete')}
+                  </Button>
+                </Popconfirm>
+              ) : null}
+            </MutateOnly>
+            <Link to="/proxy">{t('app.back')}</Link>
+          </Space>
+        }
       />
 
       <Card size="small" style={{ marginBottom: 12 }}>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }}>
-          <Descriptions.Item label={t('proxy.publicHost')}>
+          <Descriptions.Item label={t('proxy.clientDomain')}>
             {proxy.publicHost || '—'}
           </Descriptions.Item>
           <Descriptions.Item label={t('proxy.agentBaseUrl')}>
@@ -229,13 +309,20 @@ export function ProxyServerDetailPage() {
       <Card size="small" title={t('proxy.wizard')}>
         <Typography.Paragraph type="secondary">{t('proxy.wizardHint')}</Typography.Paragraph>
         <Form
-          form={wizardForm}
+          form={settingsForm}
           layout="vertical"
           onFinish={(values) => {
+            if (selectedProtocols.length === 0) {
+              void message.error(t('proxy.protocolsRequired'));
+              return;
+            }
+            const engines = [
+              ...new Set(selectedProtocols.map((protocol) => PROTOCOL_ENGINE_MAP[protocol])),
+            ] as CoreEngine[];
             const body: ProxyServerWizard = {
               publicHost: values.publicHost.trim(),
-              enabledEngines: values.enabledEngines,
-              enabledProtocols: values.enabledProtocols,
+              enabledEngines: engines,
+              enabledProtocols: selectedProtocols,
               heartbeatIntervalSec:
                 values.heartbeatIntervalSec ?? DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC,
               settings: {},
@@ -246,8 +333,9 @@ export function ProxyServerDetailPage() {
         >
           <Form.Item
             name="publicHost"
-            label={t('proxy.publicHost')}
-            rules={[{ required: true, message: t('proxy.publicHostRequired') }]}
+            label={t('proxy.clientDomain')}
+            extra={t('proxy.clientDomainHint')}
+            rules={[{ required: true, message: t('proxy.clientDomainRequired') }]}
           >
             <Input autoComplete="off" maxLength={255} placeholder="vpn.example.com" />
           </Form.Item>
@@ -258,19 +346,28 @@ export function ProxyServerDetailPage() {
           >
             <Input autoComplete="off" placeholder="http://10.0.0.2:7700" />
           </Form.Item>
-          <Form.Item
-            name="enabledEngines"
-            label={t('proxy.enabledEngines')}
-            rules={[{ required: true, message: t('proxy.enginesRequired') }]}
-          >
-            <Select mode="multiple" options={engineOptions} />
-          </Form.Item>
-          <Form.Item
-            name="enabledProtocols"
-            label={t('proxy.enabledProtocols')}
-            rules={[{ required: true, message: t('proxy.protocolsRequired') }]}
-          >
-            <Select mode="multiple" options={protocolOptions} />
+          <Form.Item label={t('proxy.enabledProtocols')} required>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              {engineBlocks.map((block) => (
+                <Card key={block.engine} size="small" type="inner" title={block.label}>
+                  <Space direction="vertical">
+                    {block.protocols.map((protocol) => (
+                      <Checkbox
+                        key={protocol}
+                        checked={selectedProtocols.includes(protocol)}
+                        onChange={(event) => toggleProtocol(protocol, event.target.checked)}
+                      >
+                        {t(`enums.protocol.${protocol}`, {
+                          defaultValue: t(`enums.inboundProtocol.${protocol}`, {
+                            defaultValue: protocol,
+                          }),
+                        })}
+                      </Checkbox>
+                    ))}
+                  </Space>
+                </Card>
+              ))}
+            </Space>
           </Form.Item>
           <Form.Item
             name="heartbeatIntervalSec"
