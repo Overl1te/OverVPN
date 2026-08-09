@@ -2867,6 +2867,7 @@ fetch_deploy_bundle() {
   done
 
   chmod 755 \
+    "${APP_DIR}/deploy/agent/entrypoint.sh" \
     "${APP_DIR}/deploy/sing-box/entrypoint.sh" \
     "${APP_DIR}/deploy/sing-box/bootstrap-config.sh" \
     "${APP_DIR}/deploy/xray/entrypoint.sh" \
@@ -2908,6 +2909,7 @@ apply_deploy_permissions() {
   [[ -f "$CREDENTIALS_FILE" ]] && chmod a+r "$CREDENTIALS_FILE"
   [[ -f "$INSTALL_CONF" ]] && chmod a+r "$INSTALL_CONF"
   [[ -f "${APP_DIR}/install.sh" ]] && chmod a+rX "${APP_DIR}/install.sh"
+  [[ -f "${APP_DIR}/deploy/agent/entrypoint.sh" ]] && chmod a+rx "${APP_DIR}/deploy/agent/entrypoint.sh"
   install_logrotate
 }
 

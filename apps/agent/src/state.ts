@@ -16,7 +16,11 @@ export type AgentState = z.infer<typeof agentStateSchema>;
 export async function loadAgentState(path: string): Promise<AgentState> {
   try {
     const raw = await readFile(path, 'utf8');
-    return agentStateSchema.parse(JSON.parse(raw) as unknown);
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return {};
+    }
+    return agentStateSchema.parse(JSON.parse(trimmed) as unknown);
   } catch (error: unknown) {
     if (
       typeof error === 'object' &&

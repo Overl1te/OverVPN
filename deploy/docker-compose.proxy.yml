@@ -110,11 +110,13 @@ services:
       - '7700'
     cap_drop:
       - ALL
-    # Needed so entrypoint can drop root->node after chown'ing volumes.
-    # Without these, setpriv/runuser fail and we fall back to root (still OK).
+    # SETUID/SETGID: drop root->node. CHOWN/FOWNER: chown volumes before drop.
+    # Without CHOWN, chown silently fails (cap_drop ALL) and node hits EACCES.
     cap_add:
       - SETUID
       - SETGID
+      - CHOWN
+      - FOWNER
     healthcheck:
       test:
         [
