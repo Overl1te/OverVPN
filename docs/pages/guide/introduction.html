@@ -3,8 +3,10 @@
 <p>
   OverVPN — <strong>панель-оркестратор</strong> (control plane) плюс
   <strong>прокси-ноды</strong> (data plane). Панель не маршрутизирует VPN-трафик сама: она хранит
-  желаемое состояние и применяет конфиги на нодах через агент
-  (<a href="https://github.com/Overl1te/OverVPN/tree/main/apps/agent" target="_blank" rel="noopener"
+  желаемое состояние и применяет конфиги на нодах через агент (<a
+    href="https://github.com/Overl1te/OverVPN/tree/main/apps/agent"
+    target="_blank"
+    rel="noopener"
     >@overvpn/agent</a
   >).
 </p>
@@ -51,7 +53,9 @@
 <div class="flow">
   <div class="flow-step"><span>1.</span> Администратор → HTTPS → Web-панель → API NestJS</div>
   <div class="flow-step"><span>2.</span> API → PostgreSQL, Redis; apply → агент ноды → ядра</div>
-  <div class="flow-step"><span>3.</span> VPN-клиенты → UDP/TCP → sing-box / Xray / MTProxy на ноде</div>
+  <div class="flow-step">
+    <span>3.</span> VPN-клиенты → UDP/TCP → sing-box / Xray / MTProxy на ноде
+  </div>
   <div class="flow-step"><span>4.</span> Клиенты подписок → HTTPS → Subscription URL → API</div>
 </div>
 
@@ -111,9 +115,7 @@
     <a href="{{BASE}}guide/installation.html">Установка</a> — одна команда через
     <code>install.sh</code> или ручной Docker Compose
   </li>
-  <li>
-    <a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a> — локальный и удалённый прокси
-  </li>
+  <li><a href="{{BASE}}guide/proxy-nodes.html">Прокси-ноды</a> — локальный и удалённый прокси</li>
   <li>
     <a href="{{BASE}}guide/management.html">Управление сервером</a> — CLI <code>overvpn</code>
   </li>

@@ -153,11 +153,11 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Инфраструктура (Compose)
 
-| Сервис            | Образ / бинарь                 | Роль                                       |
-| ----------------- | ------------------------------ | ------------------------------------------ |
-| `postgres`        | `postgres:18-alpine`           | состояние панели                           |
-| `redis`           | `redis:8-alpine`               | throttle, distributed locks воркеров/apply |
-| `migrate`         | api image, one-shot            | `prisma migrate deploy`                    |
+| Сервис            | Образ / бинарь                   | Роль                                       |
+| ----------------- | -------------------------------- | ------------------------------------------ |
+| `postgres`        | `postgres:18-alpine`             | состояние панели                           |
+| `redis`           | `redis:8-alpine`                 | throttle, distributed locks воркеров/apply |
+| `migrate`         | api image, one-shot              | `prisma migrate deploy`                    |
 | `api`             | `ghcr.io/overl1te/overvpn-api`   | NestJS                                     |
 | `web`             | `ghcr.io/overl1te/overvpn-web`   | Nginx + SPA, proxy `/api`                  |
 | `agent`           | `ghcr.io/overl1te/overvpn-agent` | proxy-node agent (`proxy` profile)         |
@@ -170,15 +170,15 @@ Workspace (`pnpm-workspace.yaml`):
 
 ### Потоки данных
 
-| Поток         | Путь                                                                                          | Примечание                                           |
-| ------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                                | JWT access + httpOnly refresh cookie                 |
-| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                                          | без админ-JWT; rate-limit по IP и fingerprint токена |
-| Apply конфига | Admin mutation → CoreModule → agent `POST /v1/apply` (или local volumes) → cores              | Redis lock; hybrid transport                         |
-| Агент ↔ API   | `/api/agent/nodes/:id/{register,heartbeat,stats,desired,apply-result}`                        | Bearer `NODE_TOKEN`                                  |
-| Трафик        | Worker → stats (локально / agent) → ledger → UsageDaily                                       | epoch/generation после reload                        |
-| Онлайн        | Worker → Clash API / agent stats → OnlineSession                                              | best-effort device id                                |
-| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости                    |                                                      |
+| Поток         | Путь                                                                             | Примечание                                           |
+| ------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Админ UI      | Browser → web → `POST/GET /api/admin/*` → Nest                                   | JWT access + httpOnly refresh cookie                 |
+| Подписка      | Client → `GET /api/sub/:token` → SubscriptionsModule                             | без админ-JWT; rate-limit по IP и fingerprint токена |
+| Apply конфига | Admin mutation → CoreModule → agent `POST /v1/apply` (или local volumes) → cores | Redis lock; hybrid transport                         |
+| Агент ↔ API   | `/api/agent/nodes/:id/{register,heartbeat,stats,desired,apply-result}`           | Bearer `NODE_TOKEN`                                  |
+| Трафик        | Worker → stats (локально / agent) → ledger → UsageDaily                          | epoch/generation после reload                        |
+| Онлайн        | Worker → Clash API / agent stats → OnlineSession                                 | best-effort device id                                |
+| Enforce       | Worker → статусы User (`LIMITED`/`EXPIRED`/…) → re-apply при необходимости       |                                                      |
 
 ### Сети Compose (упрощённо)
 
@@ -208,24 +208,24 @@ Env валидируется при старте API в `apps/api/src/config/env
 - Pino с redact секретов (пароли, cookie, PEM, obfs, …)
 - `ThrottlerModule` для login window
 
-| Модуль             | Каталог           | Зачем                                                                 |
-| ------------------ | ----------------- | --------------------------------------------------------------------- |
-| **Infrastructure** | `infrastructure/` | Prisma, Redis клиенты                                                 |
-| **Auth**           | `auth/`           | login/refresh/logout, TOTP, bootstrap-совместимая модель AdminUser    |
-| **Users**          | `users/`          | CRUD пользователей, assignments, rotate-sub, статусы                  |
-| **Plans**          | `plans/`          | тарифы / шаблоны лимитов и привязка inbound’ов                        |
-| **Inbounds**       | `inbounds/`       | протоколы Hysteria2 / VLESS Reality / Trojan / SS, settings           |
-| **Subscriptions**  | `subscriptions/`  | публичные профили `sing-box` / `clash` / `links` / `info`             |
+| Модуль             | Каталог           | Зачем                                                                          |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------ |
+| **Infrastructure** | `infrastructure/` | Prisma, Redis клиенты                                                          |
+| **Auth**           | `auth/`           | login/refresh/logout, TOTP, bootstrap-совместимая модель AdminUser             |
+| **Users**          | `users/`          | CRUD пользователей, assignments, rotate-sub, статусы                           |
+| **Plans**          | `plans/`          | тарифы / шаблоны лимитов и привязка inbound’ов                                 |
+| **Inbounds**       | `inbounds/`       | протоколы Hysteria2 / VLESS Reality / Trojan / SS, settings                    |
+| **Subscriptions**  | `subscriptions/`  | публичные профили `sing-box` / `clash` / `links` / `info`                      |
 | **Core**           | `core/`           | абстракция `CoreProvider`, dual-engine apply, health/stats, transport к агенту |
 | **Agent**          | `agent/`          | register / heartbeat / desired / stats / apply-result для нод                  |
 | **ProxyServers**   | `proxy-servers/`  | CRUD нод, install-command, wizard, dns-check, enable/disable                   |
-| **Workers**        | `workers/`        | фоновые циклы (см. ниже)                                              |
-| **System**         | `system/`         | dashboard snapshots, health агрегаты                                  |
-| **Settings**       | `settings/`       | SystemConfig (Telegram и пр.; секреты не отдаются наружу)             |
-| **Backups**        | `backups/`        | DATABASE / CORE_CONFIG / FULL, encrypt, restore (OWNER)               |
-| **Audit**          | `audit/`          | журнал админ-действий                                                 |
-| **Health**         | `health/`         | `/api/health`, `/api/health/ready`                                    |
-| **Notifications**  | `notifications/`  | Telegram (EN/RU) при enforcement / core-apply fail                    |
+| **Workers**        | `workers/`        | фоновые циклы (см. ниже)                                                       |
+| **System**         | `system/`         | dashboard snapshots, health агрегаты                                           |
+| **Settings**       | `settings/`       | SystemConfig (Telegram и пр.; секреты не отдаются наружу)                      |
+| **Backups**        | `backups/`        | DATABASE / CORE_CONFIG / FULL, encrypt, restore (OWNER)                        |
+| **Audit**          | `audit/`          | журнал админ-действий                                                          |
+| **Health**         | `health/`         | `/api/health`, `/api/health/ready`                                             |
+| **Notifications**  | `notifications/`  | Telegram (EN/RU) при enforcement / core-apply fail                             |
 
 Паттерн типичного feature-модуля:
 
@@ -320,21 +320,21 @@ acquire Redis lock
 
 ### Основные сущности
 
-| Model                                                  | Смысл                                       |
-| ------------------------------------------------------ | ------------------------------------------- |
-| `AdminUser` / `RefreshToken`                           | админы и сессии                             |
-| `User`                                                 | VPN-пользователь, лимиты, статус, sub token |
-| `Plan` / `PlanInbound`                                 | тариф и набор inbound’ов                    |
+| Model                                                  | Смысл                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| `AdminUser` / `RefreshToken`                           | админы и сессии                                            |
+| `User`                                                 | VPN-пользователь, лимиты, статус, sub token                |
+| `Plan` / `PlanInbound`                                 | тариф и набор inbound’ов                                   |
 | `Inbound`                                              | слушатель протокола + encrypted settings + `proxyServerId` |
 | `ProxyServer`                                          | прокси-нода (local seed / remote), token, agentBaseUrl     |
-| `UserInboundAssignment`                                | credentials пользователя на inbound         |
-| `UsageDaily`                                           | дневная агрегация трафика                   |
-| `TrafficCursor` / `TrafficDelta` / `TrafficCheckpoint` | ledger с учётом reload epoch                |
-| `OnlineSession`                                        | онлайн/история                              |
-| `AuditLog`                                             | действия админов                            |
-| `SystemConfig`                                         | key/value настроек                          |
-| `CoreApplyRecord` / `CoreState`                        | история apply и текущее поколение конфига   |
-| `BackupArtifact`                                       | метаданные бэкапов                          |
+| `UserInboundAssignment`                                | credentials пользователя на inbound                        |
+| `UsageDaily`                                           | дневная агрегация трафика                                  |
+| `TrafficCursor` / `TrafficDelta` / `TrafficCheckpoint` | ledger с учётом reload epoch                               |
+| `OnlineSession`                                        | онлайн/история                                             |
+| `AuditLog`                                             | действия админов                                           |
+| `SystemConfig`                                         | key/value настроек                                         |
+| `CoreApplyRecord` / `CoreState`                        | история apply и текущее поколение конфига                  |
+| `BackupArtifact`                                       | метаданные бэкапов                                         |
 
 Миграции только через Prisma:
 
@@ -365,19 +365,19 @@ src/
 
 Маршруты зеркалят домен:
 
-| Path                   | Страница                   |
-| ---------------------- | -------------------------- |
-| `/login`               | LoginPage                  |
-| `/dashboard`           | DashboardPage              |
-| `/users`, `/users/:id` | список / карточка + sub QR |
-| `/inbounds`            | inbound’ы                  |
-| `/plans`               | планы                      |
-| `/proxy`, `/proxy/new` | список нод / визард создания   |
-| `/online`              | сессии                     |
-| `/config`              | preview/apply              |
-| `/audit`               | журнал                     |
-| `/system`              | settings + system          |
-| `/backups`             | бэкапы                     |
+| Path                   | Страница                     |
+| ---------------------- | ---------------------------- |
+| `/login`               | LoginPage                    |
+| `/dashboard`           | DashboardPage                |
+| `/users`, `/users/:id` | список / карточка + sub QR   |
+| `/inbounds`            | inbound’ы                    |
+| `/plans`               | планы                        |
+| `/proxy`, `/proxy/new` | список нод / визард создания |
+| `/online`              | сессии                       |
+| `/config`              | preview/apply                |
+| `/audit`               | журнал                       |
+| `/system`              | settings + system            |
+| `/backups`             | бэкапы                       |
 
 В dev Vite проксирует `/api` → `:3000`. В проде тот же path обслуживает Nginx внутри web-образа (`apps/web/nginx.conf`).
 
