@@ -6,6 +6,10 @@ import {
   INBOUND_PROTOCOLS,
   type InboundProtocol,
 } from '@overvpn/shared/constants';
+import {
+  SUPPORT_MANIFEST,
+  computeSupportProof,
+} from '@overvpn/shared/support-integrity';
 
 const apiBase = process.env.BOOTSTRAP_API_URL ?? 'http://127.0.0.1:3000/api';
 const username = process.env.BOOTSTRAP_ADMIN_USER ?? '';
@@ -29,13 +33,20 @@ async function jsonRequest<T>(
   init: RequestInit,
   accessToken?: string,
 ): Promise<T> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  const isMutation =
+    method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  if (isMutation) {
+    headers[SUPPORT_MANIFEST.headerName] = await computeSupportProof();
+  }
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-      ...init.headers,
-    },
+    headers,
   });
   const body = (await response.json().catch(() => null)) as T | null;
   if (!response.ok) {

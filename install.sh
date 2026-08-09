@@ -1854,6 +1854,19 @@ compose() {
   docker compose --env-file "$ENV_FILE" "${files[@]}" "$@"
 }
 
+# Run a one-shot tools profile service with panel/proxy profiles from .env still active.
+# Plain `--profile tools` alone drops `panel`, so depends_on migrate/api look "undefined".
+compose_tools_run() {
+  local profiles
+  profiles="$(get_env_var COMPOSE_PROFILES "$ENV_FILE" 2>/dev/null || true)"
+  profiles="${profiles:-panel}"
+  case ",${profiles}," in
+    *,tools,*) ;;
+    *) profiles="${profiles},tools" ;;
+  esac
+  COMPOSE_PROFILES="$profiles" compose run --rm "$@"
+}
+
 install_role() {
   get_env_var INSTALL_ROLE "$INSTALL_CONF" 2>/dev/null || printf 'panel'
 }
@@ -3486,7 +3499,7 @@ cmd_install() {
   fi
 
   colorized_echo blue "$(cli_t creating_owner)"
-  compose --profile tools run --rm bootstrap-admin
+  compose_tools_run bootstrap-admin
   bootstrap_local_proxy
   bootstrap_default_inbounds
 
@@ -3903,7 +3916,7 @@ cmd_edit() {
 cmd_bootstrap() {
   check_root
   is_installed || { colorized_echo red "$(cli_t not_installed)"; exit 1; }
-  compose --profile tools run --rm bootstrap-admin
+  compose_tools_run bootstrap-admin
   bootstrap_default_inbounds
   colorized_echo green "$(cli_t bootstrap_finished)"
 }

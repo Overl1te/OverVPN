@@ -480,9 +480,13 @@ services:
       BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     command: ['node', 'apps/api/dist/scripts/bootstrap-admin.js']
+    # migrate lives in `panel`; install enables COMPOSE_PROFILES when running tools.
+    # required:false keeps `compose --profile tools run` valid if panel isn't active
+    # (migrate already ran during `compose up`).
     depends_on:
       migrate:
         condition: service_completed_successfully
+        required: false
     networks:
       - backend
     <<: *service-security
