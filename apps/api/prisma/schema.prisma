@@ -144,6 +144,14 @@ enum BackupStatus {
   DELETED
 }
 
+enum ProxyServerStatus {
+  PENDING
+  ONLINE
+  OFFLINE
+  ERROR
+  DISABLED
+}
+
 model AdminUser {
   id                         String            @id @default(uuid()) @db.Uuid
   username                   String            @unique @db.VarChar(64)
@@ -268,9 +276,55 @@ model Plan {
   @@map("plans")
 }
 
+model ProxyServer {
+  id                    String            @id @default(uuid()) @db.Uuid
+  name                  String            @db.VarChar(100)
+  status                ProxyServerStatus @default(PENDING)
+  agentBaseUrl          String?           @db.VarChar(512)
+  installTokenHash      String?           @db.VarChar(128)
+  installTokenExpiresAt DateTime?         @db.Timestamptz(3)
+  nodeTokenHash         String?           @db.VarChar(128)
+  publicHost            String?           @db.VarChar(255)
+  enabledEngines        Json              @default("[]")
+  enabledProtocols      Json              @default("[]")
+  capabilities          Json              @default("{}")
+  lastSeenAt            DateTime?         @db.Timestamptz(3)
+  lastError             String?
+  heartbeatIntervalSec  Int               @default(20)
+  settings              Json              @default("{}")
+  isLocal               Boolean           @default(false)
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime          @updatedAt @db.Timestamptz(3)
+  inbounds              Inbound[]
+  coreStates            ProxyCoreState[]
+  applyRecords          CoreApplyRecord[]
+
+  @@index([status, lastSeenAt])
+  @@index([isLocal])
+  @@map("proxy_servers")
+}
+
+model ProxyCoreState {
+  proxyServerId     String     @db.Uuid
+  engine            CoreEngine
+  desiredRevision   Int        @default(0)
+  appliedRevision   Int        @default(0)
+  appliedConfigHash String?    @db.Char(64)
+  configPath        String     @db.VarChar(512)
+  lastApplyRecordId String?    @db.Uuid
+  appliedAt         DateTime?  @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @db.Timestamptz(3)
+  proxyServer       ProxyServer @relation(fields: [proxyServerId], references: [id], onDelete: Cascade)
+
+  @@id([proxyServerId, engine])
+  @@map("proxy_core_state")
+}
+
 model Inbound {
   id                  String                  @id @default(uuid()) @db.Uuid
-  tag                 String                  @unique @db.VarChar(100)
+  proxyServerId       String                  @db.Uuid
+  tag                 String                  @db.VarChar(100)
   engine              CoreEngine              @default(SING_BOX)
   protocol            InboundProtocol
   listenHost          String                  @default("0.0.0.0") @db.VarChar(255)
@@ -286,14 +340,17 @@ model Inbound {
   createdAt           DateTime                @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime                @updatedAt @db.Timestamptz(3)
   disabledAt          DateTime?               @db.Timestamptz(3)
+  proxyServer         ProxyServer             @relation(fields: [proxyServerId], references: [id], onDelete: Restrict)
   planInbounds        PlanInbound[]
   userAssignments     UserInboundAssignment[]
   usageDaily          UsageDaily[]
   trafficCheckpoints  TrafficCheckpoint[]
   onlineSessions      OnlineSession[]
 
+  @@unique([proxyServerId, tag])
+  @@unique([proxyServerId, listenHost, listenPort])
   @@index([enabled, protocol])
-  @@index([listenHost, listenPort])
+  @@index([proxyServerId, enabled])
   @@map("inbounds")
 }
 
@@ -472,6 +529,7 @@ model SystemConfig {
 
 model CoreApplyRecord {
   id                  String           @id @default(uuid()) @db.Uuid
+  proxyServerId       String?          @db.Uuid
   status              CoreApplyStatus  @default(PENDING)
   trigger             CoreApplyTrigger @default(MANUAL)
   reason              String?
@@ -496,10 +554,12 @@ model CoreApplyRecord {
   metadata            Json?
   createdAt           DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+  proxyServer         ProxyServer?     @relation(fields: [proxyServerId], references: [id], onDelete: SetNull)
   initiatedByAdmin    AdminUser?       @relation("CoreApplyInitiator", fields: [initiatedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([initiatedByAdminId])
+  @@index([proxyServerId, status, createdAt])
   @@index([resourceType, resourceId, status])
   @@map("core_apply_records")
 }

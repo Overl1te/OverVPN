@@ -11,6 +11,8 @@ tar -czf "$OUT" \
   .env.example \
   install.sh \
   deploy/docker-compose.yml \
+  deploy/docker-compose.proxy.yml \
+  deploy/agent \
   deploy/landing \
   deploy/sing-box \
   deploy/xray \

@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import type { CoreEngine } from '@overvpn/shared/constants';
+import type { SecretEncryptionService } from '../auth/auth-crypto';
 import type { AuditService } from '../audit/audit.service';
 import type { SupportIntegrityService } from '../common/support-integrity';
 import type { AppEnvironment } from '../config/environment';
@@ -17,6 +18,7 @@ import {
 } from './core-provider';
 import type { CoreStateLoader } from './core-state.loader';
 import type { RedisDistributedLock } from './distributed-lock';
+import type { HttpAgentTransport } from './http-agent.transport';
 
 describe('CoreApplyService validation gate', () => {
   it('persists FAILED and never writes/reloads when validation fails', async () => {
@@ -60,6 +62,13 @@ describe('CoreApplyService validation gate', () => {
       assertIntact: jest.fn(),
       isIntact: jest.fn(() => true),
     } as unknown as SupportIntegrityService;
+    const agentTransport = {
+      postApply: jest.fn(),
+    } as unknown as HttpAgentTransport;
+    const encryption = {
+      encrypt: jest.fn((value: string) => `enc:${value}`),
+      decrypt: jest.fn((value: string) => value.replace(/^enc:/, '')),
+    } as unknown as SecretEncryptionService;
     const service = new CoreApplyService(
       prisma,
       registry,
@@ -69,6 +78,8 @@ describe('CoreApplyService validation gate', () => {
       audit,
       notifications,
       supportIntegrity,
+      agentTransport,
+      encryption,
       fakeConfig(),
     );
 
@@ -165,6 +176,13 @@ describe('CoreApplyService multi-engine apply', () => {
       assertIntact: jest.fn(),
       isIntact: jest.fn(() => true),
     } as unknown as SupportIntegrityService;
+    const agentTransport = {
+      postApply: jest.fn(),
+    } as unknown as HttpAgentTransport;
+    const encryption = {
+      encrypt: jest.fn((value: string) => `enc:${value}`),
+      decrypt: jest.fn((value: string) => value.replace(/^enc:/, '')),
+    } as unknown as SecretEncryptionService;
     const service = new CoreApplyService(
       prisma,
       registry,
@@ -174,6 +192,8 @@ describe('CoreApplyService multi-engine apply', () => {
       audit,
       notifications,
       supportIntegrity,
+      agentTransport,
+      encryption,
       fakeConfig(),
     );
 
@@ -382,6 +402,7 @@ function applyRecord(): CoreApplyRecord {
   const now = new Date();
   return {
     id: 'd0d18d24-7eaf-49ff-9aef-9269021eeac5',
+    proxyServerId: null,
     status: 'APPLYING',
     trigger: 'MANUAL',
     reason: 'validation failure test',

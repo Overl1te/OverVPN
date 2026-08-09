@@ -3,6 +3,7 @@ import {
   DashboardOutlined,
   UserOutlined,
   CloudServerOutlined,
+  ClusterOutlined,
   ProfileOutlined,
   WifiOutlined,
   DeploymentUnitOutlined,
@@ -112,6 +113,11 @@ export function AdminLayout() {
       key: '/users',
       icon: <UserOutlined />,
       label: <NavLabel tourId="nav-users">{t('nav.users')}</NavLabel>,
+    },
+    {
+      key: '/proxy',
+      icon: <ClusterOutlined />,
+      label: <NavLabel tourId="nav-proxy">{t('nav.proxy')}</NavLabel>,
     },
     {
       key: '/inbounds',

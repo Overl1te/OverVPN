@@ -20,6 +20,8 @@ import { HealthModule } from './health/health.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { InboundsModule } from './inbounds/inbounds.module';
 import { PlansModule } from './plans/plans.module';
+import { ProxyServersModule } from './proxy-servers/proxy-servers.module';
+import { AgentModule } from './agent/agent.module';
 import { SettingsModule } from './settings/settings.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { SystemModule } from './system/system.module';
@@ -117,6 +119,8 @@ function requestId(request: IncomingMessage, response: ServerResponse): string {
     AuthModule,
     UsersModule,
     PlansModule,
+    ProxyServersModule,
+    AgentModule,
     InboundsModule,
     SubscriptionsModule,
     WorkersModule,

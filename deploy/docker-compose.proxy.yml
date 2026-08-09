@@ -1,0 +1,119 @@
+# Proxy-node overlay: agent service for the `proxy` Compose profile.
+# Always use with the main stack file so cores/volumes/networks match:
+#   docker compose --env-file .env \
+#     -f deploy/docker-compose.yml -f deploy/docker-compose.proxy.yml up -d
+#
+# Profiles (COMPOSE_PROFILES in .env):
+#   panel                 — postgres / redis / migrate / api / web
+#   proxy                 — agent (this file)
+#   singbox|xray|mtproxy  — VPN cores (docker-compose.yml)
+#   tools                 — bootstrap-admin
+#
+# Co-located: COMPOSE_PROFILES=panel,proxy,singbox,xray,mtproxy
+# Remote proxy: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy
+# Panel only:   COMPOSE_PROFILES=panel
+
+x-service-security: &service-security
+  security_opt:
+    - no-new-privileges:true
+
+x-agent-environment: &agent-environment
+  NODE_ENV: production
+  PANEL_URL: ${PANEL_URL:?Set PANEL_URL in .env}
+  NODE_ID: ${NODE_ID:?Set NODE_ID in .env}
+  NODE_TOKEN: ${NODE_TOKEN:-}
+  INSTALL_TOKEN: ${INSTALL_TOKEN:-}
+  AGENT_LISTEN: ${AGENT_LISTEN:-0.0.0.0:7700}
+  AGENT_BASE_URL: ${AGENT_BASE_URL:-}
+  AGENT_HOSTNAME: ${AGENT_HOSTNAME:-}
+  AGENT_VERSION: ${AGENT_VERSION:-0.1.0}
+  AGENT_STATE_PATH: /var/lib/overvpn/agent/state.json
+  HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-20}
+  PULL_DESIRED_ENABLED: ${PULL_DESIRED_ENABLED:-true}
+  SKIP_CORE_RELOAD: ${SKIP_CORE_RELOAD:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  SING_BOX_CONFIG_PATH: /var/lib/sing-box/config.json
+  SING_BOX_LAST_KNOWN_GOOD_PATH: /var/lib/sing-box/config.last-known-good.json
+  SING_BOX_RELOAD_REQUEST_PATH: /var/lib/overvpn/reload/request
+  SING_BOX_RELOAD_ACK_PATH: /var/lib/overvpn/reload/ack
+  SING_BOX_PID_PATH: /var/lib/overvpn/reload/sing-box.pid
+  SING_BOX_CLASH_API_URL: http://core:9090
+  SING_BOX_CLASH_API_SECRET: ${SING_BOX_CLASH_API_SECRET:-}
+  SING_BOX_V2RAY_API_ADDRESS: core:8080
+  XRAY_CONFIG_PATH: /var/lib/xray/config.json
+  XRAY_LAST_KNOWN_GOOD_PATH: /var/lib/xray/config.last-known-good.json
+  XRAY_RELOAD_REQUEST_PATH: /var/lib/overvpn/xray-reload/request
+  XRAY_RELOAD_ACK_PATH: /var/lib/overvpn/xray-reload/ack
+  XRAY_PID_PATH: /var/lib/overvpn/xray-reload/xray.pid
+  XRAY_STATS_ADDRESS: core-xray:10085
+  MTPROXY_CONFIG_PATH: /var/lib/mtproxy/config.json
+  MTPROXY_LAST_KNOWN_GOOD_PATH: /var/lib/mtproxy/config.last-known-good.json
+  MTPROXY_RELOAD_REQUEST_PATH: /var/lib/overvpn/mtproxy-reload/request
+  MTPROXY_RELOAD_ACK_PATH: /var/lib/overvpn/mtproxy-reload/ack
+  MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
+  MTPROXY_HEARTBEAT_PATH: /var/lib/overvpn/mtproxy-reload/heartbeat
+  MTPROXY_RUNTIME_STATS_PATH: /var/lib/overvpn/mtproxy-reload/runtime-stats.json
+
+services:
+  agent:
+    profiles: ['proxy']
+    image: ${AGENT_IMAGE:-ghcr.io/overl1te/overvpn-agent:latest}
+    build:
+      context: ..
+      dockerfile: deploy/agent/Dockerfile
+      args:
+        OVERVPN_GIT_SHA: ${OVERVPN_GIT_SHA:-}
+    restart: unless-stopped
+    environment:
+      <<: *agent-environment
+    depends_on:
+      core:
+        condition: service_healthy
+        required: false
+      core-xray:
+        condition: service_healthy
+        required: false
+      core-mtproxy:
+        condition: service_healthy
+        required: false
+    volumes:
+      - agent_state:/var/lib/overvpn/agent
+      - singbox_config:/var/lib/sing-box
+      - singbox_reload:/var/lib/overvpn/reload
+      - singbox_state:/var/lib/sing-box-state
+      - ./sing-box/certs:/var/lib/sing-box-certs:ro
+      - xray_config:/var/lib/xray
+      - xray_reload:/var/lib/overvpn/xray-reload
+      - xray_state:/var/lib/xray-state
+      - ./xray/certs:/var/lib/xray-certs:ro
+      - mtproxy_config:/var/lib/mtproxy
+      - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
+      - mtproxy_state:/var/lib/mtproxy-state
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    ports:
+      - '${AGENT_BIND_ADDRESS:-0.0.0.0}:${AGENT_PORT:-7700}:7700'
+    expose:
+      - '7700'
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:7700/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+      - core
+    <<: *service-security
+
+volumes:
+  agent_state:

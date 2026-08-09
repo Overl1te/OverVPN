@@ -19,12 +19,15 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Column } from '@ant-design/charts';
 import { getDashboard, getHostStats, getSystemHealth, getUpdateStatus } from '@/api/system';
+import { listProxyServers } from '@/api/proxy-servers';
 import { PageHeader } from '@/components/PageHeader';
+import { ProxyServerStatusTag } from '@/components/StatusTag';
 import { useSetupProgress, type SetupStepId } from '@/hooks/useSetupProgress';
 import { usePanelTour } from '@/hooks/usePanelTour';
 import { formatBytes, formatBytesPerSecond } from '@/utils/format';
 import { localizedRuntimeError } from '@/utils/localizeRuntimeError';
 import dayjs from 'dayjs';
+import type { ProxyServerStatus } from '@overvpn/shared/constants';
 
 function memoryPercent(used: string | undefined, total: string | undefined): number {
   if (!used || !total) {
@@ -75,11 +78,35 @@ export function DashboardPage() {
     queryFn: () => getUpdateStatus(),
     refetchInterval: 60_000,
   });
+  const proxyQuery = useQuery({
+    queryKey: ['proxy-servers', 'dashboard'],
+    queryFn: () => listProxyServers({ page: 1, pageSize: 100 }),
+    refetchInterval: 30_000,
+  });
 
   const data = dashboardQuery.data;
   const health = healthQuery.data;
   const host = hostQuery.data;
   const update = updateQuery.data;
+
+  const proxyCounts = (proxyQuery.data?.items ?? []).reduce(
+    (acc, server) => {
+      acc.total += 1;
+      if (server.status === 'ONLINE') {
+        acc.online += 1;
+      } else {
+        acc.other += 1;
+      }
+      acc.byStatus[server.status] = (acc.byStatus[server.status] ?? 0) + 1;
+      return acc;
+    },
+    {
+      total: 0,
+      online: 0,
+      other: 0,
+      byStatus: {} as Partial<Record<ProxyServerStatus, number>>,
+    },
+  );
 
   const series =
     data?.traffic.period.series.map((point) => ({
@@ -387,6 +414,57 @@ export function DashboardPage() {
                   </div>
                 ),
               )}
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
+        <Col xs={24} sm={12} lg={8}>
+          <Card size="small" loading={proxyQuery.isLoading}>
+            <Typography.Text type="secondary">{t('proxy.dashboardTitle')}</Typography.Text>
+            <Row gutter={8} style={{ marginTop: 8 }}>
+              <Col span={8}>
+                <Statistic
+                  title={t('proxy.dashboardOnline')}
+                  value={proxyCounts.online}
+                  valueStyle={{ fontSize: 20 }}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title={t('proxy.dashboardOffline')}
+                  value={proxyCounts.other}
+                  valueStyle={{ fontSize: 20 }}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title={t('proxy.dashboardTotal')}
+                  value={proxyCounts.total}
+                  valueStyle={{ fontSize: 20 }}
+                />
+              </Col>
+            </Row>
+            <Space size={4} wrap style={{ marginTop: 8 }}>
+              {(['ONLINE', 'PENDING', 'OFFLINE', 'ERROR', 'DISABLED'] as const).map((status) =>
+                (proxyCounts.byStatus[status] ?? 0) > 0 ? (
+                  <span
+                    key={status}
+                    style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}
+                  >
+                    <ProxyServerStatusTag status={status} />
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {proxyCounts.byStatus[status]}
+                    </Typography.Text>
+                  </span>
+                ) : null,
+              )}
+            </Space>
+            <div style={{ marginTop: 8 }}>
+              <Link to="/proxy">
+                <Button size="small">{t('nav.proxy')}</Button>
+              </Link>
             </div>
           </Card>
         </Col>

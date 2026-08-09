@@ -126,8 +126,18 @@ x-service-security: &service-security
   security_opt:
     - no-new-privileges:true
 
+# Profiles:
+#   panel  — postgres / redis / migrate / api / web
+#   proxy  — agent (see docker-compose.proxy.yml) + selected core profiles
+#   singbox | xray | mtproxy — VPN data-plane cores
+#   tools  — bootstrap-admin
+# Co-located: COMPOSE_PROFILES=panel,proxy,singbox,xray,mtproxy
+# Panel-only: COMPOSE_PROFILES=panel
+# Proxy-only: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy
+
 services:
   postgres:
+    profiles: ['panel']
     image: ${POSTGRES_IMAGE:-postgres:18-alpine}
     restart: unless-stopped
     environment:
@@ -150,6 +160,7 @@ services:
     <<: *service-security
 
   redis:
+    profiles: ['panel']
     image: ${REDIS_IMAGE:-redis:8-alpine}
     restart: unless-stopped
     environment:
@@ -377,6 +388,7 @@ services:
     <<: *service-security
 
   migrate:
+    profiles: ['panel']
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: 'no'
@@ -399,6 +411,7 @@ services:
     <<: *service-security
 
   api:
+    profiles: ['panel']
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
     build: *api-build
     restart: unless-stopped
@@ -444,6 +457,7 @@ services:
     <<: *service-security
 
   web:
+    profiles: ['panel']
     image: ${WEB_IMAGE:-ghcr.io/overl1te/overvpn-web:latest}
     build:
       context: ..

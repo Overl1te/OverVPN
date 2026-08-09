@@ -31,6 +31,7 @@ import { CoreController } from './core.controller';
 import { CoreProvider, type EngineProvider } from './core-provider';
 import { CoreStateLoader } from './core-state.loader';
 import { RedisDistributedLock } from './distributed-lock';
+import { HttpAgentTransport } from './http-agent.transport';
 import { MtproxyProvider } from './mtproxy.provider';
 import { SingBoxProvider } from './sing-box.provider';
 import {
@@ -114,13 +115,16 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
     },
     CoreStateLoader,
     RedisDistributedLock,
+    HttpAgentTransport,
     CoreApplyService,
   ],
   exports: [
     CoreChangeDispatcher,
     CoreProvider,
     CoreEngineRegistry,
+    CoreStateLoader,
     CoreApplyService,
+    HttpAgentTransport,
     RedisDistributedLock,
     ProcessAdapter,
     CoreFileSystem,

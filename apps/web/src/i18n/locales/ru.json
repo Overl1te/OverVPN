@@ -72,6 +72,7 @@
   "nav": {
     "dashboard": "Обзор",
     "users": "Пользователи",
+    "proxy": "Прокси",
     "inbounds": "Точки входа",
     "plans": "Планы",
     "online": "Онлайн-сессии",
@@ -388,6 +389,13 @@
       "ACTIVE": "Активен",
       "ARCHIVED": "В архиве"
     },
+    "proxyServerStatus": {
+      "PENDING": "Ожидание",
+      "ONLINE": "Онлайн",
+      "OFFLINE": "Офлайн",
+      "ERROR": "Ошибка",
+      "DISABLED": "Отключён"
+    },
     "assignmentStatus": {
       "ACTIVE": "Активно",
       "DISABLED": "Отключено"
@@ -528,6 +536,11 @@
     "create": "Создать точку входа",
     "edit": "Изменить точку входа",
     "tag": "Тег",
+    "proxyServer": "Прокси-сервер",
+    "selectProxyServer": "Выберите прокси-сервер",
+    "proxyServerRequired": "Выберите прокси-сервер",
+    "proxyServerEmpty": "Пока нет прокси-серверов. Создайте в разделе",
+    "filterProxyServer": "Фильтр по прокси",
     "displayNameTemplate": "Имя подключения",
     "displayNameTemplateHint": "Как клиент покажет сервер. Переменные: {identity}, {username}, {tag}, {protocol}, {product}, {plan}. {protocol} — коротко: Hysteria2, Reality, XHTTP, gRPC…. Пусто = {identity} - {tag}.",
     "protocol": "Протокол",
@@ -787,5 +800,40 @@
     "createFailed": "Ошибка создания бэкапа",
     "restoreSuccess": "Восстановление завершено",
     "restoreFailed": "Ошибка восстановления"
+  },
+  "proxy": {
+    "title": "Прокси-серверы",
+    "create": "Добавить прокси",
+    "detail": "Прокси-сервер",
+    "local": "Локальный",
+    "isLocal": "Локальный узел (этот хост)",
+    "note": "Заметка",
+    "nameRequired": "Укажите имя",
+    "publicHost": "Публичный хост",
+    "publicHostRequired": "Укажите публичный хост",
+    "agentBaseUrl": "URL агента",
+    "agentBaseUrlHint": "Необязательный URL панель→агент, например http://node:7700",
+    "heartbeat": "Интервал heartbeat (сек)",
+    "heartbeatHint": "Как часто агент сообщает статус (5–300)",
+    "lastSeenAt": "Последний контакт",
+    "enabledEngines": "Движки",
+    "enabledProtocols": "Протоколы",
+    "enginesRequired": "Выберите хотя бы один движок",
+    "protocolsRequired": "Выберите хотя бы один протокол",
+    "installCommand": "Команда установки",
+    "installCommandHint": "Выдаёт одноразовый токен и shell-команду для установки удалённого агента.",
+    "issueInstallCommand": "Сгенерировать команду",
+    "installCommandIssued": "Команда установки создана",
+    "copyInstallCommand": "Копировать команду",
+    "installExpires": "Токен истекает {{at}}",
+    "panelUrl": "URL панели",
+    "localNoInstall": "Локальному прокси команда установки не нужна.",
+    "wizard": "Мастер узла",
+    "wizardHint": "Задайте публичный хост, движки/протоколы и heartbeat для этого прокси.",
+    "applyWizard": "Применить мастер",
+    "dashboardTitle": "Прокси-узлы",
+    "dashboardOnline": "Онлайн",
+    "dashboardOffline": "Офлайн / прочие",
+    "dashboardTotal": "Всего"
   }
 }

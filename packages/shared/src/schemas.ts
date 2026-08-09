@@ -10,10 +10,12 @@ import {
   CORE_APPLY_TRIGGERS,
   CORE_ENGINES,
   DEFAULT_PAGE_SIZE,
+  DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC,
   INBOUND_PROTOCOLS,
   MAX_PAGE_SIZE,
   MAX_SIGNED_BIGINT,
   PLAN_STATUSES,
+  PROXY_SERVER_STATUSES,
   RESET_STRATEGIES,
   SORT_ORDERS,
   SUBSCRIPTION_FORMATS,
@@ -31,6 +33,8 @@ export const resetStrategySchema = z.enum(RESET_STRATEGIES);
 export const userStatusReasonSchema = z.enum(USER_STATUS_REASONS);
 export const backupKindSchema = z.enum(BACKUP_KINDS);
 export const backupStatusSchema = z.enum(BACKUP_STATUSES);
+export const proxyServerStatusSchema = z.enum(PROXY_SERVER_STATUSES);
+export const coreEngineSchema = z.enum(CORE_ENGINES);
 
 export const idSchema = z.uuid();
 export const subscriptionTokenSchema = z
@@ -1423,100 +1427,94 @@ export const mtproxyInboundSettingsSchema = z
   });
 export type MtproxyInboundSettings = z.infer<typeof mtproxyInboundSettingsSchema>;
 
+const createInboundCommonFields = {
+  proxyServerId: idSchema,
+  tag: singBoxTagSchema,
+  displayNameTemplate: z.string().trim().max(200).nullable().optional(),
+};
+
 export const createInboundSchema = z.discriminatedUnion('protocol', [
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('HYSTERIA2'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: hysteria2InboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('VLESS_REALITY'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: vlessRealityInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('VLESS_XHTTP_TLS'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: vlessXhttpTlsInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('VLESS_GRPC_TLS'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: vlessGrpcTlsInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('VLESS_TCP_TLS'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: vlessTcpTlsInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('TROJAN'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: trojanInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('SHADOWSOCKS'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: shadowsocksInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('WIREGUARD'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: wireguardInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('TROJAN_TLS'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: trojanTlsInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('SHADOWSOCKS_XRAY'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: shadowsocksXrayInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('WIREGUARD_XRAY'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: wireguardInboundSettingsSchema,
     })
     .strict(),
   z
     .object({
-      tag: singBoxTagSchema,
+      ...createInboundCommonFields,
       protocol: z.literal('MTPROXY'),
-      displayNameTemplate: z.string().trim().max(200).nullable().optional(),
       settings: mtproxyInboundSettingsSchema,
     })
     .strict(),
@@ -1769,6 +1767,7 @@ export type MtproxyInboundPublicConfig = z.infer<typeof mtproxyInboundPublicConf
 
 const inboundResultCommonFields = {
   id: idSchema,
+  proxyServerId: idSchema,
   tag: z.string(),
   displayNameTemplate: z.string().nullable(),
   revision: z.number().int().positive(),
@@ -1879,6 +1878,7 @@ export const inboundListQuerySchema = paginationQuerySchema
   .extend({
     search: z.string().trim().max(100).optional(),
     protocol: inboundProtocolSchema.optional(),
+    proxyServerId: idSchema.optional(),
     enabled: booleanQuerySchema.optional(),
     sortBy: z.enum(['tag', 'listenPort', 'createdAt', 'updatedAt']).default('createdAt'),
     sortOrder: z.enum(SORT_ORDERS).default('desc'),
@@ -2770,3 +2770,255 @@ function isHttpUrlWithoutCredentials(value: string, requireHttps = false): boole
     return false;
   }
 }
+
+// --- Proxy servers & agent hybrid protocol ---
+
+export const proxyServerSummarySchema = z
+  .object({
+    id: idSchema,
+    name: z.string().min(1).max(100),
+    status: proxyServerStatusSchema,
+    agentBaseUrl: z.string().url().nullable(),
+    publicHost: z.string().nullable(),
+    enabledEngines: z.array(coreEngineSchema),
+    enabledProtocols: z.array(inboundProtocolSchema),
+    capabilities: z.record(z.string(), z.unknown()),
+    lastSeenAt: isoDateTimeSchema.nullable(),
+    lastError: z.string().nullable(),
+    heartbeatIntervalSec: z.number().int().positive(),
+    settings: z.record(z.string(), z.unknown()),
+    isLocal: z.boolean(),
+    createdAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProxyServerSummary = z.infer<typeof proxyServerSummarySchema>;
+
+export const createProxyServerSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    isLocal: z.boolean().optional().default(false),
+    note: z.string().trim().max(1000).optional(),
+  })
+  .strict();
+export type CreateProxyServer = z.infer<typeof createProxyServerSchema>;
+
+export const updateProxyServerSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    publicHost: z.string().trim().min(1).max(255).nullable().optional(),
+    agentBaseUrl: z.string().url().nullable().optional(),
+    enabledEngines: z.array(coreEngineSchema).optional(),
+    enabledProtocols: z.array(inboundProtocolSchema).optional(),
+    heartbeatIntervalSec: z.number().int().min(5).max(300).optional(),
+    settings: z.record(z.string(), z.unknown()).optional(),
+    status: z.enum(['DISABLED', 'PENDING']).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+export type UpdateProxyServer = z.infer<typeof updateProxyServerSchema>;
+
+export const proxyServerListQuerySchema = paginationQuerySchema
+  .extend({
+    search: z.string().trim().max(100).optional(),
+    status: proxyServerStatusSchema.optional(),
+    sortBy: z.enum(['name', 'status', 'lastSeenAt', 'createdAt']).default('createdAt'),
+    sortOrder: z.enum(SORT_ORDERS).default('desc'),
+  })
+  .strict();
+export type ProxyServerListQuery = z.infer<typeof proxyServerListQuerySchema>;
+
+export const proxyServerListResponseSchema = z
+  .object({
+    items: z.array(proxyServerSummarySchema),
+    pagination: paginationMetaSchema,
+  })
+  .strict();
+
+export const proxyInstallCommandResponseSchema = z
+  .object({
+    proxyServerId: idSchema,
+    installToken: z.string().min(32).max(128),
+    expiresAt: isoDateTimeSchema,
+    command: z.string().min(1),
+    panelUrl: z.string().url(),
+  })
+  .strict();
+export type ProxyInstallCommandResponse = z.infer<typeof proxyInstallCommandResponseSchema>;
+
+export const proxyServerWizardSchema = z
+  .object({
+    publicHost: z.string().trim().min(1).max(255),
+    agentBaseUrl: z.string().url().optional(),
+    enabledEngines: z.array(coreEngineSchema).min(1),
+    enabledProtocols: z.array(inboundProtocolSchema).min(1),
+    heartbeatIntervalSec: z
+      .number()
+      .int()
+      .min(5)
+      .max(300)
+      .optional()
+      .default(DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC),
+    settings: z.record(z.string(), z.unknown()).optional().default({}),
+  })
+  .strict();
+export type ProxyServerWizard = z.infer<typeof proxyServerWizardSchema>;
+
+export const agentRegisterRequestSchema = z
+  .object({
+    hostname: z.string().trim().min(1).max(255),
+    agentBaseUrl: z.string().url(),
+    agentVersion: z.string().trim().min(1).max(64).optional(),
+    capabilities: z
+      .object({
+        engines: z.array(coreEngineSchema).default([]),
+        engineVersions: z.record(z.string(), z.string()).optional(),
+        os: z.string().optional(),
+        arch: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type AgentRegisterRequest = z.infer<typeof agentRegisterRequestSchema>;
+
+export const agentRegisterResponseSchema = z
+  .object({
+    proxyServerId: idSchema,
+    nodeToken: z.string().min(32).max(128),
+    heartbeatIntervalSec: z.number().int().positive(),
+    status: proxyServerStatusSchema,
+  })
+  .strict();
+export type AgentRegisterResponse = z.infer<typeof agentRegisterResponseSchema>;
+
+export const agentHeartbeatRequestSchema = z
+  .object({
+    status: z.enum(['ONLINE', 'ERROR']).default('ONLINE'),
+    engines: z
+      .array(
+        z
+          .object({
+            engine: coreEngineSchema,
+            running: z.boolean(),
+            version: z.string().optional(),
+          })
+          .strict(),
+      )
+      .default([]),
+    load: z
+      .object({
+        cpuPercent: z.number().nonnegative().optional(),
+        memoryPercent: z.number().nonnegative().optional(),
+        diskPercent: z.number().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+    errorMessage: z.string().max(2000).nullable().optional(),
+  })
+  .strict();
+export type AgentHeartbeatRequest = z.infer<typeof agentHeartbeatRequestSchema>;
+
+export const agentStatsRequestSchema = z
+  .object({
+    collectedAt: isoDateTimeSchema,
+    traffic: z
+      .array(
+        z
+          .object({
+            inboundId: idSchema.optional(),
+            inboundTag: z.string().optional(),
+            userId: idSchema.optional(),
+            credentialName: z.string().optional(),
+            uploadBytes: byteCountSchema,
+            downloadBytes: byteCountSchema,
+          })
+          .strict(),
+      )
+      .default([]),
+    online: z
+      .array(
+        z
+          .object({
+            inboundId: idSchema.optional(),
+            inboundTag: z.string().optional(),
+            userId: idSchema.optional(),
+            credentialName: z.string().optional(),
+            ip: z.string().optional(),
+            userAgent: z.string().optional(),
+          })
+          .strict(),
+      )
+      .default([]),
+  })
+  .strict();
+export type AgentStatsRequest = z.infer<typeof agentStatsRequestSchema>;
+
+export const agentDesiredStateSchema = z
+  .object({
+    proxyServerId: idSchema,
+    revision: z.number().int().nonnegative(),
+    engines: z.array(
+      z
+        .object({
+          engine: coreEngineSchema,
+          enabled: z.boolean(),
+          config: z.unknown(),
+          configHash: z.string().length(64).optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type AgentDesiredState = z.infer<typeof agentDesiredStateSchema>;
+
+export const agentApplyRequestSchema = agentDesiredStateSchema;
+export type AgentApplyRequest = z.infer<typeof agentApplyRequestSchema>;
+
+export const agentApplyResultSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    success: z.boolean(),
+    configHash: z.string().length(64).nullable().optional(),
+    engineResults: z
+      .array(
+        z
+          .object({
+            engine: coreEngineSchema,
+            success: z.boolean(),
+            errorMessage: z.string().nullable().optional(),
+          })
+          .strict(),
+      )
+      .default([]),
+    errorMessage: z.string().max(4000).nullable().optional(),
+  })
+  .strict();
+export type AgentApplyResult = z.infer<typeof agentApplyResultSchema>;
+
+export const agentCoresCommandSchema = z
+  .object({
+    action: z.enum(['enable', 'disable', 'update']),
+    engines: z.array(coreEngineSchema).min(1),
+  })
+  .strict();
+export type AgentCoresCommand = z.infer<typeof agentCoresCommandSchema>;
+
+export const agentStatusResponseSchema = z
+  .object({
+    proxyServerId: idSchema.optional(),
+    hostname: z.string(),
+    agentVersion: z.string(),
+    engines: z.array(
+      z
+        .object({
+          engine: coreEngineSchema,
+          running: z.boolean(),
+          version: z.string().optional(),
+        })
+        .strict(),
+    ),
+    appliedRevision: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type AgentStatusResponse = z.infer<typeof agentStatusResponseSchema>;

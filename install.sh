@@ -3,6 +3,7 @@
 # Usage (script is too large for bash -c "$(curl …)" — MAX_ARG_STRLEN ~128KiB):
 #   curl -fsSL https://raw.githubusercontent.com/Overl1te/OverVPN/main/install.sh -o /tmp/overvpn-install.sh && sudo bash /tmp/overvpn-install.sh @ install
 #   overvpn up|down|restart|status|logs|update|uninstall|info|edit|bootstrap
+#   overvpn install-proxy --panel-url … --token … --node-id …
 
 set -euo pipefail
 
@@ -11,6 +12,7 @@ INSTALL_DIR="/opt"
 APP_DIR="${INSTALL_DIR}/${APP_NAME}"
 ENV_FILE="${APP_DIR}/.env"
 COMPOSE_FILE="${APP_DIR}/deploy/docker-compose.yml"
+COMPOSE_PROXY_FILE="${APP_DIR}/deploy/docker-compose.proxy.yml"
 CREDENTIALS_FILE="${APP_DIR}/.credentials"
 INSTALL_CONF="${APP_DIR}/.install.conf"
 INSTALL_MODE_FILE="${APP_DIR}/.install.mode"
@@ -30,9 +32,11 @@ REPO_URL="${OVERVPN_REPO_URL:-https://github.com/Overl1te/OverVPN.git}"
 REPO_RAW_BASE="${OVERVPN_RAW_BASE:-https://raw.githubusercontent.com/Overl1te/OverVPN}"
 DEFAULT_BRANCH="${OVERVPN_BRANCH:-main}"
 DEFAULT_WEB_PORT="8000"
+DEFAULT_AGENT_PORT="7700"
 DEFAULT_IMAGE_TAG="${OVERVPN_IMAGE_TAG:-latest}"
 GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
 GHCR_WEB_IMAGE="ghcr.io/overl1te/overvpn-web"
+GHCR_AGENT_IMAGE="ghcr.io/overl1te/overvpn-agent"
 GHCR_MTPROXY_IMAGE="ghcr.io/overl1te/overvpn-mtproxy"
 DEFAULT_POSTGRES_IMAGE="postgres:18-alpine"
 DEFAULT_REDIS_IMAGE="redis:8-alpine"
@@ -654,8 +658,21 @@ cli_t() {
     case "$key" in
       must_be_root) printf '%s' "Эту команду нужно запускать от root (sudo)." ;;
       wizard_title) printf '%s' "Мастер установки" ;;
-      wizard_subtitle) printf '%s' "Однонодовая панель · установка" ;;
-      menu_subtitle) printf '%s' "Однонодовая панель · управление" ;;
+      wizard_subtitle) printf '%s' "Панель · установка" ;;
+      wizard_subtitle_proxy) printf '%s' "Прокси-нода · установка" ;;
+      menu_subtitle) printf '%s' "Панель · управление" ;;
+      menu_subtitle_panel) printf '%s' "Панель · управление" ;;
+      menu_subtitle_colocated) printf '%s' "Панель + прокси · управление" ;;
+      menu_subtitle_proxy) printf '%s' "Прокси-нода · управление" ;;
+      proxy_screen_title) printf '%s' "Локальный прокси" ;;
+      proxy_screen_hint) printf '%s' "Поставить агент и VPN-ядра на этом же хосте (по умолчанию — да)." ;;
+      proxy_opt_yes) printf '%s' "С локальным прокси" ;;
+      proxy_opt_no) printf '%s' "Только панель (прокси отдельно)" ;;
+      prompt_with_proxy) printf '%s' "Установить локальный прокси на этом хосте?" ;;
+      summary_proxy_on) printf '%s' "Локальный прокси: да" ;;
+      summary_proxy_off) printf '%s' "Локальный прокси: нет (только панель)" ;;
+      install_proxy_missing_flags) printf '%s' "install-proxy требует --panel-url, --token и --node-id" ;;
+      install_proxy_success) printf 'Прокси-нода готова. Агент слушает порт %s; PANEL_URL=%s NODE_ID=%s' "$1" "$2" "$3" ;;
       server_ip) printf 'IP сервера: %s' "$1" ;;
       answer_all) printf '%s' "Ответьте на все вопросы — дальше установка без участия." ;;
       depth_title) printf '%s' "Глубина настройки" ;;
@@ -878,8 +895,21 @@ cli_t() {
     case "$key" in
       must_be_root) printf '%s' "This command must be run as root (use sudo)." ;;
       wizard_title) printf '%s' "Setup wizard" ;;
-      wizard_subtitle) printf '%s' "Single-node panel · install" ;;
-      menu_subtitle) printf '%s' "Single-node panel · manage" ;;
+      wizard_subtitle) printf '%s' "Panel · install" ;;
+      wizard_subtitle_proxy) printf '%s' "Proxy node · install" ;;
+      menu_subtitle) printf '%s' "Panel · manage" ;;
+      menu_subtitle_panel) printf '%s' "Panel · manage" ;;
+      menu_subtitle_colocated) printf '%s' "Panel + proxy · manage" ;;
+      menu_subtitle_proxy) printf '%s' "Proxy node · manage" ;;
+      proxy_screen_title) printf '%s' "Local proxy" ;;
+      proxy_screen_hint) printf '%s' "Install the agent and VPN cores on this host (default: yes)." ;;
+      proxy_opt_yes) printf '%s' "With local proxy" ;;
+      proxy_opt_no) printf '%s' "Panel only (proxy elsewhere)" ;;
+      prompt_with_proxy) printf '%s' "Install a local proxy on this host?" ;;
+      summary_proxy_on) printf '%s' "Local proxy:  yes" ;;
+      summary_proxy_off) printf '%s' "Local proxy:  no (panel only)" ;;
+      install_proxy_missing_flags) printf '%s' "install-proxy requires --panel-url, --token, and --node-id" ;;
+      install_proxy_success) printf 'Proxy node ready. Agent on port %s; PANEL_URL=%s NODE_ID=%s' "$1" "$2" "$3" ;;
       server_ip) printf 'Server IP: %s' "$1" ;;
       answer_all) printf '%s' "Answer everything now — after that install runs unattended." ;;
       depth_title) printf '%s' "Setup depth" ;;
@@ -1549,6 +1579,11 @@ prompt_install_confirm() {
     else
       draw_box_line " $(cli_t summary_mtproxy_off)" "$w"
     fi
+    if [[ "${CFG_WITH_PROXY:-true}" == "true" ]]; then
+      draw_box_line " $(cli_t summary_proxy_on)" "$w"
+    else
+      draw_box_line " $(cli_t summary_proxy_off)" "$w"
+    fi
     if [[ "${CFG_ONBOARDING_TOUR:-true}" == "true" ]]; then
       draw_box_line " $(cli_t summary_onboarding_on)" "$w"
     else
@@ -1604,6 +1639,33 @@ prompt_install_mtproxy() {
   esac
 }
 
+prompt_install_local_proxy() {
+  if [[ "${CFG_PROXY_SKIP_PROMPT:-}" == "true" ]]; then
+    return
+  fi
+  local choice
+  _prompt_install_local_proxy_header() {
+    local w
+    w="$(tui_term_width)"
+    show_banner "$(cli_t wizard_subtitle)"
+    draw_box_top "$w"
+    draw_box_center "${TUI_BOLD}$(cli_t proxy_screen_title)${TUI_NC}" "$w"
+    draw_box_sep "$w"
+    draw_box_line " $(cli_t proxy_screen_hint)" "$w"
+    draw_box_empty "$w"
+  }
+  UI_MENU_HEADER=_prompt_install_local_proxy_header
+  ui_select_menu 0 \
+    "yes|$(cli_t proxy_opt_yes)" \
+    "no|$(cli_t proxy_opt_no)"
+  choice="$UI_SELECT_RESULT"
+  unset UI_MENU_HEADER
+  case "$choice" in
+    no) CFG_WITH_PROXY="false" ;;
+    *) CFG_WITH_PROXY="true" ;;
+  esac
+}
+
 prompt_install_onboarding() {
   if [[ "${CFG_ONBOARDING_SKIP_PROMPT:-}" == "true" ]]; then
     return
@@ -1644,6 +1706,7 @@ prompt_install_endpoints() {
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="${CFG_MTPROXY_ENABLED:-true}"
+  CFG_WITH_PROXY="${CFG_WITH_PROXY:-true}"
   CFG_ONBOARDING_TOUR="${CFG_ONBOARDING_TOUR:-true}"
 
   prompt_wizard_language
@@ -1665,6 +1728,7 @@ prompt_install_endpoints() {
       prompt_install_mtproxy
       sync_simple_protocol_config
     fi
+    prompt_install_local_proxy
     prompt_install_onboarding
     prompt_install_confirm "$ip"
     return
@@ -1695,6 +1759,7 @@ prompt_install_endpoints() {
         prompt_install_mtproxy
         sync_simple_protocol_config
       fi
+      prompt_install_local_proxy
       prompt_install_onboarding
       prompt_install_confirm "$ip"
       return
@@ -1719,6 +1784,7 @@ prompt_install_endpoints() {
     prompt_install_mtproxy
     sync_simple_protocol_config
   fi
+  prompt_install_local_proxy
   prompt_install_onboarding
   prompt_install_confirm "$ip"
 }
@@ -1781,7 +1847,42 @@ ensure_docker() {
 }
 
 compose() {
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+  local -a files=(-f "$COMPOSE_FILE")
+  if [[ -f "$COMPOSE_PROXY_FILE" ]]; then
+    files+=(-f "$COMPOSE_PROXY_FILE")
+  fi
+  docker compose --env-file "$ENV_FILE" "${files[@]}" "$@"
+}
+
+install_role() {
+  get_env_var INSTALL_ROLE "$INSTALL_CONF" 2>/dev/null || printf 'panel'
+}
+
+with_proxy_enabled() {
+  local value
+  value="$(get_env_var WITH_PROXY "$INSTALL_CONF" 2>/dev/null || true)"
+  case "${value:-true}" in
+    true|1|yes|YES|True) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_proxy_host() {
+  [[ "$(install_role)" == "proxy" ]]
+}
+
+is_panel_host() {
+  [[ "$(install_role)" != "proxy" ]]
+}
+
+role_menu_subtitle() {
+  if is_proxy_host; then
+    cli_t menu_subtitle_proxy
+  elif with_proxy_enabled; then
+    cli_t menu_subtitle_colocated
+  else
+    cli_t menu_subtitle_panel
+  fi
 }
 
 # Remove app + dependency images pulled/built for this install.
@@ -1801,11 +1902,14 @@ remove_overvpn_images() {
     [[ -n "$img" ]] && images+=("$img")
     img="$(get_env_var MTPROXY_IMAGE "$ENV_FILE" 2>/dev/null || true)"
     [[ -n "$img" ]] && images+=("$img")
+    img="$(get_env_var AGENT_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
   fi
 
   images+=(
     "${GHCR_API_IMAGE}:latest"
     "${GHCR_WEB_IMAGE}:latest"
+    "${GHCR_AGENT_IMAGE}:latest"
     "${GHCR_MTPROXY_IMAGE}:latest"
     "$DEFAULT_POSTGRES_IMAGE"
     "$DEFAULT_REDIS_IMAGE"
@@ -1901,8 +2005,11 @@ compose_up() {
     compose up -d --build
   else
     colorized_echo blue "$(cli_t pulling_images)"
-    # Avoid failing when MTProxy GHCR image is not published yet.
-    COMPOSE_PROFILES= compose pull
+    # Pull active profiles but skip mtproxy (built above / optional GHCR).
+    local profiles
+    profiles="$(get_env_var COMPOSE_PROFILES "$ENV_FILE" 2>/dev/null || true)"
+    profiles="$(printf '%s' "$profiles" | sed -E 's/(^|,)mtproxy(,|$)/\1/g; s/,,+/,/g; s/^,//; s/,$//')"
+    COMPOSE_PROFILES="$profiles" compose pull
     if core_enabled xray; then
       assert_api_image_has_xray "$(api_image_ref)"
     fi
@@ -1922,6 +2029,9 @@ compose_up() {
   if [[ "$enable_mtproxy" == "true" ]]; then
     compose up -d --force-recreate --no-deps core-mtproxy-config-init
     compose up -d --force-recreate --no-deps core-mtproxy
+  fi
+  if with_proxy_enabled || is_proxy_host; then
+    compose up -d --force-recreate --no-deps agent || true
   fi
 }
 
@@ -2284,6 +2394,12 @@ configure_firewall() {
     ufw allow "${web_port}/tcp" >/dev/null 2>&1 || true
     ufw allow 80/tcp >/dev/null 2>&1 || true
     ufw allow 443/tcp >/dev/null 2>&1 || true
+  fi
+
+  if with_proxy_enabled || is_proxy_host; then
+    local agent_port
+    agent_port="$(get_env_var AGENT_PORT "$ENV_FILE" 2>/dev/null || echo "$DEFAULT_AGENT_PORT")"
+    ufw allow "${agent_port}/tcp" >/dev/null 2>&1 || true
   fi
 
   if ufw status | grep -qi inactive; then
@@ -2676,11 +2792,15 @@ fetch_deploy_bundle() {
     "$APP_DIR/deploy/sing-box/certs" \
     "$APP_DIR/deploy/xray/certs" \
     "$APP_DIR/deploy/mtproxy" \
-    "$APP_DIR/deploy/proxy"
+    "$APP_DIR/deploy/proxy" \
+    "$APP_DIR/deploy/agent"
 
   local -a files=(
     ".env.example"
     "deploy/docker-compose.yml"
+    "deploy/docker-compose.proxy.yml"
+    "deploy/agent/Dockerfile"
+    "deploy/agent/entrypoint.sh"
     "deploy/landing/index.html"
     "deploy/landing/sub.html"
     "deploy/landing/vpn.html"
@@ -2899,10 +3019,31 @@ generate_env() {
   set_env_var "ONBOARDING_TOUR" "${CFG_ONBOARDING_TOUR:-true}"
   set_env_var "UFW_ENABLED" "${CFG_USE_UFW:-true}"
   set_env_var "ENABLED_PROTOCOLS" "$CFG_ENABLED_PROTOCOLS"
-  set_env_var "COMPOSE_PROFILES" "$CFG_ENABLED_CORES"
+  # Build COMPOSE_PROFILES from CFG_* (INSTALL_CONF is written below).
+  local compose_profiles="panel"
+  if [[ "${CFG_INSTALL_ROLE:-panel}" == "proxy" ]]; then
+    compose_profiles="proxy"
+  elif [[ "${CFG_WITH_PROXY:-true}" == "true" ]]; then
+    compose_profiles="panel,proxy"
+  fi
+  if [[ "${CFG_INSTALL_ROLE:-panel}" == "proxy" || "${CFG_WITH_PROXY:-true}" == "true" ]]; then
+    [[ "${CFG_SING_BOX_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},singbox"
+    [[ "${CFG_XRAY_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},xray"
+    [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},mtproxy"
+  else
+    # Panel-only: disable local data plane.
+    set_env_var "SING_BOX_ENABLED" "false"
+    set_env_var "XRAY_ENABLED" "false"
+    set_env_var "MTPROXY_ENABLED" "false"
+  fi
+  set_env_var "COMPOSE_PROFILES" "$compose_profiles"
   set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
+  set_env_var "AGENT_IMAGE" "${GHCR_AGENT_IMAGE}:${image_tag}"
+  set_env_var "AGENT_PORT" "${CFG_AGENT_PORT:-$DEFAULT_AGENT_PORT}"
+  set_env_var "AGENT_BIND_ADDRESS" "0.0.0.0"
+  set_env_var "AGENT_LISTEN" "0.0.0.0:${CFG_AGENT_PORT:-$DEFAULT_AGENT_PORT}"
 
   local panel_url sub_url
   if [[ "${CFG_MODE}" == "domain" ]]; then
@@ -2945,6 +3086,30 @@ generate_env() {
     set_env_var "WEB_PORT" "$web_port"
   fi
 
+  # Agent→panel URL (compose network for co-located; remote set by install-proxy).
+  # Local proxy UUID matches Prisma seed / LOCAL_PROXY_SERVER_ID.
+  local local_proxy_id="00000000-0000-4000-8000-000000000001"
+  if [[ "${CFG_INSTALL_ROLE:-panel}" == "proxy" ]]; then
+    set_env_var "PANEL_URL" "${CFG_PANEL_URL:?}"
+    set_env_var "NODE_ID" "${CFG_NODE_ID:?}"
+    set_env_var "INSTALL_TOKEN" "${CFG_INSTALL_TOKEN:-}"
+    set_env_var "NODE_TOKEN" "${CFG_NODE_TOKEN:-}"
+    set_env_var "AGENT_BASE_URL" "${CFG_AGENT_BASE_URL:?}"
+  elif [[ "${CFG_WITH_PROXY:-true}" == "true" ]]; then
+    local node_token
+    node_token="$(rand_password)"
+    # rand_password may be short for some builds — ensure ≥32 chars for agent schema.
+    while [[ ${#node_token} -lt 32 ]]; do
+      node_token="${node_token}$(rand_password)"
+    done
+    node_token="${node_token:0:64}"
+    set_env_var "PANEL_URL" "http://api:3000"
+    set_env_var "NODE_ID" "$local_proxy_id"
+    set_env_var "INSTALL_TOKEN" ""
+    set_env_var "NODE_TOKEN" "$node_token"
+    set_env_var "AGENT_BASE_URL" "http://agent:7700"
+  fi
+
   umask 077
   cat >"$CREDENTIALS_FILE" <<EOF
 BOOTSTRAP_ADMIN_USER=${admin_user}
@@ -2967,6 +3132,8 @@ SUB_PATH=${CFG_SUB_PATH:-}
 VPN_HOST=${CFG_VPN_HOST:-}
 EMAIL=${CFG_EMAIL:-}
 INSTALL_DEPTH=${CFG_INSTALL_DEPTH:-simple}
+INSTALL_ROLE=${CFG_INSTALL_ROLE:-panel}
+WITH_PROXY=${CFG_WITH_PROXY:-true}
 ENABLED_PROTOCOLS=${CFG_ENABLED_PROTOCOLS}
 ENABLED_CORES=${CFG_ENABLED_CORES}
 CREATE_DEFAULT_INBOUNDS=${CFG_CREATE_DEFAULT_INBOUNDS}
@@ -3003,7 +3170,24 @@ bootstrap_default_inbounds() {
     -e "BOOTSTRAP_ADMIN_USER=$(get_env_var BOOTSTRAP_ADMIN_USER "$ENV_FILE")" \
     -e "BOOTSTRAP_ADMIN_PASSWORD=$(get_env_var BOOTSTRAP_ADMIN_PASSWORD "$ENV_FILE")" \
     -e "ENABLED_PROTOCOLS=$(get_env_var ENABLED_PROTOCOLS "$ENV_FILE")" \
+    -e "BOOTSTRAP_PROXY_SERVER_ID=$(get_env_var NODE_ID "$ENV_FILE" 2>/dev/null || true)" \
     api node apps/api/dist/scripts/bootstrap-default-inbounds.js
+}
+
+bootstrap_local_proxy() {
+  [[ "$(get_env_var WITH_PROXY "$INSTALL_CONF" 2>/dev/null || true)" == "true" ]] || return 0
+  [[ "$(get_env_var INSTALL_ROLE "$INSTALL_CONF" 2>/dev/null || true)" == "proxy" ]] && return 0
+  local node_token agent_base
+  node_token="$(get_env_var NODE_TOKEN "$ENV_FILE" 2>/dev/null || true)"
+  agent_base="$(get_env_var AGENT_BASE_URL "$ENV_FILE" 2>/dev/null || true)"
+  [[ -n "$node_token" ]] || return 0
+  colorized_echo blue "Wiring local proxy agent credentials…"
+  compose exec -T \
+    -e "NODE_TOKEN=${node_token}" \
+    -e "AGENT_BASE_URL=${agent_base:-http://agent:7700}" \
+    -e "LOCAL_PROXY_SERVER_ID=$(get_env_var NODE_ID "$ENV_FILE")" \
+    api node apps/api/dist/scripts/bootstrap-local-proxy.js
+  compose restart agent >/dev/null 2>&1 || true
 }
 
 print_success() {
@@ -3021,7 +3205,7 @@ print_success() {
 
   if [[ -t 1 ]]; then
     clear_screen
-    show_banner "$(cli_t menu_subtitle)"
+    show_banner "$(role_menu_subtitle)"
   else
     echo
   fi
@@ -3058,6 +3242,7 @@ Usage:
   ${APP_NAME}                      Interactive console menu (TTY)
   ${APP_NAME} menu                 Same as bare command
   ${APP_NAME} install [options]
+  ${APP_NAME} install-proxy --panel-url <url> --token <token> --node-id <id> [options]
   ${APP_NAME} up | down | restart | status | logs [service] | update | check-update | uninstall
   ${APP_NAME} enable-core <singbox|xray|mtproxy>
   ${APP_NAME} disable-core <singbox|xray|mtproxy>
@@ -3072,10 +3257,10 @@ Config (domains, nginx, certificates):
   ${APP_NAME} config apply
 
 Install wizard (console screens):
-  language → simple/detailed → install mode → domains/email → DNS → protocols/ports → confirm
+  language → simple/detailed → install mode → domains/email → DNS → protocols/ports → local proxy → confirm
   Then runs unattended (packages, Docker, images, Nginx/TLS).
 
-Options:
+Options (install):
   --base-domain <host>     Skip base-domain prompt
   --panel <host>           Panel hostname
   --subscription <spec>    Host or host/path for public subscription URLs
@@ -3095,6 +3280,8 @@ Options:
   --no-default-inbounds    Do not request default inbounds
   --with-mtproxy           Enable MTProxy / Telemt (default)
   --without-mtproxy        Skip MTProxy / Telemt
+  --with-proxy             Co-install local proxy agent+cores (default)
+  --no-proxy               Panel only (no local proxy / agent)
   --with-onboarding-tour   Enable OWNER panel onboarding tour (default)
   --without-onboarding-tour
                            Disable OWNER panel onboarding tour
@@ -3102,6 +3289,29 @@ Options:
   --no-nginx               Skip Nginx/TLS
   --no-ufw                 Do not touch UFW
   -h, --help               Show help
+
+Options (install-proxy):
+  --panel-url <url>        Panel base URL (required)
+  --token <token>          One-time install token from the panel (required)
+  --node-id <id>           ProxyServer id from the panel (required)
+  --branch <name>          Git branch (default: ${DEFAULT_BRANCH})
+  --tag <tag>              GHCR image tag (default: ${DEFAULT_IMAGE_TAG})
+  --build                  Build images locally instead of pulling from GHCR
+  --simple | --detailed    Protocol/core selection (same as install)
+  --protocols <list>       Comma-separated protocol enum names
+  --cores <list>           singbox,xray,mtproxy
+  --ports <pairs>          PROTOCOL=PORT pairs
+  --with-mtproxy | --without-mtproxy
+  --no-ufw                 Do not touch UFW
+  --agent-port <port>      Agent listen port (default: ${DEFAULT_AGENT_PORT})
+
+Compose profiles:
+  panel                    postgres / redis / migrate / api / web
+  proxy                    agent (docker-compose.proxy.yml)
+  singbox | xray | mtproxy VPN cores
+  Co-located panel+proxy:  panel,proxy[,cores…]
+  Panel-only:              panel
+  Remote proxy:            proxy[,cores…]
 
 Default install downloads only deploy files (no full git clone).
 Use --build to clone the repository and build images locally.
@@ -3120,9 +3330,12 @@ cmd_install() {
   local with_nginx="auto" use_ufw="true"
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
   local flag_mtproxy="" flag_depth="" flag_protocols="" flag_cores="" flag_ports=""
+  local flag_with_proxy=""
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="true"
+  CFG_WITH_PROXY="true"
+  CFG_INSTALL_ROLE="panel"
   CFG_ONBOARDING_TOUR="true"
   CFG_CREATE_DEFAULT_INBOUNDS="true"
   CFG_USE_UFW="true"
@@ -3147,6 +3360,8 @@ cmd_install() {
       --no-default-inbounds) CFG_CREATE_DEFAULT_INBOUNDS="false"; shift ;;
       --with-mtproxy) flag_mtproxy="true"; shift ;;
       --without-mtproxy) flag_mtproxy="false"; shift ;;
+      --with-proxy) flag_with_proxy="true"; shift ;;
+      --no-proxy|--without-proxy) flag_with_proxy="false"; shift ;;
       --with-onboarding-tour) CFG_ONBOARDING_TOUR="true"; CFG_ONBOARDING_SKIP_PROMPT="true"; shift ;;
       --without-onboarding-tour) CFG_ONBOARDING_TOUR="false"; CFG_ONBOARDING_SKIP_PROMPT="true"; shift ;;
       --skip-dns) CFG_SKIP_DNS="true"; shift ;;
@@ -3198,6 +3413,11 @@ cmd_install() {
       CFG_ENABLED_PROTOCOLS="$(printf '%s' "$CFG_ENABLED_PROTOCOLS" | sed -E 's/(^|,)MTPROXY(,|$)/\1/; s/,,+/,/g; s/^,//; s/,$//')"
     fi
     derive_enabled_cores
+  fi
+
+  if [[ -n "$flag_with_proxy" ]]; then
+    CFG_WITH_PROXY="$flag_with_proxy"
+    CFG_PROXY_SKIP_PROMPT="true"
   fi
 
   # Collect ALL answers first — then run unattended.
@@ -3267,6 +3487,7 @@ cmd_install() {
 
   colorized_echo blue "$(cli_t creating_owner)"
   compose --profile tools run --rm bootstrap-admin
+  bootstrap_local_proxy
   bootstrap_default_inbounds
 
   install_cli "${APP_DIR}/install.sh"
@@ -3275,11 +3496,135 @@ cmd_install() {
   print_success "$web_port"
 }
 
+cmd_install_proxy() {
+  check_root
+  detect_os
+
+  local branch="$DEFAULT_BRANCH" image_tag="$DEFAULT_IMAGE_TAG" do_build="false"
+  local use_ufw="true"
+  local flag_mtproxy="" flag_depth="" flag_protocols="" flag_cores="" flag_ports=""
+  local panel_url="" install_token="" node_id="" agent_port="$DEFAULT_AGENT_PORT"
+
+  CFG_INSTALL_ROLE="proxy"
+  CFG_WITH_PROXY="true"
+  CFG_MODE="ip"
+  CFG_MTPROXY_ENABLED="true"
+  CFG_ONBOARDING_TOUR="false"
+  CFG_CREATE_DEFAULT_INBOUNDS="false"
+  CFG_USE_UFW="true"
+  CFG_PROXY_SKIP_PROMPT="true"
+  CFG_ONBOARDING_SKIP_PROMPT="true"
+  CFG_MTPROXY_SKIP_PROMPT="true"
+  CFG_DEPTH_SKIP_PROMPT="true"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --panel-url) panel_url="${2:-}"; shift 2 ;;
+      --token) install_token="${2:-}"; shift 2 ;;
+      --node-id) node_id="${2:-}"; shift 2 ;;
+      --agent-port) agent_port="${2:-}"; shift 2 ;;
+      --branch) branch="${2:-}"; shift 2 ;;
+      --tag|--version) image_tag="${2:-}"; shift 2 ;;
+      --build) do_build="true"; shift ;;
+      --simple) flag_depth="simple"; shift ;;
+      --detailed) flag_depth="detailed"; CFG_DEPTH_SKIP_PROMPT="false"; shift ;;
+      --protocols) flag_protocols="${2:-}"; shift 2 ;;
+      --cores) flag_cores="${2:-}"; shift 2 ;;
+      --ports) flag_ports="${2:-}"; shift 2 ;;
+      --with-mtproxy) flag_mtproxy="true"; shift ;;
+      --without-mtproxy) flag_mtproxy="false"; shift ;;
+      --no-ufw) use_ufw="false"; CFG_USE_UFW="false"; CFG_UFW_DECIDED="true"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) colorized_echo red "$(cli_t unknown_option "$1")"; usage; exit 1 ;;
+    esac
+  done
+
+  if [[ -z "$panel_url" || -z "$install_token" || -z "$node_id" ]]; then
+    colorized_echo red "$(cli_t install_proxy_missing_flags)"
+    usage
+    exit 1
+  fi
+  if [[ ! "$agent_port" =~ ^[0-9]+$ ]] || [[ "$agent_port" -lt 1 || "$agent_port" -gt 65535 ]]; then
+    colorized_echo red "$(cli_t invalid_port "$agent_port")"
+    exit 1
+  fi
+
+  ensure_clean_for_install
+  CFG_PANEL_URL="$panel_url"
+  CFG_INSTALL_TOKEN="$install_token"
+  CFG_NODE_ID="$node_id"
+  CFG_AGENT_PORT="$agent_port"
+  CFG_AGENT_BASE_URL="http://$(public_ip):${agent_port}"
+  CFG_INSTALL_DEPTH="${flag_depth:-simple}"
+  initialize_protocol_config
+
+  if [[ -n "$flag_protocols" ]]; then
+    CFG_ENABLED_PROTOCOLS="$(normalize_protocol_list "$flag_protocols")"
+    [[ -n "$CFG_ENABLED_PROTOCOLS" ]] || { colorized_echo red "$(cli_t no_protocols)"; exit 1; }
+    CFG_INSTALL_DEPTH="detailed"
+    derive_enabled_cores
+  elif [[ -n "$flag_cores" ]]; then
+    CFG_ENABLED_PROTOCOLS="$(protocols_for_cores "$flag_cores")"
+    CFG_INSTALL_DEPTH="detailed"
+    derive_enabled_cores
+  else
+    sync_simple_protocol_config
+  fi
+  [[ -n "$flag_ports" ]] && apply_port_overrides "$flag_ports"
+  if [[ -n "$flag_mtproxy" ]]; then
+    CFG_MTPROXY_ENABLED="$flag_mtproxy"
+    if [[ "$flag_mtproxy" == "true" && ",$CFG_ENABLED_PROTOCOLS," != *,MTPROXY,* ]]; then
+      CFG_ENABLED_PROTOCOLS="${CFG_ENABLED_PROTOCOLS:+${CFG_ENABLED_PROTOCOLS},}MTPROXY"
+    elif [[ "$flag_mtproxy" == "false" ]]; then
+      CFG_ENABLED_PROTOCOLS="$(printf '%s' "$CFG_ENABLED_PROTOCOLS" | sed -E 's/(^|,)MTPROXY(,|$)/\1/; s/,,+/,/g; s/^,//; s/,$//')"
+    fi
+    derive_enabled_cores
+  fi
+
+  if [[ -t 0 && "$CFG_INSTALL_DEPTH" == "detailed" && "${CFG_DEPTH_SKIP_PROMPT}" != "true" ]]; then
+    prompt_wizard_language
+    show_banner "$(cli_t wizard_subtitle_proxy)"
+    prompt_detailed_install
+  fi
+
+  install_packages
+  ensure_docker
+  deploy_source "$branch" "$do_build"
+  mark_install_inprogress
+  install_cli "${APP_DIR}/install.sh"
+  generate_env "$DEFAULT_WEB_PORT" "false" "$image_tag"
+
+  if [[ "$use_ufw" == "true" ]]; then
+    configure_firewall "false" "$DEFAULT_WEB_PORT"
+  fi
+
+  compose_up "$do_build"
+  install_cli "${APP_DIR}/install.sh"
+  apply_deploy_permissions
+  mark_install_complete
+
+  colorized_echo green "$(cli_t install_proxy_success "$agent_port" "$panel_url" "$node_id")"
+}
+
 enabled_profiles_from_env() {
-  local profiles=""
-  core_enabled singbox && profiles="singbox"
-  core_enabled xray && profiles="${profiles:+${profiles},}xray"
-  core_enabled mtproxy && profiles="${profiles:+${profiles},}mtproxy"
+  local profiles="" role with_proxy
+  role="$(get_env_var INSTALL_ROLE "$INSTALL_CONF" 2>/dev/null || true)"
+  with_proxy="$(get_env_var WITH_PROXY "$INSTALL_CONF" 2>/dev/null || true)"
+  [[ -z "$role" ]] && role="panel"
+  [[ -z "$with_proxy" ]] && with_proxy="true"
+
+  if [[ "$role" == "proxy" ]]; then
+    profiles="proxy"
+  else
+    profiles="panel"
+    [[ "$with_proxy" == "true" ]] && profiles="panel,proxy"
+  fi
+
+  if [[ "$role" == "proxy" || "$with_proxy" == "true" ]]; then
+    core_enabled singbox && profiles="${profiles},singbox"
+    core_enabled xray && profiles="${profiles},xray"
+    core_enabled mtproxy && profiles="${profiles},mtproxy"
+  fi
   printf '%s' "$profiles"
 }
 
@@ -3421,13 +3766,18 @@ cmd_update() {
   if [[ -n "$image_tag" ]]; then
     set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
     set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
+    set_env_var "AGENT_IMAGE" "${GHCR_AGENT_IMAGE}:${image_tag}"
     set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
   fi
 
   compose_up "$do_build"
-  refresh_nginx
-  apply_deploy_permissions
-  wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
+  if is_panel_host; then
+    refresh_nginx
+    apply_deploy_permissions
+    wait_for_health "http://127.0.0.1:$(get_env_var WEB_PORT)/api/health" || true
+  else
+    apply_deploy_permissions
+  fi
   colorized_echo green "$(cli_t update_complete)"
 }
 
@@ -3757,7 +4107,7 @@ show_update_submenu() {
   _show_update_submenu_header() {
     local w
     w="$(tui_term_width)"
-    show_banner "$(cli_t menu_subtitle)"
+    show_banner "$(role_menu_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t menu_update)${TUI_NC}" "$w"
     draw_box_sep "$w"
@@ -3817,7 +4167,7 @@ show_main_menu() {
 
   if ! is_installed; then
     clear_screen
-    show_banner "$(cli_t menu_subtitle)"
+    show_banner "$(role_menu_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t menu_title)${TUI_NC}" "$w"
     draw_box_sep "$w"
@@ -3830,7 +4180,7 @@ show_main_menu() {
   _show_main_menu_header() {
     local w
     w="$(tui_term_width)"
-    show_banner "$(cli_t menu_subtitle)"
+    show_banner "$(role_menu_subtitle)"
     draw_box_top "$w"
     draw_box_center "${TUI_BOLD}$(cli_t menu_title)${TUI_NC}" "$w"
     draw_box_sep "$w"
@@ -3839,6 +4189,52 @@ show_main_menu() {
 
   while true; do
     UI_MENU_HEADER=_show_main_menu_header
+    if is_proxy_host; then
+      # Reduced emergency menu on proxy-only hosts.
+      ui_select_menu 6 \
+        "1|$(cli_t menu_status)" \
+        "2|$(cli_t menu_logs)" \
+        "3|$(cli_t menu_restart)" \
+        "4|$(cli_t menu_update)" \
+        "5|$(cli_t menu_edit)" \
+        "6|$(cli_t menu_cores)" \
+        "9|${TUI_RED}$(cli_t menu_uninstall)${TUI_NC}" \
+        "0|$(cli_t menu_exit)"
+      choice="$UI_SELECT_RESULT"
+      unset UI_MENU_HEADER
+      case "$choice" in
+        1) menu_run_action cmd_status ;;
+        2)
+          echo
+          colorized_echo cyan "$(cli_t menu_logs_hint)"
+          svc="$(ui_prompt "service" "")"
+          echo
+          set +e
+          if [[ -n "$svc" ]]; then
+            cmd_logs "$svc"
+          else
+            cmd_logs
+          fi
+          set -e
+          echo
+          ui_press_enter
+          ;;
+        3) menu_run_action cmd_restart ;;
+        4) show_update_submenu ;;
+        5) menu_run_action cmd_edit ;;
+        6) show_cores_submenu ;;
+        9)
+          cmd_uninstall
+          exit 0
+          ;;
+        0)
+          echo
+          exit 0
+          ;;
+      esac
+      continue
+    fi
+
     ui_select_menu 9 \
       "1|$(cli_t menu_status)" \
       "2|$(cli_t menu_info)" \
@@ -3902,6 +4298,7 @@ main() {
 
   case "$cmd" in
     install) cmd_install "$@" ;;
+    install-proxy) cmd_install_proxy "$@" ;;
     enable-core) cmd_enable_core "${1:-}" ;;
     disable-core) cmd_disable_core "${1:-}" ;;
     up|start) cmd_up ;;

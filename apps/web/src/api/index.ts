@@ -3,6 +3,7 @@ export * as authApi from './auth';
 export * as usersApi from './users';
 export * as plansApi from './plans';
 export * as inboundsApi from './inbounds';
+export * as proxyServersApi from './proxy-servers';
 export * as systemApi from './system';
 export * as onlineSessionsApi from './online-sessions';
 export * as configApi from './config';

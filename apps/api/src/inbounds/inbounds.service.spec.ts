@@ -78,6 +78,7 @@ describe('InboundsService VLESS Reality create', () => {
     };
     const inboundCreate = jest.fn().mockResolvedValue({
       id: '443f67c0-f935-44d1-a9c1-b00dbd5d3f09',
+      proxyServerId: '00000000-0000-4000-8000-000000000001',
       tag: 'vless-main',
       engine: 'SING_BOX',
       protocol: 'VLESS_REALITY',
@@ -114,6 +115,7 @@ describe('InboundsService VLESS Reality create', () => {
           callback({
             inbound: { create: inboundCreate, findFirst: inboundFindFirst },
             coreState: { upsert: jest.fn().mockResolvedValue(undefined) },
+            proxyCoreState: { upsert: jest.fn().mockResolvedValue(undefined) },
           }),
       ),
     };
@@ -129,6 +131,7 @@ describe('InboundsService VLESS Reality create', () => {
 
     const result = await service.create(
       {
+        proxyServerId: '00000000-0000-4000-8000-000000000001',
         tag: 'vless-main',
         protocol: 'VLESS_REALITY',
         settings: {
@@ -189,6 +192,7 @@ describe('InboundsService VLESS Reality create', () => {
     );
 
     const payload = {
+      proxyServerId: '00000000-0000-4000-8000-000000000001',
       tag: 'hy2-bad',
       protocol: 'HYSTERIA2' as const,
       settings: {
@@ -259,6 +263,7 @@ describe('InboundsService remove', () => {
     const inboundId = '443f67c0-f935-44d1-a9c1-b00dbd5d3f09';
     const inbound = {
       id: inboundId,
+      proxyServerId: '00000000-0000-4000-8000-000000000001',
       tag: 'hy2-main',
       engine: 'SING_BOX',
       protocol: 'HYSTERIA2',
@@ -290,6 +295,9 @@ describe('InboundsService remove', () => {
     const coreState = {
       upsert: jest.fn().mockResolvedValue({}),
     };
+    const proxyCoreState = {
+      upsert: jest.fn().mockResolvedValue({}),
+    };
     const audit = {
       record: jest.fn().mockResolvedValue(undefined),
       recordFailureSafely: jest.fn().mockResolvedValue(undefined),
@@ -308,6 +316,7 @@ describe('InboundsService remove', () => {
           trafficCheckpoint,
           usageDaily,
           coreState,
+          proxyCoreState,
         }),
       ),
     };

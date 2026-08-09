@@ -181,6 +181,7 @@ export class InboundsService {
   }> {
     const where: Prisma.InboundWhereInput = {
       ...(query.protocol ? { protocol: query.protocol } : {}),
+      ...(query.proxyServerId ? { proxyServerId: query.proxyServerId } : {}),
       ...(query.enabled === undefined ? {} : { enabled: query.enabled }),
       ...(query.search
         ? {
@@ -234,6 +235,7 @@ export class InboundsService {
       }
       this.assertListenPortPublished(input.protocol, input.settings.listenPort);
       await this.assertListenPortAvailable(
+        input.proxyServerId,
         input.settings.listenHost,
         input.settings.listenPort,
       );
@@ -249,6 +251,7 @@ export class InboundsService {
       );
       const inbound = await this.prisma.$transaction(async (tx) => {
         await this.assertListenPortAvailable(
+          input.proxyServerId,
           input.settings.listenHost,
           input.settings.listenPort,
           undefined,
@@ -256,6 +259,7 @@ export class InboundsService {
         );
         const created = await tx.inbound.create({
           data: {
+            proxyServerId: input.proxyServerId,
             tag: input.tag,
             engine,
             protocol: input.protocol,
@@ -277,7 +281,7 @@ export class InboundsService {
           },
           include: { _count: { select: { userAssignments: true } } },
         });
-        await this.bumpDesiredRevision(tx, engine);
+        await this.bumpDesiredRevision(tx, engine, input.proxyServerId);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -296,6 +300,7 @@ export class InboundsService {
         actor,
         metadata,
         `Create inbound ${inbound.tag}`,
+        input.proxyServerId,
       );
       return { inbound: this.toResult(inbound), apply };
     } catch (error: unknown) {
@@ -363,6 +368,7 @@ export class InboundsService {
             input.settings.listenPort,
           );
           await this.assertListenPortAvailable(
+            before.proxyServerId,
             input.settings.listenHost,
             input.settings.listenPort,
             id,
@@ -407,7 +413,11 @@ export class InboundsService {
           include: { _count: { select: { userAssignments: true } } },
         });
         if (!brandingOnly) {
-          await this.bumpDesiredRevision(tx, before.engine);
+          await this.bumpDesiredRevision(
+            tx,
+            before.engine,
+            before.proxyServerId,
+          );
         }
         await this.audit.record(
           {
@@ -431,6 +441,7 @@ export class InboundsService {
         actor,
         metadata,
         `Update inbound ${result.inbound.tag}`,
+        result.inbound.proxyServerId,
       );
       return { inbound: this.toResult(result.inbound), apply };
     } catch (error: unknown) {
@@ -467,7 +478,7 @@ export class InboundsService {
           },
           include: { _count: { select: { userAssignments: true } } },
         });
-        await this.bumpDesiredRevision(tx, before.engine);
+        await this.bumpDesiredRevision(tx, before.engine, before.proxyServerId);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -487,6 +498,7 @@ export class InboundsService {
         actor,
         metadata,
         `${enabled ? 'Enable' : 'Disable'} inbound ${inbound.tag}`,
+        inbound.proxyServerId,
       );
       return { inbound: this.toResult(inbound), apply };
     } catch (error: unknown) {
@@ -512,7 +524,7 @@ export class InboundsService {
           data: { inboundId: null },
         });
         await tx.inbound.delete({ where: { id } });
-        await this.bumpDesiredRevision(tx, before.engine);
+        await this.bumpDesiredRevision(tx, before.engine, before.proxyServerId);
         await this.audit.record(
           {
             actorAdminId: actor.id,
@@ -525,12 +537,13 @@ export class InboundsService {
           },
           tx,
         );
-        return before.tag;
+        return { tag: before.tag, proxyServerId: before.proxyServerId };
       });
       const apply = await this.applyMutation(
         actor,
         metadata,
-        `Delete inbound ${tag}`,
+        `Delete inbound ${tag.tag}`,
+        tag.proxyServerId,
       );
       return { inbound: null, apply };
     } catch (error: unknown) {
@@ -705,14 +718,18 @@ export class InboundsService {
           },
           tx,
         );
-        return saved;
+        return {
+          assignment: saved,
+          proxyServerId: inboundRecord.proxyServerId,
+        };
       });
       const apply = await this.applyMutation(
         actor,
         metadata,
-        `Assign user ${assignment.userId} to inbound ${inboundId}`,
+        `Assign user ${assignment.assignment.userId} to inbound ${inboundId}`,
+        assignment.proxyServerId,
       );
-      return { assignment: this.toAssignment(assignment), apply };
+      return { assignment: this.toAssignment(assignment.assignment), apply };
     } catch (error: unknown) {
       await this.recordMutationFailure(
         'INBOUND_ASSIGNMENT_ADD',
@@ -739,6 +756,7 @@ export class InboundsService {
           assignmentId,
           tx,
         );
+        const inbound = await this.requireInbound(inboundId, tx);
         const updated = await tx.userInboundAssignment.update({
           where: { id: assignmentId },
           data: {
@@ -770,14 +788,18 @@ export class InboundsService {
           },
           tx,
         );
-        return updated;
+        return {
+          assignment: updated,
+          proxyServerId: inbound.proxyServerId,
+        };
       });
       const apply = await this.applyMutation(
         actor,
         metadata,
         `Remove assignment ${assignmentId} from inbound ${inboundId}`,
+        assignment.proxyServerId,
       );
-      return { assignment: this.toAssignment(assignment), apply };
+      return { assignment: this.toAssignment(assignment.assignment), apply };
     } catch (error: unknown) {
       await this.recordMutationFailure(
         'INBOUND_ASSIGNMENT_REMOVE',
@@ -841,14 +863,18 @@ export class InboundsService {
           },
           tx,
         );
-        return updated;
+        return {
+          assignment: updated,
+          proxyServerId: inbound.proxyServerId,
+        };
       });
       const apply = await this.applyMutation(
         actor,
         metadata,
         `Rotate credential for assignment ${assignmentId}`,
+        assignment.proxyServerId,
       );
-      return { assignment: this.toAssignment(assignment), apply };
+      return { assignment: this.toAssignment(assignment.assignment), apply };
     } catch (error: unknown) {
       await this.recordMutationFailure(
         'INBOUND_CREDENTIAL_ROTATE',
@@ -1228,6 +1254,7 @@ export class InboundsService {
   }
 
   private async assertListenPortAvailable(
+    proxyServerId: string,
     listenHost: string,
     listenPort: number,
     excludeId?: string,
@@ -1236,6 +1263,7 @@ export class InboundsService {
   ): Promise<void> {
     const collision = await client.inbound.findFirst({
       where: {
+        proxyServerId,
         listenHost,
         listenPort,
         ...(excludeId ? { id: { not: excludeId } } : {}),
@@ -1441,7 +1469,7 @@ export class InboundsService {
         revision: { increment: 1 },
         needsApply: true,
       },
-      select: { engine: true },
+      select: { engine: true, proxyServerId: true },
     });
     await tx.user.update({
       where: { id: userId },
@@ -1450,12 +1478,13 @@ export class InboundsService {
         needsApply: true,
       },
     });
-    await this.bumpDesiredRevision(tx, inbound.engine);
+    await this.bumpDesiredRevision(tx, inbound.engine, inbound.proxyServerId);
   }
 
   private async bumpDesiredRevision(
     tx: Prisma.TransactionClient,
     engine: CoreEngine,
+    proxyServerId?: string,
   ): Promise<void> {
     const id = coreStateId(engine);
     const configPath = this.configPaths[engine];
@@ -1472,14 +1501,39 @@ export class InboundsService {
         configPath,
       },
     });
+    if (proxyServerId) {
+      await tx.proxyCoreState.upsert({
+        where: {
+          proxyServerId_engine: { proxyServerId, engine },
+        },
+        create: {
+          proxyServerId,
+          engine,
+          desiredRevision: 1,
+          appliedRevision: 0,
+          configPath,
+        },
+        update: {
+          desiredRevision: { increment: 1 },
+          configPath,
+        },
+      });
+    }
   }
 
   private applyMutation(
     actor: AuthenticatedAdmin,
     metadata: RequestMetadata,
     reason: string,
+    proxyServerId?: string,
   ) {
-    return this.coreApply.apply(actor, { reason }, 'MUTATION', metadata);
+    return this.coreApply.apply(
+      actor,
+      { reason },
+      'MUTATION',
+      metadata,
+      proxyServerId ? { proxyServerId } : {},
+    );
   }
 
   private toResult(inbound: InboundWithCount): InboundResult {
@@ -1492,6 +1546,7 @@ export class InboundsService {
     };
     const common = {
       id: inbound.id,
+      proxyServerId: inbound.proxyServerId,
       tag: inbound.tag,
       displayNameTemplate: inbound.displayNameTemplate,
       revision: inbound.revision,

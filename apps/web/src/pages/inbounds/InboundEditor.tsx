@@ -33,6 +33,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { createInbound, updateInbound } from '@/api/inbounds';
+import { listProxyServers } from '@/api/proxy-servers';
 import { getSettings } from '@/api/settings';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 import { notifyCoreApply } from '@/utils/notifyCoreApply';
@@ -85,6 +86,7 @@ const SHADOWSOCKS_METHODS = [
 type EditorMode = 'simple' | 'detailed';
 
 type InboundEditorForm = {
+  proxyServerId?: string;
   tag: string;
   displayNameTemplate?: string | null;
   protocol: InboundProtocol;
@@ -1070,6 +1072,25 @@ export function InboundEditor({
     enabled: open,
   });
 
+  const proxyServersQuery = useQuery({
+    queryKey: ['proxy-servers', 'options'],
+    queryFn: () => listProxyServers({ page: 1, pageSize: 100, sortBy: 'name', sortOrder: 'asc' }),
+    enabled: open,
+  });
+
+  const proxyServerOptions = useMemo(
+    () =>
+      (proxyServersQuery.data?.items ?? []).map((server) => ({
+        value: server.id,
+        label: server.isLocal
+          ? `${server.name} (${t('proxy.local')})`
+          : server.publicHost
+            ? `${server.name} · ${server.publicHost}`
+            : server.name,
+      })),
+    [proxyServersQuery.data, t],
+  );
+
   const defaultsContext = useMemo((): InboundDefaultsContext | null => {
     if (!settingsQuery.isSuccess) {
       return null;
@@ -1242,6 +1263,15 @@ export function InboundEditor({
         ]);
         throw new Error('Public host is required');
       }
+      if (!inbound && !values.proxyServerId) {
+        form.setFields([
+          {
+            name: 'proxyServerId',
+            errors: [t('inbounds.proxyServerRequired')],
+          },
+        ]);
+        throw new Error('Proxy server is required');
+      }
       let sanitized = sanitizeInboundForm(values, defaultsContext);
       if (editorMode === 'simple') {
         const port = publishedListenPortForProtocol(sanitized.protocol, defaultsContext);
@@ -1279,7 +1309,10 @@ export function InboundEditor({
         }
         return updateInbound(inbound.id, body);
       }
-      return createInbound(body as CreateInbound);
+      return createInbound({
+        ...body,
+        proxyServerId: values.proxyServerId!,
+      } as CreateInbound);
     },
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['inbounds'] });
@@ -1300,8 +1333,8 @@ export function InboundEditor({
   });
 
   const initialProtocol = inbound?.protocol ?? 'HYSTERIA2';
-  const isCreateLoading = settingsQuery.isLoading;
-  const formReady = settingsQuery.isSuccess;
+  const isCreateLoading = settingsQuery.isLoading || (!inbound && proxyServersQuery.isLoading);
+  const formReady = settingsQuery.isSuccess && (inbound ? true : proxyServersQuery.isSuccess);
 
   useEffect(() => {
     if (!open) {
@@ -1316,7 +1349,12 @@ export function InboundEditor({
     }
     const initialSettings =
       inbound?.settings ?? buildDefaultInboundSettings(initialProtocol, defaultsContext);
+    const defaultProxyId =
+      inbound?.proxyServerId ??
+      proxyServersQuery.data?.items.find((server) => server.isLocal)?.id ??
+      proxyServersQuery.data?.items[0]?.id;
     form.setFields([
+      { name: 'proxyServerId', value: defaultProxyId },
       { name: 'tag', value: inbound?.tag ?? '' },
       { name: 'displayNameTemplate', value: inbound?.displayNameTemplate ?? '' },
       { name: 'protocol', value: initialProtocol },
@@ -1326,7 +1364,7 @@ export function InboundEditor({
     setAdvancedJson(JSON.stringify(initialSettings, null, 2));
     setAdvancedTouched(false);
     setProtocolResetKey(0);
-  }, [open, formReady, defaultsContext, inbound, initialProtocol, form]);
+  }, [open, formReady, defaultsContext, inbound, initialProtocol, form, proxyServersQuery.data]);
 
   useEffect(() => {
     if (!advancedOpen || advancedTouched || !settings) {
@@ -1482,6 +1520,37 @@ export function InboundEditor({
             ) : null}
           </Form.Item>
 
+          <Form.Item
+            name="proxyServerId"
+            label={t('inbounds.proxyServer')}
+            rules={inbound ? [] : [{ required: true, message: t('inbounds.proxyServerRequired') }]}
+            extra={
+              !inbound && proxyServerOptions.length === 0 ? (
+                <span>
+                  {t('inbounds.proxyServerEmpty')}{' '}
+                  <a
+                    href="/proxy"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onClose();
+                      navigate('/proxy');
+                    }}
+                  >
+                    {t('nav.proxy')}
+                  </a>
+                </span>
+              ) : undefined
+            }
+          >
+            <Select
+              disabled={!!inbound}
+              options={proxyServerOptions}
+              loading={proxyServersQuery.isLoading}
+              placeholder={t('inbounds.selectProxyServer')}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
           <Form.Item name="tag" label={t('inbounds.tag')} rules={[{ required: true }]}>
             <Input disabled={!!inbound} autoComplete="off" />
           </Form.Item>

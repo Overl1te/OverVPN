@@ -1,0 +1,28 @@
+{
+  "name": "@overvpn/agent",
+  "version": "0.1.0",
+  "description": "OverVPN proxy-node agent (panel ↔ local cores)",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "lint:fix": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@overvpn/shared": "workspace:*",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.8.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}

@@ -55,7 +55,7 @@ flowchart LR
 - собирает трафик/онлайн с обоих ядер и суммирует в usage;
 - enforce’ит лимиты и пишет audit.
 
-**Не делаем:** мульти-нода, федерация, шардинг, «панель как прокси», замена sing-box на Xray.
+**Не делаем:** федерация панелей, шардинг БД, «панель как прокси без агента», замена sing-box на Xray как единственное ядро.
 
 ---
 
@@ -67,23 +67,26 @@ OverVPN/
 │   ├── api/                 # NestJS control plane (@overvpn/api)
 │   │   ├── prisma/          # schema + migrations
 │   │   ├── src/
-│   │   │   ├── auth/ … users/ inbounds/ core/ workers/ …
+│   │   │   ├── auth/ … users/ inbounds/ core/ agent/ proxy-servers/ …
 │   │   │   ├── config/      # Zod-валидация env
 │   │   │   ├── common/      # guards, errors, interceptors
-│   │   │   └── scripts/     # bootstrap-admin
+│   │   │   └── scripts/     # bootstrap-admin, bootstrap-local-proxy, …
 │   │   └── test/            # e2e
+│   ├── agent/               # Proxy-node agent (@overvpn/agent)
 │   └── web/                 # React + Vite + Ant Design (@overvpn/web)
 ├── packages/
 │   └── shared/              # Zod-схемы и константы (@overvpn/shared)
 ├── deploy/
-│   ├── docker-compose.yml   # прод-стек
+│   ├── docker-compose.yml   # panel + cores (profiles)
+│   ├── docker-compose.proxy.yml  # agent (profile proxy)
+│   ├── agent/               # agent Dockerfile
 │   ├── proxy/               # пример Nginx
 │   ├── landing/             # HTML-заглушки для доменов
 │   ├── sing-box/            # entrypoint, bootstrap config, certs/
 │   └── xray/                # entrypoint, bootstrap config, certs/
 ├── scripts/
 │   └── install-github-runner.sh
-├── install.sh               # прод-установщик + CLI `overvpn`
+├── install.sh               # прод-установщик + CLI `overvpn` / `install-proxy`
 ├── package.json             # pnpm workspace root + turbo scripts
 ├── turbo.json
 └── Makefile                 # тонкие обёртки над pnpm
@@ -595,7 +598,7 @@ sudo systemctl restart "$SERVICE"
 5. Любое изменение учёта трафика / reload — тесты на epoch и rollback.
 6. Shared-контракты обновлять вместе с API и web.
 7. После смены env — `.env.example` + Zod + Compose.
-8. Не добавляй мульти-ноду «заодно» — это смена продукта.
+8. Multi-node / agent contract — через shared Zod + documented install paths; не ломай hybrid API без миграции агента.
 
 ### Перед пушем
 

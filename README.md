@@ -1,8 +1,8 @@
 # OverVPN
 
-### Однонодовая панель управления VPN
+### Панель-оркестратор + прокси-ноды VPN
 
-Одна нода. Веб-админка. Подписки. Учёт трафика. Лимиты. Бэкапы.
+Панель управляет пользователями, планами, точками входа и прокси-серверами. VPN data plane (sing-box / Xray / MTProxy) работает на прокси-нодах с агентом — на том же сервере или отдельно.
 
 [Документация](https://overl1te.github.io/OverVPN/) · [Установка](#-установка) · [Управление](#-управление) · [Панель](#-работа-в-панели) · [Подписки](#-подписки-клиентов) · [Contributing](CONTRIBUTING.md)
 
@@ -18,20 +18,20 @@ Docker
 
 ## Что это
 
-OverVPN — **однонодовая** панель для выдачи доступа, подписок и учёта:
+OverVPN — панель (control plane) для выдачи доступа, подписок и учёта, плюс отдельно устанавливаемые **прокси-ноды** (data plane):
 
 |               |                                                                                                |
 | ------------- | ---------------------------------------------------------------------------------------------- |
 | **Протоколы** | Hysteria2 · VLESS Reality · Trojan · Shadowsocks · WireGuard · Xray TLS/SS/WireGuard · MTProxy |
-| **Панель**    | пользователи, inbound’ы, планы, онлайн-сессии, аудит                                           |
+| **Панель**    | пользователи, inbound’ы, планы, прокси-серверы, онлайн-сессии, аудит                           |
 | **Подписки**  | JSON · Clash Meta · список ссылок · QR                                                         |
 | **Учёт**      | трафик, сроки, лимиты устройств/IP, enforce                                                    |
-| **Операции**  | apply конфига с rollback · бэкапы · Telegram-алерты                                            |
+| **Операции**  | apply конфига на ноды · бэкапы панели · Telegram-алерты                                        |
 
-Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — независимые ядра на одной ноде: [sing-box](https://sing-box.sagernet.org/), [Xray-core](https://github.com/XTLS/Xray-core) и опционально MTProxy на [Telemt](https://github.com/telemt/telemt) (образ [`whn0thacked/telemt-docker`](https://hub.docker.com/r/whn0thacked/telemt-docker)).
+Интерфейс по умолчанию на **русском** (переключатель EN/RU в шапке). Data plane — независимые ядра: [sing-box](https://sing-box.sagernet.org/), [Xray-core](https://github.com/XTLS/Xray-core) и опционально MTProxy на [Telemt](https://github.com/telemt/telemt) (образ [`whn0thacked/telemt-docker`](https://hub.docker.com/r/whn0thacked/telemt-docker)).
 
 > [!IMPORTANT]
-> Мульти-нода **не поддерживается**. Один сервер — core-процессы (`core` + `core-xray` + опционально `core-mtproxy`), один control plane.
+> Панель и прокси связаны **hybrid HTTP API** (агент ↔ панель). При `overvpn install` по умолчанию ставится локальный прокси на том же хосте. Удалённая нода: в панели «Прокси» → install-command → `overvpn install-proxy --panel-url … --token … --node-id …`.
 
 ### Dual cores + MTProxy
 
@@ -439,4 +439,4 @@ OverVPN — свободное ПО: его можно распространя�
 
 ---
 
-**OverVPN** · single-node VPN control panel
+**OverVPN** · panel orchestrator + proxy nodes

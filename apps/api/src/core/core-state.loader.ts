@@ -129,48 +129,67 @@ export class CoreStateLoader {
     private readonly encryption: SecretEncryptionService,
   ) {}
 
-  async load(engine: CoreEngine = 'SING_BOX'): Promise<CoreDesiredState> {
-    const [inbounds, users, coreState] = await this.prisma.$transaction(
-      async (tx) => {
-        const inbounds = await tx.inbound.findMany({
-          where: { engine },
-          orderBy: [{ tag: 'asc' }, { id: 'asc' }],
-          include: {
-            userAssignments: {
-              where: {
-                status: 'ACTIVE',
-                user: {
+  async load(
+    engine: CoreEngine = 'SING_BOX',
+    options: { proxyServerId?: string } = {},
+  ): Promise<CoreDesiredState> {
+    const proxyServerId = options.proxyServerId;
+    const [inbounds, users, coreState, proxyCoreState] =
+      await this.prisma.$transaction(
+        async (tx) => {
+          const inbounds = await tx.inbound.findMany({
+            where: {
+              engine,
+              ...(proxyServerId ? { proxyServerId } : {}),
+            },
+            orderBy: [{ tag: 'asc' }, { id: 'asc' }],
+            include: {
+              userAssignments: {
+                where: {
                   status: 'ACTIVE',
-                  deletedAt: null,
-                },
-              },
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    identity: true,
-                    username: true,
-                    revision: true,
-                    deviceLimit: true,
-                    ipLimit: true,
+                  user: {
+                    status: 'ACTIVE',
+                    deletedAt: null,
                   },
                 },
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      identity: true,
+                      username: true,
+                      revision: true,
+                      deviceLimit: true,
+                      ipLimit: true,
+                    },
+                  },
+                },
+                orderBy: [{ userId: 'asc' }, { id: 'asc' }],
               },
-              orderBy: [{ userId: 'asc' }, { id: 'asc' }],
             },
-          },
-        });
-        const users = await tx.user.findMany({
-          select: { id: true, revision: true },
-          orderBy: { id: 'asc' },
-        });
-        const coreState = await tx.coreState.findUnique({
-          where: { id: coreStateId(engine) },
-        });
-        return [inbounds, users, coreState] as const;
-      },
-      { isolationLevel: 'RepeatableRead' },
-    );
+          });
+          const users = await tx.user.findMany({
+            select: { id: true, revision: true },
+            orderBy: { id: 'asc' },
+          });
+          const coreState = await tx.coreState.findUnique({
+            where: { id: coreStateId(engine) },
+          });
+          const proxyCoreState =
+            proxyServerId === undefined
+              ? null
+              : await tx.proxyCoreState.findUnique({
+                  where: {
+                    proxyServerId_engine: {
+                      proxyServerId,
+                      engine,
+                    },
+                  },
+                });
+          return [inbounds, users, coreState, proxyCoreState] as const;
+        },
+        { isolationLevel: 'RepeatableRead' },
+      );
 
     const desiredInbounds: DesiredInbound[] = [];
     for (const inbound of inbounds) {
@@ -355,7 +374,8 @@ export class CoreStateLoader {
     return {
       engine,
       loadedAt: new Date(),
-      desiredRevision: coreState?.desiredRevision ?? 0,
+      desiredRevision:
+        proxyCoreState?.desiredRevision ?? coreState?.desiredRevision ?? 0,
       inbounds: desiredInbounds,
       inboundRevisions: inbounds.map(({ id, revision }) => ({ id, revision })),
       userRevisions: users,

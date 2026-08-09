@@ -146,6 +146,19 @@ export type BackupKind = (typeof BACKUP_KINDS)[number];
 export const BACKUP_STATUSES = ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'DELETED'] as const;
 export type BackupStatus = (typeof BACKUP_STATUSES)[number];
 
+export const PROXY_SERVER_STATUSES = ['PENDING', 'ONLINE', 'OFFLINE', 'ERROR', 'DISABLED'] as const;
+export type ProxyServerStatus = (typeof PROXY_SERVER_STATUSES)[number];
+
+/** Seeded local ProxyServer id (co-install / migration placeholder). */
+export const LOCAL_PROXY_SERVER_ID = '00000000-0000-4000-8000-000000000001' as const;
+
+/** Default agent→panel heartbeat interval (seconds). */
+export const DEFAULT_PROXY_HEARTBEAT_INTERVAL_SEC = 20;
+/** Default install-token TTL (seconds). */
+export const DEFAULT_PROXY_INSTALL_TOKEN_TTL_SEC = 3600;
+/** Default agent listen port (panel→agent push). */
+export const DEFAULT_AGENT_LISTEN_PORT = 7700;
+
 export const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n;
 export const DEFAULT_PAGE_SIZE = 25;
 export const MAX_PAGE_SIZE = 100;

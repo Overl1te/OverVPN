@@ -12,6 +12,7 @@ describe('InboundCreateValidationPipe', () => {
     } as never);
 
     const result = pipe.transform({
+      proxyServerId: '00000000-0000-4000-8000-000000000001',
       tag: 'hy2-main',
       protocol: 'HYSTERIA2',
       settings: {

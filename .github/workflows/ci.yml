@@ -16,6 +16,7 @@ env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/overl1te/overvpn-api
   WEB_IMAGE: ghcr.io/overl1te/overvpn-web
+  AGENT_IMAGE: ghcr.io/overl1te/overvpn-agent
 
 jobs:
   verify:
@@ -101,7 +102,7 @@ jobs:
       - name: Ensure buildx cache dirs
         run: |
           CACHE_ROOT="${HOME}/.cache/overvpn-buildx"
-          mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web"
+          mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web" "${CACHE_ROOT}/agent"
           echo "BUILDX_CACHE_ROOT=${CACHE_ROOT}" >> "$GITHUB_ENV"
 
       - name: Remove broken buildx builder
@@ -162,6 +163,18 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      - name: Docker metadata (Agent)
+        id: meta-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.AGENT_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
       - name: Prefetch Xray release zip
         env:
           XRAY_VERSION: v26.6.27
@@ -209,6 +222,20 @@ jobs:
           labels: ${{ steps.meta-web.outputs.labels }}
           cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/web
           cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/web,mode=min
+
+      - name: Build and push Agent
+        if: hashFiles('apps/agent/package.json', 'deploy/agent/Dockerfile') != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/agent/Dockerfile
+          push: true
+          tags: ${{ steps.meta-agent.outputs.tags }}
+          labels: ${{ steps.meta-agent.outputs.labels }}
+          build-args: |
+            OVERVPN_GIT_SHA=${{ github.sha }}
+          cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/agent
+          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/agent,mode=min
 
       - name: Package deploy bundle
         run: bash scripts/package-deploy-bundle.sh dist/overvpn-deploy.tar.gz

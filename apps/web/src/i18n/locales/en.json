@@ -72,6 +72,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",
+    "proxy": "Proxy",
     "inbounds": "Inbounds",
     "plans": "Plans",
     "online": "Online sessions",
@@ -388,6 +389,13 @@
       "ACTIVE": "Active",
       "ARCHIVED": "Archived"
     },
+    "proxyServerStatus": {
+      "PENDING": "Pending",
+      "ONLINE": "Online",
+      "OFFLINE": "Offline",
+      "ERROR": "Error",
+      "DISABLED": "Disabled"
+    },
     "assignmentStatus": {
       "ACTIVE": "Active",
       "DISABLED": "Disabled"
@@ -528,6 +536,11 @@
     "create": "Create inbound",
     "edit": "Edit inbound",
     "tag": "Tag",
+    "proxyServer": "Proxy server",
+    "selectProxyServer": "Select proxy server",
+    "proxyServerRequired": "Select a proxy server",
+    "proxyServerEmpty": "No proxy servers yet. Create one under",
+    "filterProxyServer": "Filter by proxy",
     "displayNameTemplate": "Connection display name",
     "displayNameTemplateHint": "Client-visible name. Variables: {identity}, {username}, {tag}, {protocol}, {product}, {plan}. {protocol} is short: Hysteria2, Reality, XHTTP, gRPC…. Empty = {identity} - {tag}.",
     "protocol": "Protocol",
@@ -787,5 +800,40 @@
     "createFailed": "Backup failed",
     "restoreSuccess": "Restore completed",
     "restoreFailed": "Restore failed"
+  },
+  "proxy": {
+    "title": "Proxy servers",
+    "create": "Add proxy",
+    "detail": "Proxy server",
+    "local": "Local",
+    "isLocal": "Local node (this host)",
+    "note": "Note",
+    "nameRequired": "Name is required",
+    "publicHost": "Public host",
+    "publicHostRequired": "Public host is required",
+    "agentBaseUrl": "Agent base URL",
+    "agentBaseUrlHint": "Optional panel→agent URL, e.g. http://node:7700",
+    "heartbeat": "Heartbeat interval (sec)",
+    "heartbeatHint": "How often the agent reports status (5–300)",
+    "lastSeenAt": "Last seen",
+    "enabledEngines": "Engines",
+    "enabledProtocols": "Protocols",
+    "enginesRequired": "Select at least one engine",
+    "protocolsRequired": "Select at least one protocol",
+    "installCommand": "Install command",
+    "installCommandHint": "Issues a one-time token and shell command to bootstrap the remote agent.",
+    "issueInstallCommand": "Generate install command",
+    "installCommandIssued": "Install command generated",
+    "copyInstallCommand": "Copy command",
+    "installExpires": "Token expires {{at}}",
+    "panelUrl": "Panel URL",
+    "localNoInstall": "Local proxy nodes do not need an install command.",
+    "wizard": "Node wizard",
+    "wizardHint": "Set public host, engines/protocols, and heartbeat for this proxy.",
+    "applyWizard": "Apply wizard",
+    "dashboardTitle": "Proxy nodes",
+    "dashboardOnline": "Online",
+    "dashboardOffline": "Offline / other",
+    "dashboardTotal": "Total"
   }
 }

@@ -2,7 +2,7 @@
   "name": "overvpn",
   "version": "0.1.0",
   "private": true,
-  "description": "Single-node VPN control plane",
+  "description": "VPN control plane (panel) + proxy-node agent",
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@11.12.0",
   "engines": {
@@ -24,10 +24,10 @@
     "migrate": "pnpm --filter @overvpn/api prisma:migrate:deploy",
     "migrate:dev": "pnpm --filter @overvpn/api prisma:migrate:dev",
     "bootstrap:admin": "pnpm --filter @overvpn/api admin:bootstrap",
-    "compose-up": "docker compose --env-file .env -f deploy/docker-compose.yml up -d",
-    "compose-pull": "docker compose --env-file .env -f deploy/docker-compose.yml pull",
-    "compose-build": "docker compose --env-file .env -f deploy/docker-compose.yml up -d --build",
-    "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml down",
+    "compose-up": "docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.proxy.yml up -d",
+    "compose-pull": "docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.proxy.yml pull",
+    "compose-build": "docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.proxy.yml up -d --build",
+    "compose-down": "docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.proxy.yml down",
     "docs:build": "node scripts/build-docs.mjs && pagefind --site docs-dist --force-language ru",
     "docs:dev": "node scripts/build-docs.mjs --dev && pagefind --site docs-dist --force-language ru && npx --yes serve docs-dist -l 4173",
     "docs:preview": "pnpm docs:build && npx --yes serve docs-dist -l 4173"

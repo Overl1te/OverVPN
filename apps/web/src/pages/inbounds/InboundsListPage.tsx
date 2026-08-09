@@ -17,6 +17,7 @@ import {
   revealAssignmentLink,
   rotateAssignmentCredential,
 } from '@/api/inbounds';
+import { listProxyServers } from '@/api/proxy-servers';
 import { listUsers } from '@/api/users';
 import { PageHeader } from '@/components/PageHeader';
 import { CopyButton } from '@/components/CopyButton';
@@ -203,6 +204,7 @@ export function InboundsListPage() {
   const isOwner = admin?.role === 'OWNER';
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [proxyServerId, setProxyServerId] = useState<string | undefined>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<InboundResult | null>(null);
 
@@ -219,9 +221,36 @@ export function InboundsListPage() {
     return () => window.removeEventListener(TOUR_ASSIST_EVENT, onAssist);
   }, [canMutate]);
 
+  const proxyServersQuery = useQuery({
+    queryKey: ['proxy-servers', 'options'],
+    queryFn: () => listProxyServers({ page: 1, pageSize: 100, sortBy: 'name', sortOrder: 'asc' }),
+  });
+
+  const proxyNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const server of proxyServersQuery.data?.items ?? []) {
+      map.set(server.id, server.name);
+    }
+    return map;
+  }, [proxyServersQuery.data]);
+
+  const proxyFilterOptions = useMemo(
+    () =>
+      (proxyServersQuery.data?.items ?? []).map((server) => ({
+        value: server.id,
+        label: server.name,
+      })),
+    [proxyServersQuery.data],
+  );
+
   const query = useQuery({
-    queryKey: ['inbounds', page, pageSize],
-    queryFn: () => listInbounds({ page, pageSize }),
+    queryKey: ['inbounds', page, pageSize, proxyServerId],
+    queryFn: () =>
+      listInbounds({
+        page,
+        pageSize,
+        proxyServerId,
+      }),
   });
 
   const toggleMutation = useMutation({
@@ -265,6 +294,21 @@ export function InboundsListPage() {
         }
       />
 
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Select
+          allowClear
+          placeholder={t('inbounds.filterProxyServer')}
+          style={{ width: 260 }}
+          value={proxyServerId}
+          options={proxyFilterOptions}
+          loading={proxyServersQuery.isLoading}
+          onChange={(value: string | undefined) => {
+            setPage(1);
+            setProxyServerId(value);
+          }}
+        />
+      </Space>
+
       <Table
         size="small"
         rowKey="id"
@@ -285,6 +329,11 @@ export function InboundsListPage() {
         }}
         columns={[
           { title: t('inbounds.tag'), dataIndex: 'tag' },
+          {
+            title: t('inbounds.proxyServer'),
+            dataIndex: 'proxyServerId',
+            render: (value: string) => proxyNameById.get(value) ?? value.slice(0, 8),
+          },
           {
             title: t('inbounds.protocol'),
             dataIndex: 'protocol',

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { CoreEngine } from '@overvpn/shared/constants';
 import type {
@@ -10,6 +10,7 @@ import type {
   CoreApplyRecordResult,
   CoreApplySummary,
 } from '@overvpn/shared/schemas';
+import { SecretEncryptionService } from '../auth/auth-crypto';
 import { AuditService } from '../audit/audit.service';
 import { ApiException } from '../common/api-error';
 import type {
@@ -23,9 +24,11 @@ import type {
   CoreApplyStatus,
   CoreApplyTrigger,
   Prisma,
+  ProxyServer,
 } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 import { TelegramNotificationService } from '../notifications/telegram-notification.service';
+import { NODE_TOKEN_SETTINGS_KEY } from '../proxy-servers/proxy-server-secrets';
 import { CoreFileSystem } from './core-adapters';
 import {
   parseAndRedactJson,
@@ -43,6 +46,7 @@ import type {
 } from './core-provider';
 import { CoreStateLoader } from './core-state.loader';
 import { RedisDistributedLock } from './distributed-lock';
+import { HttpAgentTransport } from './http-agent.transport';
 
 type EngineApplyOutcome = CoreApplyEngineResult & {
   appliedAt: Date | null;
@@ -54,8 +58,13 @@ type EngineApplyOutcome = CoreApplyEngineResult & {
   rendered: RenderedCoreConfig | null;
 };
 
+export type CoreApplyOptions = {
+  proxyServerId?: string;
+};
+
 @Injectable()
 export class CoreApplyService {
+  private readonly logger = new Logger(CoreApplyService.name);
   private readonly configPaths: Record<CoreEngine, string>;
 
   constructor(
@@ -67,6 +76,8 @@ export class CoreApplyService {
     private readonly audit: AuditService,
     private readonly notifications: TelegramNotificationService,
     private readonly supportIntegrity: SupportIntegrityService,
+    private readonly agentTransport: HttpAgentTransport,
+    private readonly encryption: SecretEncryptionService,
     config: ConfigService<AppEnvironment, true>,
   ) {
     this.configPaths = {
@@ -100,8 +111,241 @@ export class CoreApplyService {
     input: ConfigApplyRequest,
     trigger: CoreApplyTrigger,
     metadata: RequestMetadata,
+    options: CoreApplyOptions = {},
   ): Promise<CoreApplySummary> {
     this.supportIntegrity.assertIntact();
+    if (options.proxyServerId) {
+      const proxy = await this.prisma.proxyServer.findUnique({
+        where: { id: options.proxyServerId },
+      });
+      if (!proxy) {
+        throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND, {
+          reason: 'proxy_server_not_found',
+        });
+      }
+      if (proxy.agentBaseUrl) {
+        return this.applyViaAgent(actor, input, trigger, metadata, proxy);
+      }
+    }
+    return this.applyLocal(actor, input, trigger, metadata, options);
+  }
+
+  /**
+   * Best-effort push used by wizard / callers that must not fail the parent mutation.
+   * Returns null when agentBaseUrl is unset (local volume path not invoked).
+   */
+  async pushToAgentBestEffort(
+    proxyServerId: string,
+    reason: string,
+  ): Promise<CoreApplySummary | null> {
+    const proxy = await this.prisma.proxyServer.findUnique({
+      where: { id: proxyServerId },
+    });
+    if (!proxy?.agentBaseUrl) {
+      return null;
+    }
+    try {
+      return await this.apply(
+        null,
+        { reason },
+        'MUTATION',
+        {
+          requestId: null,
+          ipAddress: null,
+          userAgent: 'proxy-wizard',
+        },
+        { proxyServerId },
+      );
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Best-effort agent push failed for ${proxyServerId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
+  }
+
+  private async applyViaAgent(
+    actor: AuthenticatedAdmin | null,
+    input: ConfigApplyRequest,
+    trigger: CoreApplyTrigger,
+    metadata: RequestMetadata,
+    proxy: ProxyServer,
+  ): Promise<CoreApplySummary> {
+    const startedAt = new Date();
+    const nodeToken = decryptNodeToken(proxy.settings, this.encryption);
+    if (!nodeToken || !proxy.agentBaseUrl) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'proxy_node_token_missing',
+        message:
+          'Proxy server has agentBaseUrl but no stored node token; re-register the agent',
+        messageRu:
+          'У прокси задан agentBaseUrl, но нет node token — перерегистрируйте агент',
+      });
+    }
+
+    const initial = await this.prisma.coreApplyRecord.create({
+      data: {
+        status: 'APPLYING',
+        trigger,
+        reason: input.reason,
+        initiatedByAdminId: actor?.id ?? null,
+        proxyServerId: proxy.id,
+        startedAt,
+      },
+    });
+
+    try {
+      const desired = await this.buildAgentDesired(proxy);
+      const push = await this.agentTransport.postApply({
+        agentBaseUrl: proxy.agentBaseUrl,
+        nodeToken,
+        body: desired,
+      });
+      const completedAt = new Date();
+      const status: CoreApplyStatus = push.ok ? 'SUCCEEDED' : 'FAILED';
+      const desiredHash =
+        push.result?.configHash ??
+        compositeHash(
+          desired.engines.map((engine) => [
+            engine.engine,
+            engine.configHash ?? null,
+          ]),
+        );
+
+      if (push.ok) {
+        await this.prisma.$transaction(async (tx) => {
+          for (const engine of desired.engines) {
+            await tx.proxyCoreState.upsert({
+              where: {
+                proxyServerId_engine: {
+                  proxyServerId: proxy.id,
+                  engine: engine.engine,
+                },
+              },
+              create: {
+                proxyServerId: proxy.id,
+                engine: engine.engine,
+                desiredRevision: desired.revision,
+                appliedRevision: desired.revision,
+                appliedConfigHash: engine.configHash ?? null,
+                configPath: this.configPaths[engine.engine],
+                lastApplyRecordId: initial.id,
+                appliedAt: completedAt,
+              },
+              update: {
+                desiredRevision: desired.revision,
+                appliedRevision: desired.revision,
+                appliedConfigHash: engine.configHash ?? null,
+                configPath: this.configPaths[engine.engine],
+                lastApplyRecordId: initial.id,
+                appliedAt: completedAt,
+              },
+            });
+            await tx.inbound.updateMany({
+              where: {
+                proxyServerId: proxy.id,
+                engine: engine.engine,
+                needsApply: true,
+              },
+              data: { needsApply: false },
+            });
+          }
+        });
+      }
+
+      const record = await this.prisma.coreApplyRecord.update({
+        where: { id: initial.id },
+        data: {
+          status,
+          desiredHash,
+          configChecksum: desiredHash,
+          configRevision: desired.revision,
+          errorMessage: push.error,
+          appliedAt: push.ok ? completedAt : null,
+          completedAt,
+          engineResults: Object.fromEntries(
+            desired.engines.map((engine) => [
+              engine.engine,
+              {
+                status: push.ok ? 'SUCCEEDED' : 'FAILED',
+                hash: engine.configHash ?? null,
+                previousHash: null,
+                error: push.ok ? null : push.error,
+                rollbackOutcome: 'NOT_REQUIRED',
+              } satisfies CoreApplyEngineResult,
+            ]),
+          ),
+        },
+      });
+      const result = this.toSummary(record);
+      await this.recordApplyAudit(actor, metadata, input.reason, result);
+      await this.notifyFailure(trigger, result);
+      return result;
+    } catch (error: unknown) {
+      const message = errorMessage(error);
+      const failed = await this.prisma.coreApplyRecord.update({
+        where: { id: initial.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: message,
+          completedAt: new Date(),
+        },
+      });
+      const result = this.toSummary(failed);
+      await this.recordApplyAudit(actor, metadata, input.reason, result);
+      await this.notifyFailure(trigger, result);
+      return result;
+    }
+  }
+
+  private async buildAgentDesired(proxy: ProxyServer): Promise<{
+    proxyServerId: string;
+    revision: number;
+    engines: Array<{
+      engine: CoreEngine;
+      enabled: boolean;
+      config: unknown;
+      configHash?: string;
+    }>;
+  }> {
+    const enabled = asEngineList(proxy.enabledEngines);
+    const providers = this.registry
+      .all()
+      .filter(
+        (provider) => enabled.length === 0 || enabled.includes(provider.engine),
+      );
+    let revision = 0;
+    const engines: Array<{
+      engine: CoreEngine;
+      enabled: boolean;
+      config: unknown;
+      configHash?: string;
+    }> = [];
+    for (const provider of providers) {
+      const state = await this.stateLoader.load(provider.engine, {
+        proxyServerId: proxy.id,
+      });
+      revision = Math.max(revision, state.desiredRevision);
+      const rendered = provider.renderConfig(state);
+      engines.push({
+        engine: provider.engine,
+        enabled: true,
+        config: rendered.config,
+        configHash: rendered.hash,
+      });
+    }
+    return { proxyServerId: proxy.id, revision, engines };
+  }
+
+  private async applyLocal(
+    actor: AuthenticatedAdmin | null,
+    input: ConfigApplyRequest,
+    trigger: CoreApplyTrigger,
+    metadata: RequestMetadata,
+    options: CoreApplyOptions,
+  ): Promise<CoreApplySummary> {
     const startedAt = new Date();
     const initial = await this.prisma.coreApplyRecord.create({
       data: {
@@ -109,6 +353,7 @@ export class CoreApplyService {
         trigger,
         reason: input.reason,
         initiatedByAdminId: actor?.id ?? null,
+        proxyServerId: options.proxyServerId ?? null,
         startedAt,
       },
     });
@@ -121,7 +366,11 @@ export class CoreApplyService {
 
         for (const provider of providers) {
           assertOwned();
-          const outcome = await this.applyEngine(provider, assertOwned);
+          const outcome = await this.applyEngine(
+            provider,
+            assertOwned,
+            options.proxyServerId,
+          );
           engineResults[provider.engine] = outcome;
           secretValues = [
             ...secretValues,
@@ -206,6 +455,33 @@ export class CoreApplyService {
                 appliedAt: outcome.appliedAt,
               },
             });
+            if (options.proxyServerId) {
+              await tx.proxyCoreState.upsert({
+                where: {
+                  proxyServerId_engine: {
+                    proxyServerId: options.proxyServerId,
+                    engine: engine as CoreEngine,
+                  },
+                },
+                create: {
+                  proxyServerId: options.proxyServerId,
+                  engine: engine as CoreEngine,
+                  desiredRevision: outcome.state.desiredRevision,
+                  appliedRevision: outcome.configRevision,
+                  appliedConfigHash: outcome.rendered.hash,
+                  configPath: outcome.configPath,
+                  lastApplyRecordId: initial.id,
+                  appliedAt: outcome.appliedAt,
+                },
+                update: {
+                  appliedRevision: outcome.configRevision,
+                  appliedConfigHash: outcome.rendered.hash,
+                  configPath: outcome.configPath,
+                  lastApplyRecordId: initial.id,
+                  appliedAt: outcome.appliedAt,
+                },
+              });
+            }
           }
 
           if (allSucceeded) {
@@ -372,10 +648,13 @@ export class CoreApplyService {
   private async applyEngine(
     provider: EngineProvider,
     assertOwned: () => void,
+    proxyServerId?: string,
   ): Promise<EngineApplyOutcome> {
     const path = this.configPathFor(provider.engine);
     try {
-      const state = await this.stateLoader.load(provider.engine);
+      const state = await this.stateLoader.load(provider.engine, {
+        proxyServerId,
+      });
       const rendered = provider.renderConfig(state);
       const current = await this.currentRedacted(provider.engine);
       const diff = unifiedDiff(
@@ -385,9 +664,18 @@ export class CoreApplyService {
         'desired-redacted.json',
       );
       const diffSummary = summarizeDiff(diff);
-      const currentState = await this.prisma.coreState.findUnique({
-        where: { id: coreStateId(provider.engine) },
-      });
+      const currentState = proxyServerId
+        ? await this.prisma.proxyCoreState.findUnique({
+            where: {
+              proxyServerId_engine: {
+                proxyServerId,
+                engine: provider.engine,
+              },
+            },
+          })
+        : await this.prisma.coreState.findUnique({
+            where: { id: coreStateId(provider.engine) },
+          });
       const configRevision = (currentState?.appliedRevision ?? 0) + 1;
 
       const validation = await provider.validate(rendered);
@@ -719,4 +1007,38 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function decryptNodeToken(
+  settings: Prisma.JsonValue,
+  encryption: SecretEncryptionService,
+): string | null {
+  if (
+    settings === null ||
+    typeof settings !== 'object' ||
+    Array.isArray(settings)
+  ) {
+    return null;
+  }
+  const encrypted = (settings as Record<string, unknown>)[
+    NODE_TOKEN_SETTINGS_KEY
+  ];
+  if (typeof encrypted !== 'string' || encrypted.length === 0) {
+    return null;
+  }
+  try {
+    return encryption.decrypt(encrypted);
+  } catch {
+    return null;
+  }
+}
+
+function asEngineList(value: Prisma.JsonValue): CoreEngine[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (item): item is CoreEngine =>
+      item === 'SING_BOX' || item === 'XRAY' || item === 'MTPROXY',
+  );
 }

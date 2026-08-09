@@ -73,6 +73,23 @@ async function bootstrapDefaultInbounds(): Promise<void> {
   );
   const existingTags = new Set(existing.items.map((inbound) => inbound.tag));
 
+  const proxies = await jsonRequest<{
+    items: Array<{ id: string; isLocal: boolean }>;
+  }>(
+    '/admin/proxy-servers?page=1&pageSize=50',
+    { method: 'GET' },
+    login.accessToken,
+  );
+  const proxyServerId =
+    process.env.BOOTSTRAP_PROXY_SERVER_ID?.trim() ||
+    proxies.items.find((item) => item.isLocal)?.id ||
+    proxies.items[0]?.id;
+  if (!proxyServerId) {
+    throw new Error(
+      'No proxy server found; create one or set BOOTSTRAP_PROXY_SERVER_ID',
+    );
+  }
+
   const context: InboundDefaultsContext = {
     publicHost: process.env.VPN_PUBLIC_HOST ?? '',
     acmeHttpPort: numberFromEnvironment('SING_BOX_ACME_HTTP_PORT', 80),
@@ -107,7 +124,7 @@ async function bootstrapDefaultInbounds(): Promise<void> {
         '/admin/inbounds',
         {
           method: 'POST',
-          body: JSON.stringify({ tag, protocol, settings }),
+          body: JSON.stringify({ tag, protocol, settings, proxyServerId }),
         },
         login.accessToken,
       );
