@@ -203,9 +203,9 @@ export function DashboardPage() {
                 <div key={step.id} className="setup-checklist-item">
                   <Space>
                     {step.done ? (
-                      <CheckCircleOutlined style={{ color: '#0f766e' }} />
+                      <CheckCircleOutlined style={{ color: 'var(--admin-accent)' }} />
                     ) : (
-                      <CloseCircleOutlined style={{ color: '#94a3b8' }} />
+                      <CloseCircleOutlined style={{ color: 'var(--admin-text-muted)' }} />
                     )}
                     <Typography.Text delete={step.done}>{meta.title}</Typography.Text>
                   </Space>
@@ -252,7 +252,7 @@ export function DashboardPage() {
                 type="circle"
                 percent={host?.cpu.usagePercent ?? 0}
                 size={72}
-                strokeColor="#0f766e"
+                strokeColor="#14b8a6"
                 format={(percent) => `${percent ?? 0}%`}
               />
               <div>
@@ -274,7 +274,7 @@ export function DashboardPage() {
                 type="circle"
                 percent={ramPercent}
                 size={72}
-                strokeColor="#0e7490"
+                strokeColor="#22d3ee"
                 format={(percent) => `${percent ?? 0}%`}
               />
               <div>
@@ -390,7 +390,7 @@ export function DashboardPage() {
                   ? t('dashboard.healthy')
                   : t('dashboard.unhealthy')}
               </Tag>
-              <div style={{ marginTop: 6, fontSize: 12, color: '#64748b' }}>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--admin-text-muted)' }}>
                 {t('dashboard.version')}: {(health?.core.version ?? data?.core.version) || '—'}
                 <br />
                 {t('dashboard.latency')}: {health?.core.latencyMs ?? data?.core.latencyMs ?? '—'} ms
@@ -402,7 +402,7 @@ export function DashboardPage() {
                     style={{
                       marginTop: 6,
                       fontSize: 12,
-                      color: '#64748b',
+                      color: 'var(--admin-text-muted)',
                       display: 'flex',
                       gap: 6,
                       alignItems: 'center',
@@ -596,6 +596,7 @@ export function DashboardPage() {
                 seriesField="type"
                 isStack
                 height={220}
+                theme={{ type: 'classicDark' }}
                 legend={{ position: 'top' }}
                 axis={{
                   y: {

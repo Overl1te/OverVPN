@@ -292,7 +292,7 @@ export function SystemPage() {
                 </Button>
               ) : null}
             </Form>
-            <div style={{ marginTop: 16, fontSize: 13, color: '#64748b' }}>
+            <div style={{ marginTop: 16, fontSize: 13, color: 'var(--admin-text-muted)' }}>
               {t('system.revision')}: {settings.revision} · {t('system.envSubUrl')}:{' '}
               {settings.readOnly.subPublicBaseUrlEnv} · {t('system.corsOrigins')}:{' '}
               {settings.readOnly.corsOriginsCount} · {t('system.workersEnabled')}:{' '}
@@ -333,7 +333,7 @@ export function SystemPage() {
             <Tag color={health.status === 'ok' ? 'green' : 'orange'}>
               {health.status === 'ok' ? t('system.statusOk') : t('system.statusDegraded')}
             </Tag>
-            <span style={{ marginLeft: 8, color: '#64748b' }}>
+            <span style={{ marginLeft: 8, color: 'var(--admin-text-muted)' }}>
               {dayjs(health.checkedAt).format('YYYY-MM-DD HH:mm:ss')}
             </span>
           </>
@@ -410,7 +410,7 @@ export function SystemPage() {
             },
           ]}
         />
-        <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--admin-text-muted)' }}>
           {t('system.enginesHint')}
         </div>
       </Card>

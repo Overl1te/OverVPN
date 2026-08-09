@@ -1,18 +1,22 @@
-import type { ThemeConfig } from 'antd';
+import { theme, type ThemeConfig } from 'antd';
 
-/** Dense professional admin theme — slate/teal. */
+/** Dense professional admin theme — slate/teal dark. */
 export const adminTheme: ThemeConfig = {
+  algorithm: theme.darkAlgorithm,
   token: {
-    colorPrimary: '#0f766e',
-    colorInfo: '#0e7490',
-    colorSuccess: '#15803d',
-    colorWarning: '#b45309',
-    colorError: '#b91c1c',
-    colorBgBase: '#f4f6f8',
-    colorBgContainer: '#ffffff',
-    colorBorder: '#d7dee7',
-    colorText: '#1e293b',
-    colorTextSecondary: '#64748b',
+    colorPrimary: '#14b8a6',
+    colorInfo: '#22d3ee',
+    colorSuccess: '#22c55e',
+    colorWarning: '#f59e0b',
+    colorError: '#f87171',
+    colorBgBase: '#0b1220',
+    colorBgContainer: '#111827',
+    colorBgElevated: '#1a2332',
+    colorBorder: '#1e293b',
+    colorBorderSecondary: '#243044',
+    colorText: '#e2e8f0',
+    colorTextSecondary: '#94a3b8',
+    colorTextTertiary: '#64748b',
     borderRadius: 4,
     fontFamily: '"IBM Plex Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
     fontSize: 13,
@@ -21,23 +25,28 @@ export const adminTheme: ThemeConfig = {
   },
   components: {
     Layout: {
-      headerBg: '#0f172a',
-      siderBg: '#111827',
-      bodyBg: '#f4f6f8',
+      headerBg: '#0a101c',
+      siderBg: '#0a101c',
+      bodyBg: '#0b1220',
       headerHeight: 48,
       headerPadding: '0 16px',
+      triggerBg: '#111827',
+      triggerColor: '#94a3b8',
     },
     Menu: {
-      darkItemBg: '#111827',
-      darkSubMenuItemBg: '#0f172a',
+      darkItemBg: '#0a101c',
+      darkSubMenuItemBg: '#070b14',
       darkItemSelectedBg: '#0f766e',
+      darkItemHoverBg: '#122033',
       itemHeight: 36,
       fontSize: 13,
     },
     Table: {
       cellPaddingBlockSM: 6,
       cellPaddingInlineSM: 8,
-      headerBg: '#eef2f6',
+      headerBg: '#151e2e',
+      rowHoverBg: '#172033',
+      borderColor: '#1e293b',
     },
     Form: {
       itemMarginBottom: 12,
@@ -45,6 +54,18 @@ export const adminTheme: ThemeConfig = {
     },
     Card: {
       paddingLG: 16,
+      colorBgContainer: '#111827',
+    },
+    Modal: {
+      contentBg: '#111827',
+      headerBg: '#111827',
+    },
+    Input: {
+      activeBorderColor: '#14b8a6',
+      hoverBorderColor: '#2dd4bf',
+    },
+    Button: {
+      primaryShadow: '0 0 0 1px rgba(20, 184, 166, 0.18)',
     },
   },
 };

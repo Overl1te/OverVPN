@@ -530,7 +530,7 @@ function FieldHelpLabel({ label, help }: { label: string; help: string }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       {label}
       <Tooltip title={help}>
-        <QuestionCircleOutlined style={{ color: 'rgba(0, 0, 0, 0.45)', cursor: 'help' }} />
+        <QuestionCircleOutlined style={{ color: 'var(--admin-text-muted)', cursor: 'help' }} />
       </Tooltip>
     </span>
   );

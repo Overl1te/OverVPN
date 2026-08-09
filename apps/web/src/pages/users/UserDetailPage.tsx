@@ -601,6 +601,7 @@ export function UserDetailPage() {
                             yField="value"
                             seriesField="type"
                             height={220}
+                            theme={{ type: 'classicDark' }}
                             axis={{
                               y: {
                                 labelFormatter: (v: string | number) => formatBytes(Number(v)),
