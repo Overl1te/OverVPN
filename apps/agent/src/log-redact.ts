@@ -28,10 +28,7 @@ function normalize(value: unknown, key?: string): unknown {
       ]),
     );
   }
-  if (
-    value === null ||
-    ['string', 'number', 'boolean'].includes(typeof value)
-  ) {
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
     return value;
   }
   return value === undefined ? null : `[unsupported:${typeof value}]`;

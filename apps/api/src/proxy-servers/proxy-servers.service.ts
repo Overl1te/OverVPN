@@ -254,7 +254,11 @@ export class ProxyServersService {
       where: { id },
       data: { status: 'DISABLED', lastError: null },
     });
-    this.logger.log({ msg: 'Proxy server disabled', id: row.id, name: row.name });
+    this.logger.log({
+      msg: 'Proxy server disabled',
+      id: row.id,
+      name: row.name,
+    });
     return this.toSummary(row);
   }
 
@@ -264,7 +268,11 @@ export class ProxyServersService {
       where: { id },
       data: { status: 'PENDING', lastError: null },
     });
-    this.logger.log({ msg: 'Proxy server enabled', id: row.id, name: row.name });
+    this.logger.log({
+      msg: 'Proxy server enabled',
+      id: row.id,
+      name: row.name,
+    });
     return this.toSummary(row);
   }
 

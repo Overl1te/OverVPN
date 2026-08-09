@@ -14,10 +14,7 @@ import { JwtAuthenticationGuard, RolesGuard } from './common/authorization';
 import { SupportIntegrityGuard } from './common/support-integrity';
 import { SupportIntegrityModule } from './common/support-integrity.module';
 import { BigIntSerializationInterceptor } from './common/bigint-serialization';
-import {
-  redactLogData,
-  shouldLogRequestBody,
-} from './common/log-redact';
+import { redactLogData, shouldLogRequestBody } from './common/log-redact';
 import type { AppEnvironment } from './config/environment';
 import { validateEnvironment } from './config/environment';
 import { CoreModule } from './core/core.module';
