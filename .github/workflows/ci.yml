@@ -120,7 +120,7 @@ jobs:
           # keepstorage is in MB (not "5GB") — invalid units crash buildkitd in a restart loop
           buildkitd-flags: --oci-worker-gc --oci-worker-gc-keepstorage=5000
 
-      - name: Clean stale Docker resources
+      - name: Clean stale Docker builders
         run: |
           set +e
           docker buildx version
@@ -129,7 +129,7 @@ jobs:
             echo "Removing stale builder: ${builder}"
             docker buildx rm "$builder" 2>/dev/null || true
           done
-          docker buildx prune -af 2>/dev/null || true
+          # Do NOT prune buildx/local image caches here — that alone added ~20m to cold publishes.
           df -h /
 
       - name: Log in to GHCR
@@ -144,6 +144,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.API_IMAGE }}
+          bake-target: api
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
@@ -156,6 +157,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.WEB_IMAGE }}
+          bake-target: web
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
@@ -168,6 +170,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.AGENT_IMAGE }}
+          bake-target: agent
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
@@ -199,43 +202,18 @@ jobs:
           mv -f "${dest}.partial" "$dest"
           ls -lh "$dest"
 
-      - name: Build and push API (+ sing-box)
-        uses: docker/build-push-action@v6
+      - name: Build and push images (parallel bake)
+        uses: docker/bake-action@v6
+        env:
+          GIT_SHA: ${{ github.sha }}
+          CACHE_ROOT: ${{ env.BUILDX_CACHE_ROOT }}
         with:
-          context: .
-          file: apps/api/Dockerfile
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta-api.outputs.bake-file }}
+            ${{ steps.meta-web.outputs.bake-file }}
+            ${{ steps.meta-agent.outputs.bake-file }}
           push: true
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          build-args: |
-            OVERVPN_GIT_SHA=${{ github.sha }}
-          cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/api
-          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/api,mode=min
-
-      - name: Build and push Web
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
-          cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/web
-          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/web,mode=min
-
-      - name: Build and push Agent
-        if: hashFiles('apps/agent/package.json', 'deploy/agent/Dockerfile') != ''
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deploy/agent/Dockerfile
-          push: true
-          tags: ${{ steps.meta-agent.outputs.tags }}
-          labels: ${{ steps.meta-agent.outputs.labels }}
-          build-args: |
-            OVERVPN_GIT_SHA=${{ github.sha }}
-          cache-from: type=local,src=${{ env.BUILDX_CACHE_ROOT }}/agent
-          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ROOT }}/agent,mode=min
 
       - name: Package deploy bundle
         run: bash scripts/package-deploy-bundle.sh dist/overvpn-deploy.tar.gz
@@ -251,7 +229,8 @@ jobs:
         if: always()
         run: |
           set +e
-          docker buildx prune -af 2>/dev/null || true
+          # Keep local bake caches under BUILDX_CACHE_ROOT; only trim buildkit leftovers.
+          docker builder prune -f --filter until=168h 2>/dev/null || true
           docker buildx ls --format '{{.Name}}' | while read -r builder; do
             [[ -z "$builder" || "$builder" == "default" || "$builder" == "overvpn-ci" ]] && continue
             echo "Removing leftover builder: ${builder}"
