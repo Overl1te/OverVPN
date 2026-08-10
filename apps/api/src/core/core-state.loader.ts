@@ -577,10 +577,8 @@ function isWildcardListenHost(host: string): boolean {
 function assertNoListenPortConflicts(
   inbounds: Array<Pick<DesiredInbound, 'tag' | 'listenHost' | 'listenPort'>>,
 ): void {
-  for (let index = 0; index < inbounds.length; index += 1) {
-    const left = inbounds[index]!;
-    for (let other = index + 1; other < inbounds.length; other += 1) {
-      const right = inbounds[other]!;
+  for (const [index, left] of inbounds.entries()) {
+    for (const right of inbounds.slice(index + 1)) {
       if (left.listenPort !== right.listenPort) {
         continue;
       }

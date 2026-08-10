@@ -1077,12 +1077,12 @@ function parseEngineResults(
 function aggregateProxyApplySummaries(
   summaries: CoreApplySummary[],
 ): CoreApplySummary {
-  if (summaries.length === 0) {
+  const primary = summaries[0];
+  if (!primary) {
     throw new Error(
       'aggregateProxyApplySummaries requires at least one summary',
     );
   }
-  const primary = summaries[0]!;
   if (summaries.length === 1) {
     return primary;
   }
