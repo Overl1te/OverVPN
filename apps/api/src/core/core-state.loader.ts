@@ -371,6 +371,8 @@ export class CoreStateLoader {
       );
     }
 
+    assertNoListenPortConflicts(desiredInbounds);
+
     return {
       engine,
       loadedAt: new Date(),
@@ -559,4 +561,39 @@ function resolveMaxUniqueIps(
     return ipLimit;
   }
   return null;
+}
+
+function isWildcardListenHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  return (
+    normalized === '' ||
+    normalized === '0.0.0.0' ||
+    normalized === '::' ||
+    normalized === '::0' ||
+    normalized === '*'
+  );
+}
+
+function assertNoListenPortConflicts(
+  inbounds: Array<Pick<DesiredInbound, 'tag' | 'listenHost' | 'listenPort'>>,
+): void {
+  for (let index = 0; index < inbounds.length; index += 1) {
+    const left = inbounds[index]!;
+    for (let other = index + 1; other < inbounds.length; other += 1) {
+      const right = inbounds[other]!;
+      if (left.listenPort !== right.listenPort) {
+        continue;
+      }
+      const leftWild = isWildcardListenHost(left.listenHost);
+      const rightWild = isWildcardListenHost(right.listenHost);
+      const sameHost =
+        left.listenHost.trim().toLowerCase() ===
+        right.listenHost.trim().toLowerCase();
+      if (leftWild || rightWild || sameHost) {
+        throw new Error(
+          `Listen port conflict: inbound "${left.tag}" and "${right.tag}" both bind ${left.listenHost}:${left.listenPort}`,
+        );
+      }
+    }
+  }
 }

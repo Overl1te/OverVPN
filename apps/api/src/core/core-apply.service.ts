@@ -92,11 +92,13 @@ export class CoreApplyService {
   }
 
   async preview(proxyServerId?: string): Promise<ConfigPreviewResult> {
+    const resolvedProxyServerId =
+      proxyServerId ?? (await this.resolveDefaultProxyServerId()) ?? undefined;
     const engines: Partial<Record<CoreEngine, ConfigPreviewEngine>> = {};
     for (const provider of this.registry.all()) {
       engines[provider.engine] = await this.previewEngine(
         provider,
-        proxyServerId,
+        resolvedProxyServerId,
       );
     }
     const primary =
@@ -117,9 +119,16 @@ export class CoreApplyService {
     options: CoreApplyOptions = {},
   ): Promise<CoreApplySummary> {
     this.supportIntegrity.assertIntact();
-    if (options.proxyServerId) {
+    const resolved: CoreApplyOptions = {
+      ...options,
+      proxyServerId:
+        options.proxyServerId ??
+        (await this.resolveDefaultProxyServerId()) ??
+        undefined,
+    };
+    if (resolved.proxyServerId) {
       const proxy = await this.prisma.proxyServer.findUnique({
-        where: { id: options.proxyServerId },
+        where: { id: resolved.proxyServerId },
       });
       if (!proxy) {
         throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND, {
@@ -130,7 +139,7 @@ export class CoreApplyService {
         return this.applyViaAgent(actor, input, trigger, metadata, proxy);
       }
     }
-    return this.applyLocal(actor, input, trigger, metadata, options);
+    return this.applyLocal(actor, input, trigger, metadata, resolved);
   }
 
   /**
@@ -600,15 +609,75 @@ export class CoreApplyService {
     }
   }
 
-  applySystem(
+  async applySystem(
     reason: string,
     trigger: CoreApplyTrigger = 'ENFORCEMENT',
   ): Promise<CoreApplySummary> {
-    return this.apply(null, { reason }, trigger, {
+    const metadata: RequestMetadata = {
       requestId: null,
       ipAddress: null,
       userAgent: 'system-worker',
+    };
+    const proxies = await this.prisma.proxyServer.findMany({
+      where: { status: { not: 'DISABLED' } },
+      select: { id: true, name: true, isLocal: true, status: true },
+      orderBy: [{ isLocal: 'desc' }, { createdAt: 'asc' }],
     });
+    if (proxies.length === 0) {
+      return this.apply(null, { reason }, trigger, metadata);
+    }
+
+    const summaries: CoreApplySummary[] = [];
+    for (const proxy of proxies) {
+      try {
+        summaries.push(
+          await this.apply(null, { reason }, trigger, metadata, {
+            proxyServerId: proxy.id,
+          }),
+        );
+      } catch (error: unknown) {
+        const startedAt = new Date();
+        const failed = await this.prisma.coreApplyRecord.create({
+          data: {
+            status: 'FAILED',
+            trigger,
+            reason,
+            proxyServerId: proxy.id,
+            errorMessage: errorMessage(error),
+            startedAt,
+            completedAt: new Date(),
+          },
+        });
+        this.logger.warn({
+          msg: 'System apply failed for proxy',
+          proxyServerId: proxy.id,
+          proxyName: proxy.name,
+          error: errorMessage(error),
+        });
+        const summary = this.toSummary(failed);
+        await this.recordApplyAudit(null, metadata, reason, summary);
+        summaries.push(summary);
+      }
+    }
+
+    const aggregate = aggregateProxyApplySummaries(summaries);
+    if (summaries.every((summary) => summary.status === 'SUCCEEDED')) {
+      await this.prisma.user.updateMany({
+        where: { needsApply: true },
+        data: { needsApply: false },
+      });
+    }
+    return aggregate;
+  }
+
+  /** Prefer the co-located proxy so unscoped apply/preview never merge remote nodes. */
+  private async resolveDefaultProxyServerId(): Promise<string | null> {
+    const local = await this.prisma.proxyServer.findFirst({
+      where: { isLocal: true },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return local?.id ?? null;
   }
 
   async list(query: CoreApplyListQuery): Promise<{
@@ -1003,6 +1072,46 @@ function parseEngineResults(
     return undefined;
   }
   return value;
+}
+
+function aggregateProxyApplySummaries(
+  summaries: CoreApplySummary[],
+): CoreApplySummary {
+  if (summaries.length === 0) {
+    throw new Error(
+      'aggregateProxyApplySummaries requires at least one summary',
+    );
+  }
+  const primary = summaries[0]!;
+  if (summaries.length === 1) {
+    return primary;
+  }
+  const statuses = summaries.map((summary) => summary.status);
+  const succeeded = statuses.filter((status) => status === 'SUCCEEDED').length;
+  let status: CoreApplyStatus;
+  if (succeeded === statuses.length) {
+    status = 'SUCCEEDED';
+  } else if (succeeded > 0) {
+    status = 'PARTIAL_SUCCEEDED';
+  } else if (statuses.every((item) => item === 'ROLLED_BACK')) {
+    status = 'ROLLED_BACK';
+  } else {
+    status = 'FAILED';
+  }
+  const errors = summaries
+    .map((summary) => summary.error)
+    .filter((error): error is string => Boolean(error));
+  return {
+    ...primary,
+    status,
+    error: errors.length > 0 ? errors.join('; ') : null,
+    completedAt:
+      summaries
+        .map((summary) => summary.completedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? primary.completedAt,
+  };
 }
 
 function aggregateApplyStatus(

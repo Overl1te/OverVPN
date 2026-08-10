@@ -39,6 +39,11 @@ describe('CoreApplyService validation gate', () => {
       coreState: {
         findUnique: jest.fn(() => Promise.resolve(null)),
       },
+      proxyServer: {
+        findFirst: jest.fn(() => Promise.resolve(null)),
+        findUnique: jest.fn(),
+        findMany: jest.fn(() => Promise.resolve([])),
+      },
     } as unknown as PrismaService;
     const provider = new ValidationFailingProvider('SING_BOX');
     const registry = registryOf([provider]);
@@ -133,6 +138,11 @@ describe('CoreApplyService multi-engine apply', () => {
         findUnique: jest.fn(() => Promise.resolve(null)),
         upsert: coreStateUpsert,
       },
+      proxyServer: {
+        findFirst: jest.fn(() => Promise.resolve(null)),
+        findUnique: jest.fn(),
+        findMany: jest.fn(() => Promise.resolve([])),
+      },
       inbound: {
         updateMany: inboundUpdateMany,
       },
@@ -220,6 +230,129 @@ describe('CoreApplyService multi-engine apply', () => {
     expect(coreStateUpsert).toHaveBeenCalled();
     expect(userUpdateMany).not.toHaveBeenCalled();
     expect(notifyApplyFailure).toHaveBeenCalled();
+  });
+});
+
+describe('CoreApplyService applySystem', () => {
+  it('applies each proxy with its own proxyServerId (no cross-node merge)', async () => {
+    const localId = '00000000-0000-4000-8000-000000000001';
+    const remoteId = '42d6f370-7c9c-4db6-8596-0817b5a8c00b';
+    const record = applyRecord();
+    const update = jest.fn(({ data }: { data: Partial<CoreApplyRecord> }) =>
+      Promise.resolve({
+        ...record,
+        ...data,
+        status: data.status ?? record.status,
+        updatedAt: new Date(),
+      }),
+    );
+    const userUpdateMany = jest.fn(() => Promise.resolve({ count: 1 }));
+    const findUnique = jest.fn(({ where: { id } }: { where: { id: string } }) =>
+      Promise.resolve({
+        id,
+        name: id === localId ? 'local' : 'remote',
+        agentBaseUrl: null,
+        settings: {},
+        isLocal: id === localId,
+        status: 'ONLINE',
+      }),
+    );
+    const prisma = {
+      coreApplyRecord: {
+        create: jest.fn(() => Promise.resolve(record)),
+        update,
+        updateMany: jest.fn(() => Promise.resolve({ count: 0 })),
+      },
+      coreState: {
+        findUnique: jest.fn(() => Promise.resolve(null)),
+        upsert: jest.fn(() => Promise.resolve({})),
+      },
+      proxyServer: {
+        findFirst: jest.fn(() => Promise.resolve(null)),
+        findUnique,
+        findMany: jest.fn(() =>
+          Promise.resolve([
+            { id: localId, name: 'local', isLocal: true, status: 'ONLINE' },
+            { id: remoteId, name: 'remote', isLocal: false, status: 'ONLINE' },
+          ]),
+        ),
+      },
+      proxyCoreState: {
+        findUnique: jest.fn(() => Promise.resolve(null)),
+        upsert: jest.fn(() => Promise.resolve({})),
+      },
+      inbound: {
+        updateMany: jest.fn(() => Promise.resolve({ count: 0 })),
+      },
+      user: {
+        updateMany: userUpdateMany,
+      },
+      $transaction: jest.fn(
+        async (callback: (tx: unknown) => Promise<unknown>) =>
+          callback({
+            coreApplyRecord: {
+              update,
+              updateMany: jest.fn(() => Promise.resolve({ count: 0 })),
+            },
+            coreState: { upsert: jest.fn(() => Promise.resolve({})) },
+            proxyCoreState: { upsert: jest.fn(() => Promise.resolve({})) },
+            inbound: {
+              updateMany: jest.fn(() => Promise.resolve({ count: 0 })),
+            },
+            user: { updateMany: jest.fn(() => Promise.resolve({ count: 0 })) },
+          }),
+      ),
+    } as unknown as PrismaService;
+
+    const load = jest.fn((engine: CoreEngine) =>
+      Promise.resolve(emptyState(engine)),
+    );
+    const service = new CoreApplyService(
+      prisma,
+      registryOf([new SucceedingProvider('SING_BOX', 'b'.repeat(64))]),
+      { load } as unknown as CoreStateLoader,
+      {
+        withLock: <T>(
+          operation: (assertOwned: () => void) => Promise<T>,
+        ): Promise<T> => operation(() => undefined),
+      } as RedisDistributedLock,
+      new MemoryFileSystem(),
+      {
+        record: jest.fn(),
+        recordFailureSafely: jest.fn(() => Promise.resolve()),
+        recordSafely: jest.fn(() => Promise.resolve()),
+      } as unknown as AuditService,
+      {
+        notifyApplyFailure: jest.fn(() => Promise.resolve()),
+      } as unknown as TelegramNotificationService,
+      {
+        assertIntact: jest.fn(),
+        isIntact: jest.fn(() => true),
+      } as unknown as SupportIntegrityService,
+      { postApply: jest.fn() } as unknown as HttpAgentTransport,
+      {
+        encrypt: jest.fn((value: string) => `enc:${value}`),
+        decrypt: jest.fn((value: string) => value.replace(/^enc:/, '')),
+      } as unknown as SecretEncryptionService,
+      fakeConfig(),
+    );
+
+    const result = await service.applySystem(
+      'Automated enforcement reconciliation',
+    );
+
+    expect(result.status).toBe('SUCCEEDED');
+    const scopedIds = load.mock.calls.map(
+      (call) =>
+        (call[1] as { proxyServerId?: string } | undefined)?.proxyServerId,
+    );
+    expect(scopedIds).toContain(localId);
+    expect(scopedIds).toContain(remoteId);
+    expect(scopedIds.every((id) => Boolean(id))).toBe(true);
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: { needsApply: true },
+      data: { needsApply: false },
+    });
   });
 });
 
