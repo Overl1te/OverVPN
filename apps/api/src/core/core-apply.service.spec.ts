@@ -304,8 +304,14 @@ describe('CoreApplyService applySystem', () => {
       ),
     } as unknown as PrismaService;
 
-    const load = jest.fn((engine: CoreEngine) =>
-      Promise.resolve(emptyState(engine)),
+    const load = jest.fn(
+      (
+        engine: CoreEngine,
+        options?: { proxyServerId?: string },
+      ): Promise<ReturnType<typeof emptyState>> => {
+        void options;
+        return Promise.resolve(emptyState(engine));
+      },
     );
     const service = new CoreApplyService(
       prisma,
@@ -342,10 +348,7 @@ describe('CoreApplyService applySystem', () => {
     );
 
     expect(result.status).toBe('SUCCEEDED');
-    const scopedIds = load.mock.calls.map(
-      (call) =>
-        (call[1] as { proxyServerId?: string } | undefined)?.proxyServerId,
-    );
+    const scopedIds = load.mock.calls.map((call) => call[1]?.proxyServerId);
     expect(scopedIds).toContain(localId);
     expect(scopedIds).toContain(remoteId);
     expect(scopedIds.every((id) => Boolean(id))).toBe(true);
