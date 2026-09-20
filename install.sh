@@ -687,8 +687,8 @@ cli_t() {
       port_standard) printf '%s' "Стандартные порты" ;;
       port_stealth) printf '%s' "Скрытые высокие порты" ;;
       prompt_protocol_port) printf 'Порт %s' "$1" ;;
-      prompt_web_port) printf '%s' "Порт панели (веб-интерфейс)" ;;
-      prompt_web_port_hint) printf '%s' "80/443 не трогаем — их может занимать уже стоящий сайт. Панель будет только на этом порту." ;;
+      prompt_web_port) printf '%s' "Порт панели (админка)" ;;
+      prompt_web_port_hint) printf '%s' "Только веб-панель. 80/443 не трогаем (там может быть сайт). ACME у ядра тоже уйдёт с 80/443." ;;
       web_port_reserved) printf '%s' "80 и 443 лучше оставить текущему сайту. Укажи другой порт панели." ;;
       prompt_default_inbounds) printf '%s' "Создать входящие подключения по умолчанию?" ;;
       prompt_ufw) printf '%s' "Настроить UFW?" ;;
@@ -941,8 +941,8 @@ cli_t() {
       port_standard) printf '%s' "Standard ports" ;;
       port_stealth) printf '%s' "Stealth high ports" ;;
       prompt_protocol_port) printf '%s port' "$1" ;;
-      prompt_web_port) printf '%s' "Panel web port" ;;
-      prompt_web_port_hint) printf '%s' "Leaves 80/443 for an existing site. The panel listens only on this port." ;;
+      prompt_web_port) printf '%s' "Panel port (admin UI)" ;;
+      prompt_web_port_hint) printf '%s' "Admin UI only. 80/443 stay free for an existing site; core ACME is moved off those ports too." ;;
       web_port_reserved) printf '%s' "Keep 80 and 443 for the existing site. Choose another panel port." ;;
       prompt_default_inbounds) printf '%s' "Create default inbounds?" ;;
       prompt_ufw) printf '%s' "Configure UFW?" ;;
@@ -3399,6 +3399,13 @@ generate_env() {
     set_env_var "AUTH_COOKIE_SECURE" "false"
     set_env_var "WEB_BIND_ADDRESS" "0.0.0.0"
     set_env_var "WEB_PORT" "$web_port"
+    # Do not publish ACME on :80/:443 — those often belong to an existing site.
+    set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
+    set_env_var "SING_BOX_ACME_TLS_PORT" "8443"
+    if [[ "$CFG_XRAY_LISTEN_PORT" == "8443" ]]; then
+      CFG_XRAY_LISTEN_PORT="9443"
+      set_env_var "XRAY_LISTEN_PORT" "$CFG_XRAY_LISTEN_PORT"
+    fi
   fi
 
   # Agent→panel URL (compose network for co-located; remote set by install-proxy).
@@ -3458,6 +3465,7 @@ XRAY_ENABLED=${CFG_XRAY_ENABLED}
 MTPROXY_ENABLED=${CFG_MTPROXY_ENABLED:-true}
 AMNEZIAWG_ENABLED=${CFG_AMNEZIAWG_ENABLED:-true}
 ONBOARDING_TOUR=${CFG_ONBOARDING_TOUR:-true}
+WEB_PORT=${web_port}
 CLI_LANG=${CLI_LANG}
 EOF
   apply_deploy_permissions
