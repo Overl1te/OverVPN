@@ -35,6 +35,7 @@ const environment: AppEnvironment = {
   TOTP_ISSUER: 'OverVPN Test',
   AUTH_COOKIE_NAME: 'test_refresh',
   AUTH_COOKIE_SECURE: false,
+  ALLOW_INSECURE_HTTP: false,
   AUTH_COOKIE_SAME_SITE: 'strict',
   AUTH_COOKIE_PATH: '/api/admin/auth',
   LOGIN_THROTTLE_LIMIT: 5,
