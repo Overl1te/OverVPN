@@ -3934,7 +3934,6 @@ cmd_enable_core() {
     amneziawg) key="AMNEZIAWG_ENABLED" ;;
     *) colorized_echo red "Core must be singbox, xray, mtproxy, or amneziawg"; exit 1 ;;
   esac
-  esac
   set_env_var "$key" "true"
   update_core_protocol_lists "$core" true
   set_install_conf_var "$key" "true"
