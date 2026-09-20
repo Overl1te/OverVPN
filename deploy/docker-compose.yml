@@ -459,6 +459,8 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+      # Supervisor is root with cap_drop:ALL; agent writes 0600 as uid 1000.
+      - DAC_OVERRIDE
     devices:
       - /dev/net/tun
     sysctls:

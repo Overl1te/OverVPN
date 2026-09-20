@@ -17,4 +17,6 @@ EOF
 fi
 
 chmod 600 "$CONFIG"
-chown -R 0:0 "$SHARED" /reload /state /work 2>/dev/null || true
+# Agent (uid 1000) writes this volume. The AWG supervisor is root with
+# cap_drop:ALL; compose grants DAC_OVERRIDE so it can still read/write 0600 files.
+chown -R 1000:1000 "$SHARED" /reload /state /work 2>/dev/null || true
