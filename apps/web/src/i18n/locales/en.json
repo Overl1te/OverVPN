@@ -25,6 +25,8 @@
     "readonlyHint": "Read-only role: mutations are disabled",
     "requestId": "Request ID",
     "error": "Error",
+    "errorHelp": "How to fix",
+    "errorId": "Error ID",
     "success": "Success",
     "filters": "Filters",
     "reset": "Reset",

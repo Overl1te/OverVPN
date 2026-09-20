@@ -1,0 +1,347 @@
+{
+  "VALIDATION_FAILED": {
+    "id": "OVN-4001",
+    "title": {
+      "en": "Request validation failed",
+      "ru": "Ошибка проверки запроса"
+    },
+    "cause": {
+      "en": "The panel sent a field that the API rejected (type, range, URL format, or a required value).",
+      "ru": "Панель отправила поле, которое API отклонил: тип, диапазон, формат URL или обязательное значение."
+    },
+    "fix": {
+      "en": "Check highlighted form fields. For a plan: unique name, expiry 1–3650 days, device limit ≥ 1, at least one inbound. Empty URL fields must stay empty, not invalid text.",
+      "ru": "Проверьте поля с ошибкой. Для плана: уникальное имя, срок 1–3650 дней, лимит устройств ≥ 1, хотя бы одна точка входа. Пустые URL оставьте пустыми, не пишите туда произвольный текст."
+    }
+  },
+  "AUTH_INVALID_CREDENTIALS": {
+    "id": "OVN-4011",
+    "title": {
+      "en": "Invalid username or password",
+      "ru": "Неверное имя пользователя или пароль"
+    },
+    "cause": {
+      "en": "Login did not match an active administrator account.",
+      "ru": "Логин не совпал с активной учётной записью администратора."
+    },
+    "fix": {
+      "en": "Use credentials from `overvpn info`, or run `overvpn bootstrap` if the owner account was lost.",
+      "ru": "Возьмите учётку из `overvpn info` или выполните `overvpn bootstrap`, если учётка владельца потеряна."
+    }
+  },
+  "AUTH_TOTP_REQUIRED": {
+    "id": "OVN-4012",
+    "title": {
+      "en": "A TOTP code is required",
+      "ru": "Требуется одноразовый код TOTP"
+    },
+    "cause": {
+      "en": "This administrator has two-factor authentication enabled.",
+      "ru": "У этого администратора включена двухфакторная аутентификация."
+    },
+    "fix": {
+      "en": "Enter the 6-digit code from the authenticator app, then retry.",
+      "ru": "Введите 6-значный код из приложения-аутентификатора и повторите вход."
+    }
+  },
+  "AUTH_TOTP_INVALID": {
+    "id": "OVN-4013",
+    "title": {
+      "en": "The TOTP code is invalid",
+      "ru": "Неверный одноразовый код TOTP"
+    },
+    "cause": {
+      "en": "The one-time code was wrong, reused, or the device clock is skewed.",
+      "ru": "Одноразовый код неверный, уже использован, или часы устройства сильно расходятся."
+    },
+    "fix": {
+      "en": "Wait for a fresh code and check the device time. An owner can disable TOTP for another admin if the device is lost.",
+      "ru": "Дождитесь нового кода и проверьте время на устройстве. Владелец может отключить TOTP другому админу, если устройство потеряно."
+    }
+  },
+  "AUTH_TOKEN_INVALID": {
+    "id": "OVN-4014",
+    "title": {
+      "en": "Authentication token is invalid or expired",
+      "ru": "Токен аутентификации недействителен или истёк"
+    },
+    "cause": {
+      "en": "The session cookie/token is missing, expired, or was signed with a different JWT secret.",
+      "ru": "Сессионный cookie/токен отсутствует, истёк или подписан другим JWT-секретом."
+    },
+    "fix": {
+      "en": "Sign in again. After changing JWT secrets, all sessions must be recreated.",
+      "ru": "Войдите заново. После смены JWT-секретов все сессии нужно создать заново."
+    }
+  },
+  "AUTH_REFRESH_REUSED": {
+    "id": "OVN-4015",
+    "title": {
+      "en": "Refresh token reuse was detected; the token family was revoked",
+      "ru": "Обнаружено повторное использование refresh-токена; семейство отозвано"
+    },
+    "cause": {
+      "en": "A refresh token was used twice. This is treated as theft and the whole session family is revoked.",
+      "ru": "Refresh-токен использовали дважды. Это считается компрометацией, всё семейство сессий отозвано."
+    },
+    "fix": {
+      "en": "Sign in again. If this repeats, rotate JWT secrets and check that only one panel tab is refreshing the session.",
+      "ru": "Войдите заново. Если повторяется — смените JWT-секреты и не держите несколько вкладок панели с параллельным обновлением сессии."
+    }
+  },
+  "AUTH_ACCOUNT_INACTIVE": {
+    "id": "OVN-4016",
+    "title": {
+      "en": "Administrator account is inactive",
+      "ru": "Учётная запись администратора отключена"
+    },
+    "cause": {
+      "en": "The administrator was disabled by an owner.",
+      "ru": "Администратора отключил владелец."
+    },
+    "fix": {
+      "en": "Ask an owner to re-enable the account in the panel.",
+      "ru": "Попросите владельца снова включить учётную запись в панели."
+    }
+  },
+  "FORBIDDEN": {
+    "id": "OVN-4031",
+    "title": {
+      "en": "You do not have permission to perform this action",
+      "ru": "Недостаточно прав для выполнения действия"
+    },
+    "cause": {
+      "en": "The current role cannot mutate this resource (for example only OWNER can delete a plan).",
+      "ru": "Текущая роль не может изменить этот ресурс (например, удалить план может только OWNER)."
+    },
+    "fix": {
+      "en": "Sign in as a user with a higher role, or ask an owner to perform the action.",
+      "ru": "Войдите под учётки с более высокой ролью или попросите владельца выполнить действие."
+    }
+  },
+  "SUBSCRIPTION_INACTIVE": {
+    "id": "OVN-4032",
+    "title": {
+      "en": "Subscription is not active",
+      "ru": "Подписка не активна"
+    },
+    "cause": {
+      "en": "The user is disabled, expired, or limited, so the subscription URL refuses configs.",
+      "ru": "Пользователь отключён, истёк или ограничен — URL подписки не отдаёт конфиги."
+    },
+    "fix": {
+      "en": "Open the user in the panel and check status, expiry, traffic quota, and device limit.",
+      "ru": "Откройте пользователя в панели и проверьте статус, срок, квоту трафика и лимит устройств."
+    }
+  },
+  "NOT_FOUND": {
+    "id": "OVN-4040",
+    "title": {
+      "en": "Resource was not found",
+      "ru": "Ресурс не найден"
+    },
+    "cause": {
+      "en": "The object was deleted, the ID is wrong, or the page is stale.",
+      "ru": "Объект удалили, ID неверный, или страница устарела."
+    },
+    "fix": {
+      "en": "Refresh the list and retry. If this happened while creating a plan, selected inbounds may have been removed.",
+      "ru": "Обновите список и повторите. Если это было при создании плана — выбранные точки входа могли удалить."
+    }
+  },
+  "SUBSCRIPTION_NOT_FOUND": {
+    "id": "OVN-4041",
+    "title": {
+      "en": "Subscription was not found",
+      "ru": "Подписка не найдена"
+    },
+    "cause": {
+      "en": "The subscription token does not exist or was rotated.",
+      "ru": "Токен подписки не существует или его сменили."
+    },
+    "fix": {
+      "en": "Copy a fresh subscription URL from the user card after rotate.",
+      "ru": "Скопируйте новый URL подписки из карточки пользователя после смены токена."
+    }
+  },
+  "PLAN_INBOUND_NOT_FOUND": {
+    "id": "OVN-4042",
+    "title": {
+      "en": "One or more selected inbounds no longer exist",
+      "ru": "Одна или несколько выбранных точек входа больше не существуют"
+    },
+    "cause": {
+      "en": "The plan form still references inbound IDs that were deleted after the page loaded.",
+      "ru": "Форма плана ссылается на inbound, которые удалили после загрузки страницы."
+    },
+    "fix": {
+      "en": "Close the dialog, refresh Plans / Inbounds, select existing entry points, then save again.",
+      "ru": "Закройте окно, обновите Планы и Точки входа, выберите существующие inbound и сохраните снова."
+    }
+  },
+  "CONFLICT": {
+    "id": "OVN-4090",
+    "title": {
+      "en": "The request conflicts with the current resource state",
+      "ru": "Запрос конфликтует с текущим состоянием ресурса"
+    },
+    "cause": {
+      "en": "A unique constraint or an incompatible state blocked the write (duplicate name, port, or a related object still in use).",
+      "ru": "Уникальное ограничение или несовместимое состояние блокирует запись (дубликат имени/порта или связанный объект ещё используется)."
+    },
+    "fix": {
+      "en": "Change the unique field or remove the dependent objects, then retry. The toast may include a more specific OVN id.",
+      "ru": "Измените уникальное поле или уберите зависимые объекты и повторите. В тосте может быть более конкретный OVN-id."
+    }
+  },
+  "SUBSCRIPTION_EMPTY": {
+    "id": "OVN-4091",
+    "title": {
+      "en": "Subscription has no available servers",
+      "ru": "В подписке нет доступных серверов"
+    },
+    "cause": {
+      "en": "The user's plan has no inbounds, or all assigned inbounds are disabled / on an offline node.",
+      "ru": "У плана пользователя нет точек входа, либо все inbound выключены / на офлайн-ноде."
+    },
+    "fix": {
+      "en": "Attach at least one enabled inbound to the plan and confirm the proxy node is online.",
+      "ru": "Привяжите к плану хотя бы один включённый inbound и убедитесь, что прокси-нода онлайн."
+    }
+  },
+  "PLAN_NAME_CONFLICT": {
+    "id": "OVN-4092",
+    "title": {
+      "en": "A plan with this name already exists",
+      "ru": "План с таким названием уже существует"
+    },
+    "cause": {
+      "en": "Plan names must be unique in the database.",
+      "ru": "Название плана должно быть уникальным в базе."
+    },
+    "fix": {
+      "en": "Pick another name, or edit the existing plan instead of creating a duplicate.",
+      "ru": "Выберите другое имя или отредактируйте уже существующий план, а не создавайте дубликат."
+    }
+  },
+  "PLAN_HAS_USERS": {
+    "id": "OVN-4093",
+    "title": {
+      "en": "The plan cannot be deleted while users are assigned",
+      "ru": "План нельзя удалить, пока на него назначены пользователи"
+    },
+    "cause": {
+      "en": "Users still reference this plan.",
+      "ru": "На этот план ещё ссылаются пользователи."
+    },
+    "fix": {
+      "en": "Move or delete those users, or archive the plan instead of deleting it.",
+      "ru": "Переназначьте или удалите этих пользователей, либо архивируйте план вместо удаления."
+    }
+  },
+  "RATE_LIMITED": {
+    "id": "OVN-4291",
+    "title": {
+      "en": "Too many requests; try again later",
+      "ru": "Слишком много запросов; повторите попытку позже"
+    },
+    "cause": {
+      "en": "The API or subscription endpoint throttled this client.",
+      "ru": "API или endpoint подписки ограничил частоту запросов с этого клиента."
+    },
+    "fix": {
+      "en": "Wait a few seconds and retry. For public subscription URLs, reduce client poll interval.",
+      "ru": "Подождите несколько секунд и повторите. Для публичных URL подписки уменьшите частоту опроса клиента."
+    }
+  },
+  "INTERNAL_ERROR": {
+    "id": "OVN-5000",
+    "title": {
+      "en": "An internal error occurred",
+      "ru": "Произошла внутренняя ошибка"
+    },
+    "cause": {
+      "en": "The API threw an unexpected exception (database, core apply, or a bug).",
+      "ru": "API выбросил непредвиденное исключение (база, применение ядра или ошибка в коде)."
+    },
+    "fix": {
+      "en": "Copy the error ID and request ID, then check `overvpn logs api`. Open an issue with both IDs if it persists.",
+      "ru": "Скопируйте ID ошибки и ID запроса, затем смотрите `overvpn logs api`. Если повторяется — issue с обоими ID."
+    }
+  },
+  "SUBSCRIPTION_UNAVAILABLE": {
+    "id": "OVN-5031",
+    "title": {
+      "en": "Subscription service is temporarily unavailable",
+      "ru": "Сервис подписок временно недоступен"
+    },
+    "cause": {
+      "en": "The control plane could not build a subscription payload (database or template failure).",
+      "ru": "Панель не смогла собрать payload подписки (сбой базы или шаблона)."
+    },
+    "fix": {
+      "en": "Check API health and logs. Retry after the database is up.",
+      "ru": "Проверьте здоровье API и логи. Повторите, когда база снова доступна."
+    }
+  },
+  "SUPPORT_INTEGRITY_FAILED": {
+    "id": "OVN-5032",
+    "title": {
+      "en": "Author support attribution is missing or was tampered with",
+      "ru": "Атрибуция поддержки автора отсутствует или была изменена"
+    },
+    "cause": {
+      "en": "The panel support widget or integrity header is missing, which blocks admin writes.",
+      "ru": "Виджет поддержки в панели или integrity-заголовок отсутствует — запись в админке блокируется."
+    },
+    "fix": {
+      "en": "Do not remove the support button from the panel build. Update to an official OverVPN release.",
+      "ru": "Не удаляйте кнопку поддержки из сборки панели. Обновитесь до официального релиза OverVPN."
+    }
+  },
+  "NETWORK_ERROR": {
+    "id": "OVN-9001",
+    "title": {
+      "en": "The panel could not reach the API",
+      "ru": "Панель не смогла связаться с API"
+    },
+    "cause": {
+      "en": "The browser request failed before a JSON error envelope arrived (API down, proxy 502, mixed content, or offline).",
+      "ru": "Запрос браузера оборвался до JSON-конверта ошибки: API лежит, прокси отдал 502, mixed content или нет сети."
+    },
+    "fix": {
+      "en": "Run `overvpn status` and `overvpn logs api`. Confirm the panel is served over the same origin as `/api`. Retry after the API is healthy.",
+      "ru": "Выполните `overvpn status` и `overvpn logs api`. Панель должна открываться с того же origin, что и `/api`. Повторите, когда API снова живой."
+    }
+  },
+  "UNKNOWN_ERROR": {
+    "id": "OVN-9002",
+    "title": {
+      "en": "An unexpected client error occurred",
+      "ru": "Непредвиденная ошибка в панели"
+    },
+    "cause": {
+      "en": "The panel caught an exception that is not an API error envelope (script bug or a thrown string).",
+      "ru": "Панель поймала исключение без конверта API (баг скрипта или выброшенная строка)."
+    },
+    "fix": {
+      "en": "Copy OVN-9002, check the browser console, and retry. If creating a plan, also try a unique name and refresh inbounds.",
+      "ru": "Скопируйте OVN-9002, откройте консоль браузера и повторите. Если создаёте план — возьмите уникальное имя и обновите список точек входа."
+    }
+  },
+  "UNEXPECTED_ERROR_RESPONSE": {
+    "id": "OVN-9003",
+    "title": {
+      "en": "The API returned an unexpected error response",
+      "ru": "API вернул неожиданный ответ об ошибке"
+    },
+    "cause": {
+      "en": "The HTTP error body was HTML or JSON that does not match the OverVPN error envelope (often nginx 502/504).",
+      "ru": "Тело HTTP-ошибки — HTML или JSON не в формате конверта OverVPN (часто nginx 502/504)."
+    },
+    "fix": {
+      "en": "Check `overvpn status`, nginx/`overvpn logs web`, and that `/api` proxies to the API container.",
+      "ru": "Проверьте `overvpn status`, nginx/`overvpn logs web` и что `/api` проксируется в контейнер API."
+    }
+  }
+}

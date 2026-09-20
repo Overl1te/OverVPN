@@ -25,6 +25,8 @@
     "readonlyHint": "Только чтение: изменения недоступны",
     "requestId": "ID запроса",
     "error": "Ошибка",
+    "errorHelp": "Как исправить",
+    "errorId": "ID ошибки",
     "success": "Успешно",
     "filters": "Фильтры",
     "reset": "Сбросить",

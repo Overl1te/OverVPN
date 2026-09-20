@@ -1,3 +1,5 @@
+import catalogJson from './error-catalog.json' with { type: 'json' };
+
 export const PRODUCT_NAME = 'OverVPN';
 export const API_PREFIX = '/api';
 export const API_VERSION = '0.1.0';
@@ -171,77 +173,51 @@ export const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n;
 export const DEFAULT_PAGE_SIZE = 25;
 export const MAX_PAGE_SIZE = 100;
 
-export const ERROR_MESSAGES = {
-  VALIDATION_FAILED: {
-    en: 'Request validation failed',
-    ru: 'Ошибка проверки запроса',
-  },
-  AUTH_INVALID_CREDENTIALS: {
-    en: 'Invalid username or password',
-    ru: 'Неверное имя пользователя или пароль',
-  },
-  AUTH_TOTP_REQUIRED: {
-    en: 'A TOTP code is required',
-    ru: 'Требуется одноразовый код TOTP',
-  },
-  AUTH_TOTP_INVALID: {
-    en: 'The TOTP code is invalid',
-    ru: 'Неверный одноразовый код TOTP',
-  },
-  AUTH_TOKEN_INVALID: {
-    en: 'Authentication token is invalid or expired',
-    ru: 'Токен аутентификации недействителен или истёк',
-  },
-  AUTH_REFRESH_REUSED: {
-    en: 'Refresh token reuse was detected; the token family was revoked',
-    ru: 'Обнаружено повторное использование refresh-токена; семейство отозвано',
-  },
-  AUTH_ACCOUNT_INACTIVE: {
-    en: 'Administrator account is inactive',
-    ru: 'Учётная запись администратора отключена',
-  },
-  FORBIDDEN: {
-    en: 'You do not have permission to perform this action',
-    ru: 'Недостаточно прав для выполнения действия',
-  },
-  RATE_LIMITED: {
-    en: 'Too many requests; try again later',
-    ru: 'Слишком много запросов; повторите попытку позже',
-  },
-  SUBSCRIPTION_NOT_FOUND: {
-    en: 'Subscription was not found',
-    ru: 'Подписка не найдена',
-  },
-  SUBSCRIPTION_INACTIVE: {
-    en: 'Subscription is not active',
-    ru: 'Подписка не активна',
-  },
-  SUBSCRIPTION_EMPTY: {
-    en: 'Subscription has no available servers',
-    ru: 'В подписке нет доступных серверов',
-  },
-  SUBSCRIPTION_UNAVAILABLE: {
-    en: 'Subscription service is temporarily unavailable',
-    ru: 'Сервис подписок временно недоступен',
-  },
-  NOT_FOUND: {
-    en: 'Resource was not found',
-    ru: 'Ресурс не найден',
-  },
-  CONFLICT: {
-    en: 'The request conflicts with the current resource state',
-    ru: 'Запрос конфликтует с текущим состоянием ресурса',
-  },
-  INTERNAL_ERROR: {
-    en: 'An internal error occurred',
-    ru: 'Произошла внутренняя ошибка',
-  },
-  SUPPORT_INTEGRITY_FAILED: {
-    en: 'Author support attribution is missing or was tampered with',
-    ru: 'Атрибуция поддержки автора отсутствует или была изменена',
-  },
-} as const;
-export type ErrorCode = keyof typeof ERROR_MESSAGES;
+export const DOCS_SITE_URL = 'https://overl1te.github.io/OverVPN/' as const;
+
+export type LocalizedText = {
+  en: string;
+  ru: string;
+};
+
+export type ErrorCatalogEntry = {
+  id: string;
+  title: LocalizedText;
+  cause: LocalizedText;
+  fix: LocalizedText;
+};
+
+export const ERROR_CATALOG = catalogJson as {
+  [K in keyof typeof catalogJson]: ErrorCatalogEntry;
+};
+
+export type ErrorCode = keyof typeof ERROR_CATALOG;
+
+function catalogMessages(): { [K in ErrorCode]: LocalizedText } {
+  const result = {} as { [K in ErrorCode]: LocalizedText };
+  for (const code of Object.keys(ERROR_CATALOG) as ErrorCode[]) {
+    result[code] = ERROR_CATALOG[code].title;
+  }
+  return result;
+}
+
+export const ERROR_MESSAGES = catalogMessages();
+
+export function isErrorCode(code: string): code is ErrorCode {
+  return Object.prototype.hasOwnProperty.call(ERROR_CATALOG, code);
+}
+
+export function errorCatalogEntry(code: string): ErrorCatalogEntry {
+  return isErrorCode(code) ? ERROR_CATALOG[code] : ERROR_CATALOG.INTERNAL_ERROR;
+}
+
+export function errorDocsPath(id: string): string {
+  return `errors/${id.toLowerCase()}.html`;
+}
+
+export function errorDocsUrl(id: string): string {
+  return `${DOCS_SITE_URL}${errorDocsPath(id)}`;
+}
 
 export const BYTES_PER_KIBIBYTE = 1024n;
 export const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * 1024n;

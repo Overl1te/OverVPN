@@ -62,13 +62,29 @@ export function mbpsToBps(mbps: number | null | undefined): string | null {
   return String(Math.round(mbps * MBPS_TO_BPS));
 }
 
+export function toOptionalInt(
+  value: number | string | null | undefined,
+): number | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || value === '') {
+    return null;
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.trunc(parsed);
+}
+
 export function planFormValuesToPayload(values: PlanFormValues) {
   return {
     name: values.name,
     description: values.description,
     defaultDataLimitBytes: giBToBytes(values.defaultDataLimitGiB),
-    defaultExpiryDays: values.defaultExpiryDays,
-    defaultDeviceLimit: values.defaultDeviceLimit,
+    defaultExpiryDays: toOptionalInt(values.defaultExpiryDays),
+    defaultDeviceLimit: toOptionalInt(values.defaultDeviceLimit),
     defaultIpLimit: null,
     defaultSpeedLimitBps: mbpsToBps(values.defaultSpeedLimitMbps),
     defaultResetStrategy: values.defaultResetStrategy,

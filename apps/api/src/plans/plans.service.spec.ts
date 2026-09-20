@@ -88,10 +88,60 @@ describe('plan validation', () => {
         },
       ),
     ).rejects.toMatchObject<Partial<ApiException>>({
-      code: 'NOT_FOUND',
+      code: 'PLAN_INBOUND_NOT_FOUND',
       details: { resource: 'inbound', missingIds: [missingId] },
     });
     expect(planCreate).not.toHaveBeenCalled();
     expect(audit.recordFailureSafely).toHaveBeenCalled();
+  });
+
+  it('maps Prisma P2002 on name to PLAN_NAME_CONFLICT', async () => {
+    const prisma = {
+      $transaction: jest.fn(() =>
+        Promise.reject(
+          Object.assign(new Error('Unique constraint'), {
+            code: 'P2002',
+            meta: { target: ['name'] },
+          }),
+        ),
+      ),
+    };
+    const audit = {
+      record: jest.fn(),
+      recordFailureSafely: jest.fn().mockResolvedValue(undefined),
+    };
+    const core = { recordPending: jest.fn() };
+    const service = new PlansService(
+      prisma as unknown as PrismaService,
+      audit as unknown as AuditService,
+      core,
+      {
+        planInboundIds: jest.fn(),
+        syncUserToInboundIds: jest.fn(),
+        syncAllUsersOnPlan: jest.fn(),
+      } as never,
+    );
+
+    await expect(
+      service.create(
+        { name: 'тест', inboundIds: [] },
+        {
+          id: 'a0f6395d-0739-473d-b0e5-3f9bdc69a173',
+          username: 'admin',
+          role: 'ADMIN',
+          locale: 'en',
+          active: true,
+          totpEnabled: false,
+          lastLoginAt: null,
+        },
+        {
+          requestId: '01ae5a83-68fc-4376-94e9-4a8abfa2aa4e',
+          ipAddress: '127.0.0.1',
+          userAgent: 'jest',
+        },
+      ),
+    ).rejects.toMatchObject<Partial<ApiException>>({
+      code: 'PLAN_NAME_CONFLICT',
+    });
   });
 });

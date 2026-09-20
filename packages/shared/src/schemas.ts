@@ -2917,6 +2917,11 @@ export const errorEnvelopeSchema = z
   .object({
     error: z.object({
       code: z.string(),
+      id: z
+        .string()
+        .regex(/^OVN-\d{4}$/)
+        .optional(),
+      docsUrl: z.string().url().optional(),
       message: z.string(),
       messageRu: z.string(),
       details: z.unknown().optional(),

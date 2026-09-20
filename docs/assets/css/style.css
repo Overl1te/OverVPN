@@ -692,6 +692,30 @@ body.sidebar-open .sidebar-overlay {
   background: #dc2626;
 }
 
+.error-kicker {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.error-kicker a {
+  color: var(--text-muted);
+}
+
+.error-id {
+  font-size: 1.15em;
+}
+
+.error-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.error-meta {
+  color: var(--text-muted);
+  margin: 0 0 1.5rem;
+}
+
 .toc {
   position: sticky;
   top: calc(var(--header-height) + 1rem);

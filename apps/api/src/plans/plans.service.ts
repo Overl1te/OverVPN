@@ -106,7 +106,8 @@ export class PlansService {
   ): Promise<PlanResult> {
     try {
       const id = await this.prisma.$transaction(async (tx) => {
-        await this.validateInbounds(tx, input.inboundIds);
+        const inboundIds = input.inboundIds ?? [];
+        await this.validateInbounds(tx, inboundIds);
         const plan = await tx.plan.create({
           data: {
             name: input.name,
@@ -138,7 +139,7 @@ export class PlansService {
             subscriptionShowTrafficLimits:
               input.subscriptionShowTrafficLimits ?? true,
             planInbounds: {
-              create: input.inboundIds.map((inboundId, priority) => ({
+              create: inboundIds.map((inboundId, priority) => ({
                 inboundId,
                 priority,
               })),
@@ -366,7 +367,7 @@ export class PlansService {
           throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND);
         }
         if (before._count.users > 0) {
-          throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+          throw new ApiException('PLAN_HAS_USERS', HttpStatus.CONFLICT, {
             reason: 'plan_has_users',
             userCount: before._count.users,
           });
@@ -421,7 +422,7 @@ export class PlansService {
     });
     if (found.length !== inboundIds.length) {
       const foundIds = new Set(found.map((inbound) => inbound.id));
-      throw new ApiException('NOT_FOUND', HttpStatus.NOT_FOUND, {
+      throw new ApiException('PLAN_INBOUND_NOT_FOUND', HttpStatus.NOT_FOUND, {
         resource: 'inbound',
         missingIds: inboundIds.filter((id) => !foundIds.has(id)),
       });
@@ -481,8 +482,16 @@ export class PlansService {
     if (error && typeof error === 'object') {
       const code = (error as { code?: unknown }).code;
       if (code === 'P2002') {
+        const target = prismaMetaTarget(error);
+        if (target.some((item) => item === 'name' || item.endsWith('_name'))) {
+          return new ApiException('PLAN_NAME_CONFLICT', HttpStatus.CONFLICT, {
+            reason: 'unique_constraint',
+            target,
+          });
+        }
         return new ApiException('CONFLICT', HttpStatus.CONFLICT, {
           reason: 'unique_constraint',
+          target,
         });
       }
       if (code === 'P2003') {
@@ -500,4 +509,18 @@ export class PlansService {
     }
     return error instanceof Error ? error.name : 'unknown';
   }
+}
+
+function prismaMetaTarget(error: object): string[] {
+  const meta = (error as { meta?: { target?: unknown } }).meta;
+  if (!meta) {
+    return [];
+  }
+  if (Array.isArray(meta.target)) {
+    return meta.target.map((item) => String(item));
+  }
+  if (typeof meta.target === 'string') {
+    return [meta.target];
+  }
+  return [];
 }

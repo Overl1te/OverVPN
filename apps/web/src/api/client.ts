@@ -1,9 +1,17 @@
+import {
+  ERROR_CATALOG,
+  errorCatalogEntry,
+  errorDocsUrl,
+  type ErrorCode,
+} from '@overvpn/shared/constants';
 import { errorEnvelopeSchema } from '@overvpn/shared/schemas';
 import { SUPPORT_MANIFEST } from '@overvpn/shared/support-integrity';
 import { getPanelSupportProof, isSupportPresent } from '@/components/SupportButton';
 
 export class ApiError extends Error {
   readonly code: string;
+  readonly id: string;
+  readonly docsUrl: string;
   readonly messageRu: string;
   readonly requestId: string | null;
   readonly status: number;
@@ -16,10 +24,15 @@ export class ApiError extends Error {
     requestId: string | null;
     status: number;
     details?: unknown;
+    id?: string;
+    docsUrl?: string;
   }) {
     super(options.message);
     this.name = 'ApiError';
     this.code = options.code;
+    const catalog = errorCatalogEntry(options.code);
+    this.id = options.id ?? catalog.id;
+    this.docsUrl = options.docsUrl ?? errorDocsUrl(this.id);
     this.messageRu = options.messageRu;
     this.requestId = options.requestId;
     this.status = options.status;
@@ -29,6 +42,71 @@ export class ApiError extends Error {
   localized(locale: string): string {
     return locale.startsWith('ru') ? this.messageRu || this.message : this.message;
   }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'ApiError' &&
+      typeof (error as { code?: unknown }).code === 'string')
+  );
+}
+
+export function apiErrorFromCatalog(
+  code: ErrorCode,
+  options: {
+    status: number;
+    requestId?: string | null;
+    details?: unknown;
+    message?: string;
+    messageRu?: string;
+  },
+): ApiError {
+  const entry = ERROR_CATALOG[code];
+  return new ApiError({
+    code,
+    id: entry.id,
+    docsUrl: errorDocsUrl(entry.id),
+    message: options.message ?? entry.title.en,
+    messageRu: options.messageRu ?? entry.title.ru,
+    requestId: options.requestId ?? null,
+    status: options.status,
+    details: options.details,
+  });
+}
+
+export function normalizeApiError(error: unknown): ApiError {
+  if (isApiError(error)) {
+    if (error instanceof ApiError) {
+      return error;
+    }
+    const like = error as ApiError;
+    return new ApiError({
+      code: like.code,
+      message: like.message,
+      messageRu: like.messageRu,
+      requestId: like.requestId ?? null,
+      status: typeof like.status === 'number' ? like.status : 0,
+      details: like.details,
+      id: like.id,
+      docsUrl: like.docsUrl,
+    });
+  }
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    throw error;
+  }
+  if (error instanceof Error && error.message === 'SUPPORT_INTEGRITY_FAILED') {
+    return apiErrorFromCatalog('SUPPORT_INTEGRITY_FAILED', { status: 503 });
+  }
+  if (error instanceof TypeError) {
+    return apiErrorFromCatalog('NETWORK_ERROR', { status: 0, details: error.message });
+  }
+  return apiErrorFromCatalog('UNKNOWN_ERROR', {
+    status: 0,
+    details: error instanceof Error ? error.message : error,
+  });
 }
 
 type TokenAccessor = {
@@ -73,12 +151,10 @@ async function parseError(response: Response): Promise<ApiError> {
   try {
     payload = await response.json();
   } catch {
-    return new ApiError({
-      code: 'INTERNAL_ERROR',
-      message: response.statusText || 'Request failed',
-      messageRu: 'Ошибка запроса',
-      requestId: requestIdHeader,
+    return apiErrorFromCatalog('UNEXPECTED_ERROR_RESPONSE', {
       status: response.status,
+      requestId: requestIdHeader,
+      details: response.statusText,
     });
   }
 
@@ -91,20 +167,27 @@ async function parseError(response: Response): Promise<ApiError> {
       requestId: parsed.data.requestId || requestIdHeader,
       status: response.status,
       details: parsed.data.error.details,
+      id: parsed.data.error.id,
+      docsUrl: parsed.data.error.docsUrl,
     });
   }
 
-  return new ApiError({
-    code: 'INTERNAL_ERROR',
-    message: 'Unexpected error response',
-    messageRu: 'Неожиданный ответ об ошибке',
-    requestId: requestIdHeader,
+  return apiErrorFromCatalog('UNEXPECTED_ERROR_RESPONSE', {
     status: response.status,
+    requestId: requestIdHeader,
     details: payload,
   });
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  try {
+    return await apiRequestInner<T>(path, options);
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+async function apiRequestInner<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, query, auth = true, signal, skipRefresh = false } = options;
   const upperMethod = method.toUpperCase();
   const isMutation = upperMethod !== 'GET' && upperMethod !== 'HEAD' && upperMethod !== 'OPTIONS';
@@ -121,13 +204,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
   if (auth && isMutation) {
     if (!isSupportPresent()) {
-      throw new ApiError({
-        code: 'SUPPORT_INTEGRITY_FAILED',
-        message: 'Author support attribution is missing or was tampered with',
-        messageRu: 'Атрибуция поддержки автора отсутствует или была изменена',
-        requestId: null,
-        status: 503,
-      });
+      throw apiErrorFromCatalog('SUPPORT_INTEGRITY_FAILED', { status: 503 });
     }
     headers.set(SUPPORT_MANIFEST.headerName, await getPanelSupportProof());
   }
@@ -143,7 +220,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (response.status === 401 && auth && !skipRefresh && tokenAccessor) {
     const refreshed = await tokenAccessor.refreshAccessToken();
     if (refreshed) {
-      return apiRequest<T>(path, { ...options, skipRefresh: true });
+      return apiRequestInner<T>(path, { ...options, skipRefresh: true });
     }
     tokenAccessor.clearSession();
   }
@@ -164,10 +241,25 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!text) {
     return undefined as T;
   }
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw apiErrorFromCatalog('UNEXPECTED_ERROR_RESPONSE', { status: response.status });
+  }
 }
 
 export async function apiDownload(
+  path: string,
+  options: Omit<RequestOptions, 'body'> = {},
+): Promise<{ blob: Blob; filename: string | null }> {
+  try {
+    return await apiDownloadInner(path, options);
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+async function apiDownloadInner(
   path: string,
   options: Omit<RequestOptions, 'body'> = {},
 ): Promise<{ blob: Blob; filename: string | null }> {
@@ -190,7 +282,7 @@ export async function apiDownload(
   if (response.status === 401 && auth && !skipRefresh && tokenAccessor) {
     const refreshed = await tokenAccessor.refreshAccessToken();
     if (refreshed) {
-      return apiDownload(path, { ...options, skipRefresh: true });
+      return apiDownloadInner(path, { ...options, skipRefresh: true });
     }
     tokenAccessor.clearSession();
   }
