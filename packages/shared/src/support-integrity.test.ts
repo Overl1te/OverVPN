@@ -29,4 +29,29 @@ describe('support integrity', () => {
     assert.equal(await isValidSupportProof(await computeSupportProof(day - 1)), true);
     assert.equal(await isValidSupportProof('0'.repeat(64)), false);
   });
+
+  it('computes the same proof when Web Crypto subtle is missing', async () => {
+    const cryptoObj = globalThis.crypto as Crypto & { subtle?: SubtleCrypto };
+    const original = cryptoObj.subtle;
+    Object.defineProperty(cryptoObj, 'subtle', {
+      configurable: true,
+      value: undefined,
+    });
+    try {
+      const day = 20_000;
+      const proof = await computeSupportProof(day);
+      const material = [
+        supportCanonicalPayload(),
+        SUPPORT_FINGERPRINT,
+        SUPPORT_SEAL,
+        String(day),
+      ].join('#');
+      assert.equal(proof, createHash('sha256').update(material).digest('hex'));
+    } finally {
+      Object.defineProperty(cryptoObj, 'subtle', {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
 });

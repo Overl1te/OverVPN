@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from './constants.js';
+import { sha256Hex } from './sha256-hex.js';
 import { SUPPORT_SEAL } from './support-seal.js';
 
 /**
@@ -33,14 +34,7 @@ export function supportSealPayload(): string {
   return `seal|${supportCanonicalPayload()}|${SUPPORT_FINGERPRINT}`;
 }
 
-function bytesToHex(buffer: ArrayBuffer): string {
-  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-export async function sha256Hex(input: string): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return bytesToHex(digest);
-}
+export { sha256Hex } from './sha256-hex.js';
 
 export async function verifySupportFingerprint(): Promise<boolean> {
   const fingerprint = await sha256Hex(supportCanonicalPayload());

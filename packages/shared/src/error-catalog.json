@@ -306,12 +306,12 @@
       "ru": "Панель не смогла связаться с API"
     },
     "cause": {
-      "en": "The browser request failed before a JSON error envelope arrived (API down, proxy 502, mixed content, or offline).",
-      "ru": "Запрос браузера оборвался до JSON-конверта ошибки: API лежит, прокси отдал 502, mixed content или нет сети."
+      "en": "The browser request failed before a JSON error envelope arrived (API down, proxy 502, mixed content, or offline). GET health/list succeeding while writes fail means the API is up — the mutation never left the browser.",
+      "ru": "Запрос браузера оборвался до JSON-конверта ошибки: API лежит, прокси отдал 502, mixed content или нет сети. Если GET health/списки живут, а запись нет — API живой, мутация не ушла из браузера."
     },
     "fix": {
-      "en": "Run `overvpn status` and `overvpn logs api`. Confirm the panel is served over the same origin as `/api`. Retry after the API is healthy.",
-      "ru": "Выполните `overvpn status` и `overvpn logs api`. Панель должна открываться с того же origin, что и `/api`. Повторите, когда API снова живой."
+      "en": "Run `overvpn status` and `overvpn logs api`. Confirm the panel is served over the same origin as `/api`. If writes fail on HTTP IP-only panel, update OverVPN so support proofs work without Web Crypto. Retry after the API is healthy.",
+      "ru": "Выполните `overvpn status` и `overvpn logs api`. Панель должна открываться с того же origin, что и `/api`. Если запись ломается на HTTP по IP — обновите OverVPN (proof без Web Crypto). Повторите, когда API снова живой."
     }
   },
   "UNKNOWN_ERROR": {

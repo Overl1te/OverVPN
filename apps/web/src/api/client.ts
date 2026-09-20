@@ -101,7 +101,16 @@ export function normalizeApiError(error: unknown): ApiError {
     return apiErrorFromCatalog('SUPPORT_INTEGRITY_FAILED', { status: 503 });
   }
   if (error instanceof TypeError) {
-    return apiErrorFromCatalog('NETWORK_ERROR', { status: 0, details: error.message });
+    const message = error.message.toLowerCase();
+    const isFetchFailure =
+      message === 'failed to fetch' ||
+      message.includes('networkerror') ||
+      message.includes('load failed') ||
+      message.includes('network request failed');
+    if (isFetchFailure) {
+      return apiErrorFromCatalog('NETWORK_ERROR', { status: 0, details: error.message });
+    }
+    return apiErrorFromCatalog('UNKNOWN_ERROR', { status: 0, details: error.message });
   }
   return apiErrorFromCatalog('UNKNOWN_ERROR', {
     status: 0,
@@ -206,7 +215,17 @@ async function apiRequestInner<T>(path: string, options: RequestOptions = {}): P
     if (!isSupportPresent()) {
       throw apiErrorFromCatalog('SUPPORT_INTEGRITY_FAILED', { status: 503 });
     }
-    headers.set(SUPPORT_MANIFEST.headerName, await getPanelSupportProof());
+    try {
+      headers.set(SUPPORT_MANIFEST.headerName, await getPanelSupportProof());
+    } catch (error) {
+      if (error instanceof Error && error.message === 'SUPPORT_INTEGRITY_FAILED') {
+        throw error;
+      }
+      throw apiErrorFromCatalog('SUPPORT_INTEGRITY_FAILED', {
+        status: 503,
+        details: error instanceof Error ? error.message : error,
+      });
+    }
   }
 
   const response = await fetch(buildUrl(path, query), {
