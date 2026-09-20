@@ -3217,6 +3217,7 @@ sync_domains_from_install_conf() {
     set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
     set_env_var "VPN_PUBLIC_HOST" "$vpn_host"
     set_env_var "AUTH_COOKIE_SECURE" "true"
+    set_env_var "ALLOW_INSECURE_HTTP" "false"
     set_env_var "WEB_BIND_ADDRESS" "127.0.0.1"
     set_env_var "WEB_PORT" "8080"
     set_env_var "SING_BOX_ACME_HTTP_PORT" "8081"
@@ -3230,6 +3231,7 @@ sync_domains_from_install_conf() {
     set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
     set_env_var "VPN_PUBLIC_HOST" "$ip"
     set_env_var "AUTH_COOKIE_SECURE" "false"
+    set_env_var "ALLOW_INSECURE_HTTP" "true"
   fi
 
   if [[ -f "$CREDENTIALS_FILE" ]]; then
@@ -3372,6 +3374,7 @@ generate_env() {
     set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
     set_env_var "VPN_PUBLIC_HOST" "${CFG_VPN_HOST}"
     set_env_var "AUTH_COOKIE_SECURE" "true"
+    set_env_var "ALLOW_INSECURE_HTTP" "false"
     set_env_var "WEB_BIND_ADDRESS" "127.0.0.1"
     set_env_var "WEB_PORT" "8080"
     if [[ "$with_nginx" == "true" ]]; then
@@ -3397,6 +3400,7 @@ generate_env() {
     set_env_var "SUB_PUBLIC_BASE_URL" "$sub_url"
     set_env_var "VPN_PUBLIC_HOST" "$ip"
     set_env_var "AUTH_COOKIE_SECURE" "false"
+    set_env_var "ALLOW_INSECURE_HTTP" "true"
     set_env_var "WEB_BIND_ADDRESS" "0.0.0.0"
     set_env_var "WEB_PORT" "$web_port"
     # Do not publish ACME on :80/:443 — those often belong to an existing site.

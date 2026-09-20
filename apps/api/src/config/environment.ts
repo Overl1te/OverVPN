@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { z } from 'zod';
 
 const booleanFromEnvironment = z.preprocess((value: unknown) => {
@@ -69,6 +70,19 @@ const masterKeySchema = z.string().refine((value) => {
 
 const insecureSecretPattern =
   /replace|change[-_ ]?me|development|example|default|secret/i;
+
+function isHttpIpPublicBase(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:') {
+      return false;
+    }
+    const host = url.hostname;
+    return isIP(host) !== 0;
+  } catch {
+    return false;
+  }
+}
 
 const publicBaseUrlSchema = z
   .url()
@@ -144,6 +158,8 @@ export const environmentSchema = z
       .regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/)
       .default('overvpn_refresh'),
     AUTH_COOKIE_SECURE: booleanFromEnvironment.default(true),
+    /** IP-only installs: HTTP panel URL + non-Secure cookies (no TLS on :80/:443). */
+    ALLOW_INSECURE_HTTP: booleanFromEnvironment.default(false),
     AUTH_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('strict'),
     AUTH_COOKIE_DOMAIN: z.preprocess(
       (value) => (value === '' ? undefined : value),
@@ -706,7 +722,11 @@ export const environmentSchema = z
       return;
     }
 
-    if (!value.SUB_PUBLIC_BASE_URL.startsWith('https://')) {
+    const ipOnlyHttp =
+      value.ALLOW_INSECURE_HTTP &&
+      isHttpIpPublicBase(value.SUB_PUBLIC_BASE_URL);
+
+    if (!ipOnlyHttp && !value.SUB_PUBLIC_BASE_URL.startsWith('https://')) {
       context.addIssue({
         code: 'custom',
         path: ['SUB_PUBLIC_BASE_URL'],
@@ -753,7 +773,7 @@ export const environmentSchema = z
       });
     }
 
-    if (!value.AUTH_COOKIE_SECURE) {
+    if (!ipOnlyHttp && !value.AUTH_COOKIE_SECURE) {
       context.addIssue({
         code: 'custom',
         path: ['AUTH_COOKIE_SECURE'],
