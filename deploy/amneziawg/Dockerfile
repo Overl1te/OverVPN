@@ -1,6 +1,7 @@
 # OverVPN AmneziaWG 2.0 runtime: amneziawg-go + awg-quick supervisor.
 
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
+ENV GOTOOLCHAIN=auto
 RUN apk add --no-cache git make gcc musl-dev linux-headers bash
 WORKDIR /src
 RUN git clone --depth 1 https://github.com/amnezia-vpn/amneziawg-go.git .
