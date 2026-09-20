@@ -687,6 +687,9 @@ cli_t() {
       port_standard) printf '%s' "Стандартные порты" ;;
       port_stealth) printf '%s' "Скрытые высокие порты" ;;
       prompt_protocol_port) printf 'Порт %s' "$1" ;;
+      prompt_web_port) printf '%s' "Порт панели (веб-интерфейс)" ;;
+      prompt_web_port_hint) printf '%s' "80/443 не трогаем — их может занимать уже стоящий сайт. Панель будет только на этом порту." ;;
+      web_port_reserved) printf '%s' "80 и 443 лучше оставить текущему сайту. Укажи другой порт панели." ;;
       prompt_default_inbounds) printf '%s' "Создать входящие подключения по умолчанию?" ;;
       prompt_ufw) printf '%s' "Настроить UFW?" ;;
       summary_depth) printf 'Настройка:     %s' "$1" ;;
@@ -694,7 +697,7 @@ cli_t() {
       summary_cores) printf 'Ядра:         %s' "$1" ;;
       summary_ports) printf 'Порты:        %s' "$1" ;;
       summary_defaults) printf 'Default inbounds: %s' "$1" ;;
-      leave_empty_ip) printf 'Режим IP: http://%s:%s (без TLS).' "$1" "$2" ;;
+      leave_empty_ip) printf 'Режим IP: http://%s:%s (без TLS, 80/443 свободны).' "$1" "$2" ;;
       non_interactive_no_domain) printf '%s' "Неинтерактивный режим: установка без домена." ;;
       prompt_base_domain) printf '%s' "Базовый домен (например example.com)" ;;
       mode_ip_only) printf '%s' "Режим: только IP (без TLS)." ;;
@@ -754,8 +757,9 @@ cli_t() {
       lang_opt_en) printf '%s' "English" ;;
       lang_opt_ru) printf '%s' "Русский" ;;
       mode_screen_title) printf '%s' "Режим установки" ;;
-      mode_opt_domain) printf '%s' "С доменом (Nginx + Let's Encrypt TLS)" ;;
-      mode_opt_ip) printf 'Только IP — http://%s:%s (без TLS)' "$1" "$2" ;;
+      mode_ports_hint) printf '%s' "IP-режим не занимает 80/443. Режим с доменом ставит Nginx на 80 и 443." ;;
+      mode_opt_domain) printf '%s' "С доменом (Nginx + Let's Encrypt на 80/443)" ;;
+      mode_opt_ip) printf 'Только IP — http://%s:%s (без TLS, не 80/443)' "$1" "$2" ;;
       hosts_screen_title) printf '%s' "Домены и почта" ;;
       hosts_base_hint) printf '%s' "Базовый домен для лендинга и TLS" ;;
       confirm_screen_title) printf '%s' "Подтверждение" ;;
@@ -932,6 +936,9 @@ cli_t() {
       port_standard) printf '%s' "Standard ports" ;;
       port_stealth) printf '%s' "Stealth high ports" ;;
       prompt_protocol_port) printf '%s port' "$1" ;;
+      prompt_web_port) printf '%s' "Panel web port" ;;
+      prompt_web_port_hint) printf '%s' "Leaves 80/443 for an existing site. The panel listens only on this port." ;;
+      web_port_reserved) printf '%s' "Keep 80 and 443 for the existing site. Choose another panel port." ;;
       prompt_default_inbounds) printf '%s' "Create default inbounds?" ;;
       prompt_ufw) printf '%s' "Configure UFW?" ;;
       summary_depth) printf 'Setup:        %s' "$1" ;;
@@ -939,7 +946,7 @@ cli_t() {
       summary_cores) printf 'Cores:        %s' "$1" ;;
       summary_ports) printf 'Ports:        %s' "$1" ;;
       summary_defaults) printf 'Default inbounds: %s' "$1" ;;
-      leave_empty_ip) printf 'IP mode: http://%s:%s (no TLS).' "$1" "$2" ;;
+      leave_empty_ip) printf 'IP mode: http://%s:%s (no TLS, 80/443 unused).' "$1" "$2" ;;
       non_interactive_no_domain) printf '%s' "Non-interactive mode: installing without domain." ;;
       prompt_base_domain) printf '%s' "Base domain (e.g. example.com)" ;;
       mode_ip_only) printf '%s' "Mode: IP-only (no TLS)." ;;
@@ -999,8 +1006,9 @@ cli_t() {
       lang_opt_en) printf '%s' "English" ;;
       lang_opt_ru) printf '%s' "Русский" ;;
       mode_screen_title) printf '%s' "Install mode" ;;
-      mode_opt_domain) printf '%s' "With domain (Nginx + Let's Encrypt TLS)" ;;
-      mode_opt_ip) printf 'IP-only — http://%s:%s (no TLS)' "$1" "$2" ;;
+      mode_ports_hint) printf '%s' "IP mode does not bind 80/443. Domain mode installs Nginx on 80 and 443." ;;
+      mode_opt_domain) printf '%s' "With domain (Nginx + Let's Encrypt on 80/443)" ;;
+      mode_opt_ip) printf 'IP-only — http://%s:%s (no TLS, not 80/443)' "$1" "$2" ;;
       hosts_screen_title) printf '%s' "Domains and email" ;;
       hosts_base_hint) printf '%s' "Base domain for landing page and TLS" ;;
       confirm_screen_title) printf '%s' "Confirm" ;;
@@ -1410,6 +1418,7 @@ prompt_detailed_ports() {
   else
     CFG_CREATE_DEFAULT_INBOUNDS="false"
   fi
+  prompt_web_port
   if [[ "${CFG_UFW_DECIDED:-false}" != "true" ]]; then
     if ui_confirm y "$(cli_t prompt_ufw)"; then
       CFG_USE_UFW="true"
@@ -1418,6 +1427,33 @@ prompt_detailed_ports() {
     fi
     CFG_UFW_DECIDED="true"
   fi
+}
+
+prompt_web_port() {
+  if [[ "$CFG_MODE" != "ip" ]]; then
+    return
+  fi
+  if [[ "${CFG_WEB_PORT_SKIP:-false}" == "true" ]]; then
+    return
+  fi
+  if [[ "${CFG_WEB_PORT_ASKED:-false}" == "true" ]]; then
+    return
+  fi
+  local value
+  colorized_echo yellow "$(cli_t prompt_web_port_hint)"
+  value="$(ui_prompt "$(cli_t prompt_web_port)" "${CFG_WEB_PORT:-$DEFAULT_WEB_PORT}")"
+  if [[ ! "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 || "$value" -gt 65535 ]]; then
+    colorized_echo red "$(cli_t invalid_port "$value")"
+    prompt_web_port
+    return
+  fi
+  if [[ "$value" == "80" || "$value" == "443" ]]; then
+    colorized_echo red "$(cli_t web_port_reserved)"
+    prompt_web_port
+    return
+  fi
+  CFG_WEB_PORT="$value"
+  CFG_WEB_PORT_ASKED="true"
 }
 
 prompt_detailed_install() {
@@ -1440,13 +1476,14 @@ prompt_install_mode() {
     draw_box_sep "$w"
     draw_box_line " $(cli_t server_ip "$ip")" "$w"
     draw_box_line " $(cli_t answer_all)" "$w"
+    draw_box_line " $(cli_t mode_ports_hint)" "$w"
     draw_box_sep "$w"
     draw_box_empty "$w"
   }
   UI_MENU_HEADER=_prompt_install_mode_header
   ui_select_menu 0 \
     "domain|$(cli_t mode_opt_domain)" \
-    "ip|$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")"
+    "ip|$(cli_t mode_opt_ip "$ip" "${CFG_WEB_PORT:-$DEFAULT_WEB_PORT}")"
   choice="$UI_SELECT_RESULT"
   unset UI_MENU_HEADER
   case "$choice" in
@@ -1582,8 +1619,8 @@ prompt_install_confirm() {
         draw_box_line " DNS:          ok" "$w"
       fi
     else
-      draw_box_line " $(cli_t summary_mode_ip "$DEFAULT_WEB_PORT")" "$w"
-      draw_box_line " $(cli_t leave_empty_ip "$ip" "$DEFAULT_WEB_PORT")" "$w"
+      draw_box_line " $(cli_t summary_mode_ip "${CFG_WEB_PORT:-$DEFAULT_WEB_PORT}")" "$w"
+      draw_box_line " $(cli_t leave_empty_ip "$ip" "${CFG_WEB_PORT:-$DEFAULT_WEB_PORT}")" "$w"
     fi
     draw_box_line " $(cli_t summary_depth "${CFG_INSTALL_DEPTH:-simple}")" "$w"
     draw_box_line " $(cli_t summary_cores "${CFG_ENABLED_CORES:-singbox,xray,mtproxy}")" "$w"
@@ -1725,6 +1762,7 @@ prompt_install_endpoints() {
   CFG_VPN_HOST=""
   CFG_EMAIL=""
   CFG_MODE="ip"
+  CFG_WEB_PORT="${CFG_WEB_PORT:-$DEFAULT_WEB_PORT}"
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="${CFG_MTPROXY_ENABLED:-true}"
@@ -1749,6 +1787,7 @@ prompt_install_endpoints() {
     else
       prompt_install_mtproxy
       sync_simple_protocol_config
+      prompt_web_port
     fi
     prompt_install_local_proxy
     prompt_install_onboarding
@@ -1772,7 +1811,7 @@ prompt_install_endpoints() {
     base="$(ui_prompt "$(cli_t prompt_base_domain)")"
     base="$(printf '%s' "$base" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
     if [[ -z "$base" ]]; then
-      colorized_echo yellow "$(cli_t mode_opt_ip "$ip" "$DEFAULT_WEB_PORT")"
+      colorized_echo yellow "$(cli_t mode_opt_ip "$ip" "${CFG_WEB_PORT:-$DEFAULT_WEB_PORT}")"
       sleep 1
       CFG_MODE="ip"
       if [[ "$CFG_INSTALL_DEPTH" == "detailed" ]]; then
@@ -1780,6 +1819,7 @@ prompt_install_endpoints() {
       else
         prompt_install_mtproxy
         sync_simple_protocol_config
+        prompt_web_port
       fi
       prompt_install_local_proxy
       prompt_install_onboarding
@@ -2478,8 +2518,6 @@ configure_firewall() {
     ufw allow 443/tcp >/dev/null 2>&1 || true
   else
     ufw allow "${web_port}/tcp" >/dev/null 2>&1 || true
-    ufw allow 80/tcp >/dev/null 2>&1 || true
-    ufw allow 443/tcp >/dev/null 2>&1 || true
   fi
 
   if with_proxy_enabled || is_proxy_host; then
@@ -3579,7 +3617,7 @@ cmd_install() {
   local with_nginx="auto" use_ufw="true"
   local flag_base="" flag_panel="" flag_sub="" flag_vpn="" flag_email=""
   local flag_mtproxy="" flag_depth="" flag_protocols="" flag_cores="" flag_ports=""
-  local flag_with_proxy=""
+  local flag_with_proxy="" flag_port=""
   CFG_SKIP_DNS="false"
   CFG_DNS_HANDLED="false"
   CFG_MTPROXY_ENABLED="true"
@@ -3596,7 +3634,7 @@ cmd_install() {
       --subscription) flag_sub="${2:-}"; shift 2 ;;
       --vpn-host) flag_vpn="${2:-}"; shift 2 ;;
       --email) flag_email="${2:-}"; shift 2 ;;
-      --port) web_port="${2:-}"; shift 2 ;;
+      --port) flag_port="${2:-}"; web_port="${2:-}"; shift 2 ;;
       --branch) branch="${2:-}"; shift 2 ;;
       --tag|--version) image_tag="${2:-}"; shift 2 ;;
       --build) do_build="true"; shift ;;
@@ -3635,6 +3673,11 @@ cmd_install() {
   CFG_VPN_HOST=""
   CFG_EMAIL=""
   CFG_MODE="ip"
+  CFG_WEB_PORT="$web_port"
+  if [[ -n "$flag_port" ]]; then
+    CFG_WEB_PORT_SKIP="true"
+    CFG_WEB_PORT_ASKED="true"
+  fi
   CFG_INSTALL_DEPTH="${flag_depth:-simple}"
   initialize_protocol_config
   if [[ -n "$flag_depth" || -n "$flag_protocols" || -n "$flag_cores" || -n "$flag_ports" ]]; then
@@ -3691,6 +3734,7 @@ cmd_install() {
   fi
 
   use_ufw="${CFG_USE_UFW:-$use_ufw}"
+  web_port="${CFG_WEB_PORT:-$web_port}"
 
   if [[ "$with_nginx" == "auto" ]]; then
     if [[ "$CFG_MODE" == "domain" ]]; then
