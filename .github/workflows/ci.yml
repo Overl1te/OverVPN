@@ -17,6 +17,8 @@ env:
   API_IMAGE: ghcr.io/overl1te/overvpn-api
   WEB_IMAGE: ghcr.io/overl1te/overvpn-web
   AGENT_IMAGE: ghcr.io/overl1te/overvpn-agent
+  MTPROXY_IMAGE: ghcr.io/overl1te/overvpn-mtproxy
+  AMNEZIAWG_IMAGE: ghcr.io/overl1te/overvpn-amneziawg
 
 jobs:
   verify:
@@ -102,7 +104,7 @@ jobs:
       - name: Ensure buildx cache dirs
         run: |
           CACHE_ROOT="${HOME}/.cache/overvpn-buildx"
-          mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web" "${CACHE_ROOT}/agent"
+          mkdir -p "${CACHE_ROOT}/api" "${CACHE_ROOT}/web" "${CACHE_ROOT}/agent" "${CACHE_ROOT}/mtproxy" "${CACHE_ROOT}/amneziawg"
           echo "BUILDX_CACHE_ROOT=${CACHE_ROOT}" >> "$GITHUB_ENV"
 
       - name: Remove broken buildx builder
@@ -178,6 +180,32 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      - name: Docker metadata (MTProxy)
+        id: meta-mtproxy
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.MTPROXY_IMAGE }}
+          bake-target: mtproxy
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Docker metadata (AmneziaWG)
+        id: meta-amneziawg
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.AMNEZIAWG_IMAGE }}
+          bake-target: amneziawg
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
       - name: Prefetch Xray release zip
         env:
           XRAY_VERSION: v26.6.27
@@ -216,6 +244,8 @@ jobs:
             ${{ steps.meta-api.outputs.bake-file }}
             ${{ steps.meta-web.outputs.bake-file }}
             ${{ steps.meta-agent.outputs.bake-file }}
+            ${{ steps.meta-mtproxy.outputs.bake-file }}
+            ${{ steps.meta-amneziawg.outputs.bake-file }}
           push: true
 
       - name: Package deploy bundle

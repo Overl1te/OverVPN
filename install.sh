@@ -798,6 +798,11 @@ cli_t() {
       checking_mtproxy_image) printf '%s' "Проверяем, что MTProxy-образ содержит Telemt…" ;;
       mtproxy_image_missing) printf 'Образ %s не содержит Telemt.\nПовторите: sudo overvpn install --build' "$1" ;;
       building_mtproxy_image) printf '%s' "Собираем образ MTProxy (Telemt)…" ;;
+      checking_amneziawg_image) printf '%s' "Проверяем образ AmneziaWG…" ;;
+      amneziawg_image_missing) printf 'Образ %s без AmneziaWG runtime.\nПовторите: sudo overvpn install --build' "$1" ;;
+      building_amneziawg_image) printf '%s' "Собираем образ AmneziaWG…" ;;
+      pulling_core_image) printf 'Скачиваем образ %s…' "$1" ;;
+      pull_failed_building) printf 'В GHCR нет %s — собираем локально…' "$1" ;;
       refreshing_core_config) printf '%s' "Обновляем bootstrap-конфиг VPN-ядра…" ;;
       installing_cli) printf 'Устанавливаем CLI в %s…' "$1" ;;
       cli_installed) printf 'CLI установлен. Команда: %s <command>' "$1" ;;
@@ -1047,6 +1052,11 @@ cli_t() {
       checking_mtproxy_image) printf '%s' "Checking that the MTProxy image includes Telemt..." ;;
       mtproxy_image_missing) printf 'Image %s is missing Telemt.\nRetry with: sudo overvpn install --build' "$1" ;;
       building_mtproxy_image) printf '%s' "Building MTProxy (Telemt) image..." ;;
+      checking_amneziawg_image) printf '%s' "Checking AmneziaWG image..." ;;
+      amneziawg_image_missing) printf 'Image %s is missing AmneziaWG runtime.\nRetry with: sudo overvpn install --build' "$1" ;;
+      building_amneziawg_image) printf '%s' "Building AmneziaWG image..." ;;
+      pulling_core_image) printf 'Pulling image %s...' "$1" ;;
+      pull_failed_building) printf 'GHCR has no %s — building locally...' "$1" ;;
       refreshing_core_config) printf '%s' "Refreshing VPN core bootstrap config..." ;;
       installing_cli) printf 'Installing CLI to %s...' "$1" ;;
       cli_installed) printf 'CLI installed. Use: %s <command>' "$1" ;;
@@ -1988,6 +1998,7 @@ remove_overvpn_images() {
     "${GHCR_WEB_IMAGE}:latest"
     "${GHCR_AGENT_IMAGE}:latest"
     "${GHCR_MTPROXY_IMAGE}:latest"
+    "${GHCR_AMNEZIAWG_IMAGE}:latest"
     "$DEFAULT_POSTGRES_IMAGE"
     "$DEFAULT_REDIS_IMAGE"
     "$BUSYBOX_IMAGE"
@@ -2072,12 +2083,30 @@ assert_mtproxy_image() {
 
 assert_amneziawg_image() {
   local image=$1
-  colorized_echo blue "Checking AmneziaWG image..."
+  colorized_echo blue "$(cli_t checking_amneziawg_image)"
   if ! docker run --rm --entrypoint /bin/sh "$image" -c \
     'test -x /usr/local/bin/amneziawg-go && test -x /usr/local/bin/awg && test -f /opt/overvpn-amneziawg/supervisor.py && command -v python3 >/dev/null'; then
-    colorized_echo red "Image $image is missing AmneziaWG runtime. Retry with: sudo overvpn install --build"
+    colorized_echo red "$(cli_t amneziawg_image_missing "$image")"
     exit 1
   fi
+}
+
+ensure_core_runtime_image() {
+  local service=$1
+  local image=$2
+  local do_build=$3
+  local building_key=$4
+  if [[ "$do_build" == "true" ]]; then
+    colorized_echo blue "$(cli_t "$building_key")"
+    compose build "$service"
+    return
+  fi
+  colorized_echo blue "$(cli_t pulling_core_image "$image")"
+  if docker pull "$image"; then
+    return
+  fi
+  colorized_echo yellow "$(cli_t pull_failed_building "$image")"
+  compose build "$service"
 }
 
 core_enabled() {
@@ -2096,13 +2125,11 @@ core_enabled() {
 compose_up() {
   local do_build=${1:-false}
   if mtproxy_enabled; then
-    colorized_echo blue "$(cli_t building_mtproxy_image)"
-    compose build core-mtproxy
+    ensure_core_runtime_image core-mtproxy "$(mtproxy_image_ref)" "$do_build" building_mtproxy_image
     assert_mtproxy_image "$(mtproxy_image_ref)"
   fi
   if amneziawg_enabled; then
-    colorized_echo blue "Building AmneziaWG image..."
-    compose build core-amneziawg
+    ensure_core_runtime_image core-amneziawg "$(amneziawg_image_ref)" "$do_build" building_amneziawg_image
     assert_amneziawg_image "$(amneziawg_image_ref)"
   fi
 
@@ -2111,10 +2138,7 @@ compose_up() {
     compose up -d --build
   else
     colorized_echo blue "$(cli_t pulling_images)"
-    local profiles
-    profiles="$(get_env_var COMPOSE_PROFILES "$ENV_FILE" 2>/dev/null || true)"
-    profiles="$(printf '%s' "$profiles" | sed -E 's/(^|,)(mtproxy|amneziawg)(,|$)/\1/g; s/,,+/,/g; s/^,//; s/,$//')"
-    COMPOSE_PROFILES="$profiles" compose pull
+    compose pull
     if core_enabled xray; then
       assert_api_image_has_xray "$(api_image_ref)"
     fi
@@ -3048,6 +3072,7 @@ fetch_deploy_bundle() {
     "$APP_DIR/deploy/sing-box/certs" \
     "$APP_DIR/deploy/xray/certs" \
     "$APP_DIR/deploy/mtproxy" \
+    "$APP_DIR/deploy/amneziawg" \
     "$APP_DIR/deploy/proxy" \
     "$APP_DIR/deploy/agent" \
     "$APP_DIR/deploy/logrotate" \
@@ -3078,6 +3103,11 @@ fetch_deploy_bundle() {
     "deploy/mtproxy/entrypoint.sh"
     "deploy/mtproxy/supervisor.py"
     "deploy/mtproxy/Dockerfile"
+    "deploy/amneziawg/bootstrap-config.sh"
+    "deploy/amneziawg/config.json"
+    "deploy/amneziawg/entrypoint.sh"
+    "deploy/amneziawg/supervisor.py"
+    "deploy/amneziawg/Dockerfile"
     "deploy/proxy/nginx.reverse-proxy.conf.example"
   )
 
@@ -3093,7 +3123,9 @@ fetch_deploy_bundle() {
     "${APP_DIR}/deploy/xray/entrypoint.sh" \
     "${APP_DIR}/deploy/xray/bootstrap-config.sh" \
     "${APP_DIR}/deploy/mtproxy/entrypoint.sh" \
-    "${APP_DIR}/deploy/mtproxy/bootstrap-config.sh"
+    "${APP_DIR}/deploy/mtproxy/bootstrap-config.sh" \
+    "${APP_DIR}/deploy/amneziawg/entrypoint.sh" \
+    "${APP_DIR}/deploy/amneziawg/bootstrap-config.sh"
 
   fetch_raw_file "$branch" "install.sh" "${APP_DIR}/install.sh"
   chmod 755 "${APP_DIR}/install.sh"

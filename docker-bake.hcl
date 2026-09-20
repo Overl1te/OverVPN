@@ -8,7 +8,7 @@ variable "CACHE_ROOT" {
 }
 
 group "default" {
-  targets = ["api", "web", "agent"]
+  targets = ["api", "web", "agent", "mtproxy", "amneziawg"]
 }
 
 target "docker-metadata-action" {}
@@ -41,4 +41,20 @@ target "agent" {
   }
   cache-from = ["type=local,src=${CACHE_ROOT}/agent"]
   cache-to   = ["type=local,dest=${CACHE_ROOT}/agent,mode=max"]
+}
+
+target "mtproxy" {
+  inherits = ["docker-metadata-action"]
+  context    = "deploy/mtproxy"
+  dockerfile = "Dockerfile"
+  cache-from = ["type=local,src=${CACHE_ROOT}/mtproxy"]
+  cache-to   = ["type=local,dest=${CACHE_ROOT}/mtproxy,mode=max"]
+}
+
+target "amneziawg" {
+  inherits = ["docker-metadata-action"]
+  context    = "deploy/amneziawg"
+  dockerfile = "Dockerfile"
+  cache-from = ["type=local,src=${CACHE_ROOT}/amneziawg"]
+  cache-to   = ["type=local,dest=${CACHE_ROOT}/amneziawg,mode=max"]
 }
