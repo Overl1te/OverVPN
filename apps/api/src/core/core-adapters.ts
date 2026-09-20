@@ -449,6 +449,42 @@ export class SharedVolumeMtproxyReloadHandshakeAdapter extends MtproxyReloadHand
   }
 }
 
+export abstract class AmneziawgReloadHandshakeAdapter {
+  abstract requestReload(hash: string): Promise<ReloadAcknowledgement>;
+}
+
+@Injectable()
+export class SharedVolumeAmneziawgReloadHandshakeAdapter extends AmneziawgReloadHandshakeAdapter {
+  private readonly requestPath: string;
+  private readonly acknowledgementPath: string;
+  private readonly timeoutMs: number;
+
+  constructor(
+    config: ConfigService<AppEnvironment, true>,
+    private readonly fileSystem: CoreFileSystem,
+  ) {
+    super();
+    this.requestPath = config.get('AMNEZIAWG_RELOAD_REQUEST_PATH', {
+      infer: true,
+    });
+    this.acknowledgementPath = config.get('AMNEZIAWG_RELOAD_ACK_PATH', {
+      infer: true,
+    });
+    this.timeoutMs = config.get('AMNEZIAWG_RELOAD_TIMEOUT_MS', { infer: true });
+  }
+
+  async requestReload(hash: string): Promise<ReloadAcknowledgement> {
+    return requestSharedVolumeReload({
+      label: 'AmneziaWG',
+      hash,
+      requestPath: this.requestPath,
+      acknowledgementPath: this.acknowledgementPath,
+      timeoutMs: this.timeoutMs,
+      fileSystem: this.fileSystem,
+    });
+  }
+}
+
 async function requestSharedVolumeReload(input: {
   label: string;
   hash: string;

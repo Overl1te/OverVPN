@@ -7,8 +7,10 @@ import type { AppEnvironment } from '../config/environment';
 import { coreStateId } from '../core/core-ids';
 import type { AssignmentCredential } from '../core/core-provider';
 import type { Inbound, Prisma } from '../generated/prisma/client';
+import { createAmneziawgCredential } from './amneziawg-domain';
 import { createCredential } from './hysteria2-domain';
 import {
+  parseAmneziawgPublicConfig,
   parseShadowsocksPublicConfig,
   parseWireguardPublicConfig,
 } from './inbound-storage';
@@ -34,6 +36,7 @@ export class PlanAssignmentSyncService {
       SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
       XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
       MTPROXY: config.get('MTPROXY_CONFIG_PATH', { infer: true }),
+      AMNEZIAWG: config.get('AMNEZIAWG_CONFIG_PATH', { infer: true }),
     };
   }
 
@@ -161,6 +164,11 @@ export class PlanAssignmentSyncService {
     ) {
       return createWireguardCredential(
         parseWireguardPublicConfig(inbound.config).address,
+      );
+    }
+    if (inbound.protocol === 'AMNEZIAWG') {
+      return createAmneziawgCredential(
+        parseAmneziawgPublicConfig(inbound.config).address,
       );
     }
     if (inbound.protocol === 'MTPROXY') {

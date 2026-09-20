@@ -54,6 +54,7 @@ const XRAY_PROTOCOLS: InboundProtocol[] = [
   'WIREGUARD_XRAY',
 ];
 const MTPROXY_PROTOCOLS: InboundProtocol[] = ['MTPROXY'];
+const AMNEZIAWG_PROTOCOLS: InboundProtocol[] = ['AMNEZIAWG'];
 const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>([
   'VLESS_XHTTP_TLS',
   'VLESS_GRPC_TLS',
@@ -487,7 +488,11 @@ export function sanitizeInboundForm(
     return { ...values, settings: settings as InboundEditorForm['settings'] };
   }
 
-  if (values.protocol === 'WIREGUARD' || values.protocol === 'WIREGUARD_XRAY') {
+  if (
+    values.protocol === 'WIREGUARD' ||
+    values.protocol === 'WIREGUARD_XRAY' ||
+    values.protocol === 'AMNEZIAWG'
+  ) {
     const preset = buildDefaultInboundSettings(values.protocol, context, overrides);
     const settings = overlayPresetKeys(preset as Record<string, unknown>, dirty, [
       'privateKey',
@@ -848,6 +853,73 @@ function WireguardFields() {
   );
 }
 
+function AmneziawgFields({ detailed }: { detailed: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <WireguardFields />
+      {detailed ? (
+        <>
+          <Space size="large" wrap>
+            <Form.Item name={['settings', 'jc']} label={t('inbounds.amneziawgJc')}>
+              <InputNumber min={1} max={128} style={{ width: 140 }} />
+            </Form.Item>
+            <Form.Item name={['settings', 'jmin']} label={t('inbounds.amneziawgJmin')}>
+              <InputNumber min={1} max={1280} style={{ width: 140 }} />
+            </Form.Item>
+            <Form.Item name={['settings', 'jmax']} label={t('inbounds.amneziawgJmax')}>
+              <InputNumber min={1} max={1280} style={{ width: 140 }} />
+            </Form.Item>
+          </Space>
+          <Space size="large" wrap>
+            <Form.Item name={['settings', 's1']} label={t('inbounds.amneziawgS1')}>
+              <InputNumber min={0} max={150} style={{ width: 140 }} />
+            </Form.Item>
+            <Form.Item name={['settings', 's2']} label={t('inbounds.amneziawgS2')}>
+              <InputNumber min={0} max={150} style={{ width: 140 }} />
+            </Form.Item>
+            <Form.Item name={['settings', 's3']} label={t('inbounds.amneziawgS3')}>
+              <InputNumber min={0} max={150} style={{ width: 140 }} />
+            </Form.Item>
+            <Form.Item name={['settings', 's4']} label={t('inbounds.amneziawgS4')}>
+              <InputNumber min={0} max={150} style={{ width: 140 }} />
+            </Form.Item>
+          </Space>
+          <Space size="large" wrap>
+            <Form.Item name={['settings', 'h1']} label={t('inbounds.amneziawgH1')}>
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item name={['settings', 'h2']} label={t('inbounds.amneziawgH2')}>
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item name={['settings', 'h3']} label={t('inbounds.amneziawgH3')}>
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item name={['settings', 'h4']} label={t('inbounds.amneziawgH4')}>
+              <Input autoComplete="off" />
+            </Form.Item>
+          </Space>
+          <Form.Item name={['settings', 'i1']} label={t('inbounds.amneziawgI1')}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name={['settings', 'i2']} label={t('inbounds.amneziawgI2')}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name={['settings', 'i3']} label={t('inbounds.amneziawgI3')}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name={['settings', 'i4']} label={t('inbounds.amneziawgI4')}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name={['settings', 'i5']} label={t('inbounds.amneziawgI5')}>
+            <Input autoComplete="off" />
+          </Form.Item>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function VlessXhttpTlsFields({ detailed }: { detailed: boolean }) {
   const { t } = useTranslation();
 
@@ -1033,6 +1105,8 @@ function ProtocolFields({
     case 'WIREGUARD':
     case 'WIREGUARD_XRAY':
       return <WireguardFields />;
+    case 'AMNEZIAWG':
+      return <AmneziawgFields detailed={detailed} />;
     case 'MTPROXY':
       return <MtproxyFields />;
     default:
@@ -1123,6 +1197,7 @@ export function InboundEditor({
       xrayTrojanPort: readOnly.xrayTrojanPort,
       xraySsPort: readOnly.xraySsPort,
       xrayWgPort: readOnly.xrayWgPort,
+      amneziawgPort: readOnly.amneziawgPort,
       mtproxyPortMin: readOnly.mtproxyPortMin,
       mtproxyPortMax: readOnly.mtproxyPortMax,
       tlsCertificatePath: readOnly.tlsCertificatePath,
@@ -1155,6 +1230,7 @@ export function InboundEditor({
       SING_BOX: settingsQuery.data?.readOnly.singBoxEnabled ?? true,
       XRAY: settingsQuery.data?.readOnly.xrayEnabled ?? true,
       MTPROXY: settingsQuery.data?.readOnly.mtproxyEnabled ?? true,
+      AMNEZIAWG: settingsQuery.data?.readOnly.amneziawgEnabled ?? true,
     }),
     [settingsQuery.data],
   );
@@ -1173,6 +1249,11 @@ export function InboundEditor({
     }
     if (engineEnabled.MTPROXY) {
       for (const value of MTPROXY_PROTOCOLS) {
+        panelAllowed.add(value);
+      }
+    }
+    if (engineEnabled.AMNEZIAWG) {
+      for (const value of AMNEZIAWG_PROTOCOLS) {
         panelAllowed.add(value);
       }
     }
@@ -1207,7 +1288,7 @@ export function InboundEditor({
     }> = [];
 
     const pushGroup = (
-      engineKey: 'SING_BOX' | 'XRAY' | 'MTPROXY',
+      engineKey: 'SING_BOX' | 'XRAY' | 'MTPROXY' | 'AMNEZIAWG',
       groupLabel: string,
       protocols: InboundProtocol[],
     ) => {
@@ -1233,6 +1314,7 @@ export function InboundEditor({
     pushGroup('SING_BOX', t('inbounds.engineGroupSingBox'), SING_BOX_PROTOCOLS);
     pushGroup('XRAY', t('inbounds.engineGroupXray'), XRAY_PROTOCOLS);
     pushGroup('MTPROXY', t('inbounds.engineGroupMtproxy'), MTPROXY_PROTOCOLS);
+    pushGroup('AMNEZIAWG', t('inbounds.engineGroupAmneziawg'), AMNEZIAWG_PROTOCOLS);
     return groups;
   }, [allowedProtocols, engineEnabled, t]);
 
@@ -1804,7 +1886,8 @@ export function InboundEditor({
           protocol === 'SHADOWSOCKS' ||
           protocol === 'SHADOWSOCKS_XRAY' ||
           protocol === 'WIREGUARD' ||
-          protocol === 'WIREGUARD_XRAY' ? (
+          protocol === 'WIREGUARD_XRAY' ||
+          protocol === 'AMNEZIAWG' ? (
             <>
               <Typography.Title level={5}>{t('inbounds.sectionProtocol')}</Typography.Title>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>

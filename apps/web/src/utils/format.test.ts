@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import {
+  buildAmneziawgSubscriptionUrl,
   buildSubscriptionClientLinks,
   buildSubscriptionUrl,
   formatBytes,
@@ -86,6 +87,15 @@ describe('buildSubscriptionUrl', () => {
     assert.equal(
       buildSubscriptionUrl('abc', 'https://sub.example.com'),
       'https://sub.example.com/api/sub/abc',
+    );
+  });
+});
+
+describe('buildAmneziawgSubscriptionUrl', () => {
+  it('appends /amneziawg to the public subscription URL', () => {
+    assert.equal(
+      buildAmneziawgSubscriptionUrl('tok', 'https://sub.example.com'),
+      'https://sub.example.com/api/sub/tok/amneziawg',
     );
   });
 });

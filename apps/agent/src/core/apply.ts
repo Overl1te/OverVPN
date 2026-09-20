@@ -11,6 +11,7 @@ const ENGINE_LABELS: Record<CoreEngine, string> = {
   SING_BOX: 'sing-box',
   XRAY: 'Xray',
   MTPROXY: 'MTProxy',
+  AMNEZIAWG: 'AmneziaWG',
 };
 
 export type ApplyServiceOptions = {

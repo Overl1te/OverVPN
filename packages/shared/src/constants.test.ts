@@ -4,6 +4,8 @@ import {
   CORE_ENGINES,
   INBOUND_PROTOCOLS,
   PROTOCOL_ENGINE_MAP,
+  buildAmneziawgSubscriptionPublicUrl,
+  buildSubscriptionPublicUrl,
   type CoreEngine,
   type InboundProtocol,
 } from './constants.ts';
@@ -31,8 +33,22 @@ describe('PROTOCOL_ENGINE_MAP', () => {
       SHADOWSOCKS_XRAY: 'XRAY',
       WIREGUARD_XRAY: 'XRAY',
       MTPROXY: 'MTPROXY',
+      AMNEZIAWG: 'AMNEZIAWG',
     } as const satisfies Record<InboundProtocol, CoreEngine>;
 
     assert.deepEqual(PROTOCOL_ENGINE_MAP, expected);
+  });
+});
+
+describe('buildAmneziawgSubscriptionPublicUrl', () => {
+  it('nests /amneziawg under the public subscription URL', () => {
+    assert.equal(
+      buildAmneziawgSubscriptionPublicUrl('https://sub.example.com', 'tok'),
+      'https://sub.example.com/api/sub/tok/amneziawg',
+    );
+    assert.equal(
+      buildSubscriptionPublicUrl('https://sub.example.com', 'tok'),
+      'https://sub.example.com/api/sub/tok',
+    );
   });
 });

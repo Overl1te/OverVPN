@@ -49,6 +49,7 @@ import { MutateOnly } from '@/components/MutateOnly';
 import { useAuth } from '@/auth/AuthContext';
 import { useApiErrorHandler } from '@/hooks/useApiError';
 import {
+  buildAmneziawgSubscriptionUrl,
   buildSubscriptionClientLinks,
   buildSubscriptionUrl,
   formatBytes,
@@ -71,6 +72,7 @@ export function UserDetailPage() {
   const onError = useApiErrorHandler();
   const onFormError = useApiErrorHandler(form);
   const [qrOpen, setQrOpen] = useState(false);
+  const [awgQrOpen, setAwgQrOpen] = useState(false);
   const [mtproxyQr, setMtproxyQr] = useState<string | null>(null);
   const [usageRange, setUsageRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(29, 'day').startOf('day'),
@@ -225,6 +227,8 @@ export function UserDetailPage() {
   const user = userQuery.data;
   const subBaseUrl = settingsQuery.data?.subPublicBaseUrl;
   const subUrl = user && subBaseUrl ? buildSubscriptionUrl(user.subToken, subBaseUrl) : '';
+  const amneziawgUrl =
+    user && subBaseUrl ? buildAmneziawgSubscriptionUrl(user.subToken, subBaseUrl) : '';
   const clientLinks = useMemo(() => (subUrl ? buildSubscriptionClientLinks(subUrl) : []), [subUrl]);
   const formatUrls = useMemo(
     () =>
@@ -374,6 +378,9 @@ export function UserDetailPage() {
                 type="primary"
               />
             ) : null}
+            {amneziawgUrl ? (
+              <CopyButton value={amneziawgUrl} label={t('users.copyAmneziawg')} size="middle" />
+            ) : null}
             <Button
               size="middle"
               icon={<QrcodeOutlined />}
@@ -381,6 +388,14 @@ export function UserDetailPage() {
               onClick={() => setQrOpen(true)}
             >
               {t('app.showQr')}
+            </Button>
+            <Button
+              size="middle"
+              icon={<QrcodeOutlined />}
+              disabled={!amneziawgUrl}
+              onClick={() => setAwgQrOpen(true)}
+            >
+              {t('users.showAmneziawgQr')}
             </Button>
             <MutateOnly>
               <Dropdown
@@ -433,6 +448,22 @@ export function UserDetailPage() {
                 {t('users.subscriptionLoading')}
               </Typography.Paragraph>
             )}
+            {amneziawgUrl ? (
+              <>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('users.amneziawgSubscription')}
+                </Typography.Text>
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                  {t('users.amneziawgSubscriptionHint')}
+                </Typography.Paragraph>
+                <Typography.Paragraph
+                  copyable={{ text: amneziawgUrl }}
+                  style={{ wordBreak: 'break-all', marginBottom: 12, fontSize: 15 }}
+                >
+                  {amneziawgUrl}
+                </Typography.Paragraph>
+              </>
+            ) : null}
 
             {formatUrls || clientLinks.length > 0 ? (
               <Tabs
@@ -887,6 +918,7 @@ export function UserDetailPage() {
       </Row>
 
       <QrModal open={qrOpen} value={subUrl} onClose={() => setQrOpen(false)} />
+      <QrModal open={awgQrOpen} value={amneziawgUrl} onClose={() => setAwgQrOpen(false)} />
       <QrModal
         open={mtproxyQr != null}
         value={mtproxyQr ?? ''}

@@ -278,7 +278,10 @@ function asEngineList(value: Prisma.JsonValue): CoreEngine[] {
   }
   return value.filter(
     (item): item is CoreEngine =>
-      item === 'SING_BOX' || item === 'XRAY' || item === 'MTPROXY',
+      item === 'SING_BOX' ||
+      item === 'XRAY' ||
+      item === 'MTPROXY' ||
+      item === 'AMNEZIAWG',
   );
 }
 
@@ -290,6 +293,8 @@ function defaultConfigPath(engine: CoreEngine): string {
       return '/var/lib/xray/config.json';
     case 'MTPROXY':
       return '/var/lib/mtproxy/config.json';
+    case 'AMNEZIAWG':
+      return '/var/lib/amneziawg/config.json';
     default: {
       const _exhaustive: never = engine;
       throw new Error(`Unsupported engine: ${String(_exhaustive)}`);

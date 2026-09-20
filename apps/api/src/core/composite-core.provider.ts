@@ -170,6 +170,7 @@ function ensureUniqueConnectionId(
     SING_BOX: 'sing-box:',
     XRAY: 'xray:',
     MTPROXY: 'mtproxy:',
+    AMNEZIAWG: 'amneziawg:',
   };
   const prefix = prefixes[engine];
   if (

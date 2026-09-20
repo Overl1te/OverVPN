@@ -89,6 +89,20 @@ x-api-environment: &api-environment
   MTPROXY_PROCESS_TIMEOUT_MS: ${MTPROXY_PROCESS_TIMEOUT_MS:-15000}
   MTPROXY_RELOAD_TIMEOUT_MS: ${MTPROXY_RELOAD_TIMEOUT_MS:-20000}
   MTPROXY_HEALTH_TIMEOUT_MS: ${MTPROXY_HEALTH_TIMEOUT_MS:-5000}
+  AMNEZIAWG_ENABLED: ${AMNEZIAWG_ENABLED:-true}
+  AMNEZIAWG_CONFIG_PATH: /var/lib/amneziawg/config.json
+  AMNEZIAWG_LAST_KNOWN_GOOD_PATH: /var/lib/amneziawg/config.last-known-good.json
+  AMNEZIAWG_RELOAD_REQUEST_PATH: /var/lib/overvpn/amneziawg-reload/request
+  AMNEZIAWG_RELOAD_ACK_PATH: /var/lib/overvpn/amneziawg-reload/ack
+  AMNEZIAWG_PID_PATH: /var/lib/overvpn/amneziawg-reload/amneziawg.pid
+  AMNEZIAWG_HEARTBEAT_PATH: /var/lib/overvpn/amneziawg-reload/heartbeat
+  AMNEZIAWG_HEARTBEAT_MAX_AGE_SECONDS: ${AMNEZIAWG_HEARTBEAT_MAX_AGE_SECONDS:-15}
+  AMNEZIAWG_RUNTIME_STATS_PATH: /var/lib/overvpn/amneziawg-reload/runtime-stats.json
+  AMNEZIAWG_RUNTIME_STATS_MAX_AGE_SECONDS: ${AMNEZIAWG_RUNTIME_STATS_MAX_AGE_SECONDS:-30}
+  AMNEZIAWG_PORT: ${AMNEZIAWG_PORT:-51822}
+  AMNEZIAWG_PROCESS_TIMEOUT_MS: ${AMNEZIAWG_PROCESS_TIMEOUT_MS:-15000}
+  AMNEZIAWG_RELOAD_TIMEOUT_MS: ${AMNEZIAWG_RELOAD_TIMEOUT_MS:-20000}
+  AMNEZIAWG_HEALTH_TIMEOUT_MS: ${AMNEZIAWG_HEALTH_TIMEOUT_MS:-5000}
   CORE_APPLY_LOCK_TTL_MS: ${CORE_APPLY_LOCK_TTL_MS:-60000}
   WORKERS_ENABLED: ${WORKERS_ENABLED:-true}
   WORKER_LOCK_TTL_MS: ${WORKER_LOCK_TTL_MS:-60000}
@@ -138,11 +152,11 @@ x-service-security: &service-security
 # Profiles:
 #   panel  — postgres / redis / migrate / api / web
 #   proxy  — agent (see docker-compose.proxy.yml) + selected core profiles
-#   singbox | xray | mtproxy — VPN data-plane cores
+#   singbox | xray | mtproxy | amneziawg — VPN data-plane cores
 #   tools  — bootstrap-admin
-# Co-located: COMPOSE_PROFILES=panel,proxy,singbox,xray,mtproxy
+# Co-located: COMPOSE_PROFILES=panel,proxy,singbox,xray,mtproxy,amneziawg
 # Panel-only: COMPOSE_PROFILES=panel
-# Proxy-only: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy
+# Proxy-only: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy,amneziawg
 
 services:
   postgres:
@@ -396,6 +410,72 @@ services:
       - core
     <<: *service-security
 
+  core-amneziawg-config-init:
+    profiles: ['amneziawg']
+    image: busybox:1.37
+    restart: 'no'
+    network_mode: none
+    entrypoint: ['/bin/sh', '/seed/bootstrap-config.sh']
+    volumes:
+      - ./amneziawg/bootstrap-config.sh:/seed/bootstrap-config.sh:ro
+      - ./amneziawg/config.json:/seed/config.json:ro
+      - amneziawg_config:/shared
+      - amneziawg_reload:/reload
+      - amneziawg_state:/state
+      - amneziawg_work:/work
+    <<: *service-security
+
+  core-amneziawg:
+    profiles: ['amneziawg']
+    image: ${AMNEZIAWG_IMAGE:-ghcr.io/overl1te/overvpn-amneziawg:latest}
+    build:
+      context: ./amneziawg
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      AMNEZIAWG_CONFIG_PATH: /var/lib/amneziawg/config.json
+      AMNEZIAWG_RELOAD_REQUEST_PATH: /var/lib/overvpn/amneziawg-reload/request
+      AMNEZIAWG_RELOAD_ACK_PATH: /var/lib/overvpn/amneziawg-reload/ack
+      AMNEZIAWG_PID_PATH: /var/lib/overvpn/amneziawg-reload/amneziawg.pid
+      AMNEZIAWG_HEARTBEAT_PATH: /var/lib/overvpn/amneziawg-reload/heartbeat
+      AMNEZIAWG_RUNTIME_STATS_PATH: /var/lib/overvpn/amneziawg-reload/runtime-stats.json
+      AMNEZIAWG_WORK_DIR: /var/lib/amneziawg-work
+      WG_QUICK_USERSPACE_IMPLEMENTATION: /usr/local/bin/amneziawg-go
+    depends_on:
+      core-amneziawg-config-init:
+        condition: service_completed_successfully
+    volumes:
+      - amneziawg_config:/var/lib/amneziawg:ro
+      - amneziawg_reload:/var/lib/overvpn/amneziawg-reload
+      - amneziawg_state:/var/lib/amneziawg-state
+      - amneziawg_work:/var/lib/amneziawg-work
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - '${AMNEZIAWG_BIND_ADDRESS:-0.0.0.0}:${AMNEZIAWG_PORT:-51822}:${AMNEZIAWG_PORT:-51822}/udp'
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun
+    sysctls:
+      net.ipv4.ip_forward: '1'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'test -r /var/lib/overvpn/amneziawg-reload/amneziawg.pid && kill -0 "$$(cat /var/lib/overvpn/amneziawg-reload/amneziawg.pid)"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 8s
+    networks:
+      - core
+    logging: *default-logging
+
   migrate:
     profiles: ['panel']
     image: ${API_IMAGE:-ghcr.io/overl1te/overvpn-api:latest}
@@ -441,6 +521,9 @@ services:
       core-mtproxy:
         condition: service_healthy
         required: false
+      core-amneziawg:
+        condition: service_healthy
+        required: false
     volumes:
       - /proc:/host/proc:ro
       - singbox_config:/var/lib/sing-box
@@ -454,6 +537,9 @@ services:
       - mtproxy_config:/var/lib/mtproxy
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
+      - amneziawg_config:/var/lib/amneziawg
+      - amneziawg_reload:/var/lib/overvpn/amneziawg-reload
+      - amneziawg_state:/var/lib/amneziawg-state
       - backup_data:/var/lib/overvpn/backups
       - ../logs/api:/var/log/overvpn
     read_only: true
@@ -514,6 +600,10 @@ volumes:
   mtproxy_reload:
   mtproxy_state:
   mtproxy_work:
+  amneziawg_config:
+  amneziawg_reload:
+  amneziawg_state:
+  amneziawg_work:
   backup_data:
 
 networks:

@@ -32,6 +32,7 @@ const info: SubscriptionInfo = {
   colorProfile: '{"buttonColor":"#fff"}',
   showTrafficLimits: true,
   subscriptionUrl: 'https://vpn.example.com/api/sub/tok',
+  amneziawgUrl: 'https://vpn.example.com/api/sub/tok/amneziawg',
   formats: ['sing-box', 'links', 'clash'],
   formatUrls: {
     singBox: 'https://vpn.example.com/api/sub/tok?format=sing-box',

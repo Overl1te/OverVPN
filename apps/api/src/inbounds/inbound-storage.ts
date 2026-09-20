@@ -1,5 +1,7 @@
 import type { InboundProtocol } from '@overvpn/shared/constants';
 import type {
+  AmneziawgInboundPublicConfig,
+  AmneziawgInboundSettings,
   Hysteria2InboundPublicConfig,
   Hysteria2InboundSettings,
   MtproxyInboundPublicConfig,
@@ -22,6 +24,7 @@ import type {
   WireguardInboundSettings,
 } from '@overvpn/shared/schemas';
 import {
+  amneziawgInboundPublicConfigSchema,
   hysteria2InboundPublicConfigSchema,
   mtproxyInboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
@@ -43,6 +46,10 @@ import type {
   VlessXhttpTlsInboundSecrets,
   WireguardInboundSecrets,
 } from '../core/core-provider';
+import {
+  buildAmneziawgStorage,
+  type AmneziawgStorage,
+} from './amneziawg-domain';
 import {
   buildHysteria2Storage,
   type Hysteria2Storage,
@@ -91,6 +98,7 @@ export type InboundStorage =
   | { protocol: 'TROJAN_TLS'; storage: TrojanTlsStorage }
   | { protocol: 'SHADOWSOCKS_XRAY'; storage: ShadowsocksStorage }
   | { protocol: 'WIREGUARD' | 'WIREGUARD_XRAY'; storage: WireguardStorage }
+  | { protocol: 'AMNEZIAWG'; storage: AmneziawgStorage }
   | { protocol: 'MTPROXY'; storage: MtproxyStorage };
 
 export type InboundPublicConfig =
@@ -103,6 +111,7 @@ export type InboundPublicConfig =
   | ShadowsocksInboundPublicConfig
   | TrojanTlsInboundPublicConfig
   | WireguardInboundPublicConfig
+  | AmneziawgInboundPublicConfig
   | MtproxyInboundPublicConfig;
 
 export type InboundSecretBundle =
@@ -126,6 +135,7 @@ export async function buildInboundStorage(
     | ShadowsocksInboundSettings
     | TrojanTlsInboundSettings
     | WireguardInboundSettings
+    | AmneziawgInboundSettings
     | MtproxyInboundSettings,
   previous: InboundStorage | undefined,
   deps: {
@@ -221,6 +231,15 @@ export async function buildInboundStorage(
       ),
     };
   }
+  if (protocol === 'AMNEZIAWG') {
+    return {
+      protocol,
+      storage: buildAmneziawgStorage(
+        settings as AmneziawgInboundSettings,
+        previous?.protocol === 'AMNEZIAWG' ? previous.storage : undefined,
+      ),
+    };
+  }
   if (protocol === 'MTPROXY') {
     return {
       protocol,
@@ -297,6 +316,12 @@ export function parseShadowsocksPublicConfig(
   return shadowsocksInboundPublicConfigSchema.parse(config);
 }
 
+export function parseAmneziawgPublicConfig(
+  config: unknown,
+): AmneziawgInboundPublicConfig {
+  return amneziawgInboundPublicConfigSchema.parse(config);
+}
+
 export function parseMtproxyPublicConfig(
   config: unknown,
 ): MtproxyInboundPublicConfig {
@@ -330,6 +355,9 @@ export function parseInboundPublicConfig(
   }
   if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
     return parseWireguardPublicConfig(config);
+  }
+  if (protocol === 'AMNEZIAWG') {
+    return parseAmneziawgPublicConfig(config);
   }
   if (protocol === 'MTPROXY') {
     return parseMtproxyPublicConfig(config);
@@ -366,6 +394,15 @@ export function storageFromInbound(
       protocol,
       storage: {
         publicConfig: publicConfig as WireguardInboundPublicConfig,
+        secrets: secrets as WireguardInboundSecrets,
+      },
+    };
+  }
+  if (protocol === 'AMNEZIAWG') {
+    return {
+      protocol,
+      storage: {
+        publicConfig: publicConfig as AmneziawgInboundPublicConfig,
         secrets: secrets as WireguardInboundSecrets,
       },
     };
@@ -491,7 +528,11 @@ export function isInboundSecretBundle(
   ) {
     return isXrayFilesTlsSecrets(value);
   }
-  if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+  if (
+    protocol === 'WIREGUARD' ||
+    protocol === 'WIREGUARD_XRAY' ||
+    protocol === 'AMNEZIAWG'
+  ) {
     return (
       keys.size <= 3 &&
       keys.has('privateKey') &&

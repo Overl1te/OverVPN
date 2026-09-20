@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import type { AppEnvironment } from '../config/environment';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AmneziawgProvider } from './amneziawg.provider';
 import { CompositeCoreProvider } from './composite-core.provider';
 import {
+  AmneziawgReloadHandshakeAdapter,
   CoreFileSystem,
   CoreHttpAdapter,
   FetchCoreHttpAdapter,
@@ -13,6 +15,7 @@ import {
   NodeProcessAdapter,
   ProcessAdapter,
   ReloadHandshakeAdapter,
+  SharedVolumeAmneziawgReloadHandshakeAdapter,
   SharedVolumeMtproxyReloadHandshakeAdapter,
   SharedVolumeReloadHandshakeAdapter,
   SharedVolumeXrayReloadHandshakeAdapter,
@@ -71,6 +74,10 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
       useClass: SharedVolumeMtproxyReloadHandshakeAdapter,
     },
     {
+      provide: AmneziawgReloadHandshakeAdapter,
+      useClass: SharedVolumeAmneziawgReloadHandshakeAdapter,
+    },
+    {
       provide: CoreHttpAdapter,
       useClass: FetchCoreHttpAdapter,
     },
@@ -85,13 +92,21 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
     SingBoxProvider,
     XrayProvider,
     MtproxyProvider,
+    AmneziawgProvider,
     {
       provide: CORE_ENGINE_PROVIDERS,
-      inject: [SingBoxProvider, XrayProvider, MtproxyProvider, ConfigService],
+      inject: [
+        SingBoxProvider,
+        XrayProvider,
+        MtproxyProvider,
+        AmneziawgProvider,
+        ConfigService,
+      ],
       useFactory: (
         singBoxProvider: SingBoxProvider,
         xrayProvider: XrayProvider,
         mtproxyProvider: MtproxyProvider,
+        amneziawgProvider: AmneziawgProvider,
         config: ConfigService<AppEnvironment, true>,
       ): readonly EngineProvider[] => {
         const providers: EngineProvider[] = [];
@@ -103,6 +118,9 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
         }
         if (config.get('MTPROXY_ENABLED', { infer: true })) {
           providers.push(mtproxyProvider);
+        }
+        if (config.get('AMNEZIAWG_ENABLED', { infer: true })) {
+          providers.push(amneziawgProvider);
         }
         return providers;
       },
@@ -131,6 +149,7 @@ import { GrpcXrayStatsAdapter, XrayStatsAdapter } from './xray-stats.adapter';
     ReloadHandshakeAdapter,
     XrayReloadHandshakeAdapter,
     MtproxyReloadHandshakeAdapter,
+    AmneziawgReloadHandshakeAdapter,
   ],
 })
 export class CoreModule {}

@@ -84,6 +84,7 @@ export class CoreApplyService {
       SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
       XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
       MTPROXY: config.get('MTPROXY_CONFIG_PATH', { infer: true }),
+      AMNEZIAWG: config.get('AMNEZIAWG_CONFIG_PATH', { infer: true }),
     };
   }
 
@@ -1223,6 +1224,9 @@ function asEngineList(value: Prisma.JsonValue): CoreEngine[] {
   }
   return value.filter(
     (item): item is CoreEngine =>
-      item === 'SING_BOX' || item === 'XRAY' || item === 'MTPROXY',
+      item === 'SING_BOX' ||
+      item === 'XRAY' ||
+      item === 'MTPROXY' ||
+      item === 'AMNEZIAWG',
   );
 }

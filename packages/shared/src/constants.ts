@@ -22,6 +22,11 @@ export function buildSubscriptionPublicUrl(baseUrl: string, token: string): stri
   }
 }
 
+/** Amnezia VPN subscription (AWG-only native configs). Same token, dedicated path. */
+export function buildAmneziawgSubscriptionPublicUrl(baseUrl: string, token: string): string {
+  return `${buildSubscriptionPublicUrl(baseUrl, token).replace(/\/+$/, '')}/amneziawg`;
+}
+
 export const SUPPORTED_LOCALES = ['ru', 'en'] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
@@ -34,7 +39,7 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 export const PLAN_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
-export const CORE_ENGINES = ['SING_BOX', 'XRAY', 'MTPROXY'] as const;
+export const CORE_ENGINES = ['SING_BOX', 'XRAY', 'MTPROXY', 'AMNEZIAWG'] as const;
 export type CoreEngine = (typeof CORE_ENGINES)[number];
 
 export const INBOUND_PROTOCOLS = [
@@ -50,6 +55,7 @@ export const INBOUND_PROTOCOLS = [
   'SHADOWSOCKS_XRAY',
   'WIREGUARD_XRAY',
   'MTPROXY',
+  'AMNEZIAWG',
 ] as const;
 export type InboundProtocol = (typeof INBOUND_PROTOCOLS)[number];
 
@@ -69,6 +75,7 @@ export const PROTOCOL_ENGINE_MAP = {
   SHADOWSOCKS_XRAY: 'XRAY',
   WIREGUARD_XRAY: 'XRAY',
   MTPROXY: 'MTPROXY',
+  AMNEZIAWG: 'AMNEZIAWG',
 } as const satisfies Record<InboundProtocol, CoreEngine>;
 
 /**
@@ -88,6 +95,7 @@ export const PROTOCOL_DISPLAY_LABELS = {
   WIREGUARD: 'WireGuard',
   WIREGUARD_XRAY: 'WireGuard',
   MTPROXY: 'MTProxy',
+  AMNEZIAWG: 'AmneziaWG 2.0',
 } as const satisfies Record<InboundProtocol, string>;
 
 export function protocolDisplayLabel(protocol: string): string {

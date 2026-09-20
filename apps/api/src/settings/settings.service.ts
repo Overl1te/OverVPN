@@ -351,9 +351,11 @@ export class SettingsService {
         xrayWgPort: this.config.get('XRAY_WG_PORT', { infer: true }),
         mtproxyPortMin: this.config.get('MTPROXY_PORT_MIN', { infer: true }),
         mtproxyPortMax: this.config.get('MTPROXY_PORT_MAX', { infer: true }),
+        amneziawgPort: this.config.get('AMNEZIAWG_PORT', { infer: true }),
         singBoxEnabled: this.config.get('SING_BOX_ENABLED', { infer: true }),
         xrayEnabled: this.config.get('XRAY_ENABLED', { infer: true }),
         mtproxyEnabled: this.config.get('MTPROXY_ENABLED', { infer: true }),
+        amneziawgEnabled: this.config.get('AMNEZIAWG_ENABLED', { infer: true }),
         tlsCertificatePath:
           this.config.get('VPN_TLS_CERTIFICATE_PATH', { infer: true }) ?? null,
         tlsKeyPath:

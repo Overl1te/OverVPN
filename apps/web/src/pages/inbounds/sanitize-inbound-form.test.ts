@@ -297,4 +297,40 @@ describe('sanitizeInboundForm', () => {
     });
     expect(sanitized.settings).not.toHaveProperty('method');
   });
+
+  it('strips leftover keys when saving AmneziaWG 2.0', () => {
+    const sanitized = sanitizeInboundForm(
+      {
+        tag: 'awg',
+        protocol: 'AMNEZIAWG',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 51822,
+          publicHost: 'vpn.overl1te-private.online',
+          publicPort: 51822,
+          enabled: true,
+          address: '10.67.0.1/24',
+          mtu: 1420,
+          method: '2022-blake3-aes-256-gcm',
+          path: '/',
+          secretMode: 'SECURE',
+        } as never,
+      },
+      {
+        ...defaults,
+        amneziawgPort: 51822,
+      },
+    );
+
+    expect(sanitized.settings).toEqual(
+      expect.objectContaining({
+        listenPort: 51822,
+        address: '10.67.0.1/24',
+        mtu: 1420,
+      }),
+    );
+    expect(sanitized.settings).not.toHaveProperty('method');
+    expect(sanitized.settings).not.toHaveProperty('path');
+    expect(sanitized.settings).not.toHaveProperty('secretMode');
+  });
 });

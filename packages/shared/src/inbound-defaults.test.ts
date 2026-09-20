@@ -108,6 +108,7 @@ describe('buildDefaultInboundSettings', () => {
       xrayTcpTlsPort: 9447,
       mtproxyPortMin: 10001,
       mtproxyPortMax: 10016,
+      amneziawgPort: 51822,
       tlsCertificatePath: '/certs/fullchain.pem',
       tlsKeyPath: '/certs/privkey.pem',
     };
@@ -149,6 +150,11 @@ describe('buildDefaultInboundSettings', () => {
     assert.equal(mtproxy.listenPort, 10001);
     assert.equal(mtproxy.publicPort, 10001);
     assert.equal(mtproxy.secretMode, 'SECURE');
+
+    const amneziawg = buildDefaultInboundSettings('AMNEZIAWG', context);
+    assert.equal(amneziawg.listenPort, 51822);
+    assert.equal(amneziawg.publicPort, 51822);
+    assert.equal(amneziawg.address, '10.67.0.1/24');
   });
 });
 

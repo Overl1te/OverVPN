@@ -67,6 +67,15 @@ const environmentSchema = z
     MTPROXY_RELOAD_ACK_PATH: z.string().default('/var/lib/overvpn/mtproxy-reload/ack'),
     MTPROXY_RELOAD_TIMEOUT_MS: positiveInt.default(20_000),
     MTPROXY_PID_PATH: z.string().default('/var/lib/overvpn/mtproxy-reload/mtproxy.pid'),
+
+    AMNEZIAWG_CONFIG_PATH: z.string().default('/var/lib/amneziawg/config.json'),
+    AMNEZIAWG_LAST_KNOWN_GOOD_PATH: z
+      .string()
+      .default('/var/lib/amneziawg/config.last-known-good.json'),
+    AMNEZIAWG_RELOAD_REQUEST_PATH: z.string().default('/var/lib/overvpn/amneziawg-reload/request'),
+    AMNEZIAWG_RELOAD_ACK_PATH: z.string().default('/var/lib/overvpn/amneziawg-reload/ack'),
+    AMNEZIAWG_RELOAD_TIMEOUT_MS: positiveInt.default(20_000),
+    AMNEZIAWG_PID_PATH: z.string().default('/var/lib/overvpn/amneziawg-reload/amneziawg.pid'),
   })
   .superRefine((value, ctx) => {
     if (!value.NODE_TOKEN && !value.INSTALL_TOKEN) {
@@ -134,7 +143,7 @@ export function resolveStatePath(env: AgentEnvironment): string {
 
 export function enginePathsFor(
   env: AgentEnvironment,
-  engine: 'SING_BOX' | 'XRAY' | 'MTPROXY',
+  engine: 'SING_BOX' | 'XRAY' | 'MTPROXY' | 'AMNEZIAWG',
 ): EnginePaths {
   switch (engine) {
     case 'SING_BOX':
@@ -163,6 +172,15 @@ export function enginePathsFor(
         reloadAckPath: env.MTPROXY_RELOAD_ACK_PATH,
         reloadTimeoutMs: env.MTPROXY_RELOAD_TIMEOUT_MS,
         pidPath: env.MTPROXY_PID_PATH,
+      };
+    case 'AMNEZIAWG':
+      return {
+        configPath: env.AMNEZIAWG_CONFIG_PATH,
+        lastKnownGoodPath: env.AMNEZIAWG_LAST_KNOWN_GOOD_PATH,
+        reloadRequestPath: env.AMNEZIAWG_RELOAD_REQUEST_PATH,
+        reloadAckPath: env.AMNEZIAWG_RELOAD_ACK_PATH,
+        reloadTimeoutMs: env.AMNEZIAWG_RELOAD_TIMEOUT_MS,
+        pidPath: env.AMNEZIAWG_PID_PATH,
       };
   }
 }

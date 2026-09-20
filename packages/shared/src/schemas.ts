@@ -1398,6 +1398,180 @@ export const wireguardInboundSettingsSchema = z
   });
 export type WireguardInboundSettings = z.infer<typeof wireguardInboundSettingsSchema>;
 
+const amneziawgHeaderSchema = z
+  .string()
+  .trim()
+  .regex(/^[0-9]+(?:-[0-9]+)?$/, 'Expected a number or N-M range');
+
+const amneziawgCpsSchema = z.string().trim().max(4_096);
+
+function parseAmneziawgHeaderRange(value: string): { lo: number; hi: number } {
+  const [left, right] = value.split('-');
+  const lo = Number(left);
+  const hi = right === undefined ? lo : Number(right);
+  return { lo, hi };
+}
+
+function refineAmneziawgObfuscation(
+  value: {
+    jmin: number;
+    jmax: number;
+    s1: number;
+    s2: number;
+    h1: string;
+    h2: string;
+    h3: string;
+    h4: string;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (value.jmax < value.jmin) {
+    context.addIssue({
+      code: 'custom',
+      path: ['jmax'],
+      message: 'jmax must be greater than or equal to jmin',
+    });
+  }
+  if (value.s1 + 56 === value.s2) {
+    context.addIssue({
+      code: 'custom',
+      path: ['s2'],
+      message: 's2 must not equal s1 + 56',
+    });
+  }
+  const headers = [value.h1, value.h2, value.h3, value.h4].map((header, index) => ({
+    index,
+    ...parseAmneziawgHeaderRange(header),
+  }));
+  for (const header of headers) {
+    if (
+      !Number.isInteger(header.lo) ||
+      !Number.isInteger(header.hi) ||
+      header.lo < 1 ||
+      header.hi > 2_147_483_647 ||
+      header.hi < header.lo
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: [`h${header.index + 1}`],
+        message: 'Header must be 1..2147483647 (or a non-empty range in that interval)',
+      });
+    }
+  }
+  for (let i = 0; i < headers.length; i += 1) {
+    for (let j = i + 1; j < headers.length; j += 1) {
+      const left = headers[i];
+      const right = headers[j];
+      if (left.hi >= right.lo && right.hi >= left.lo) {
+        context.addIssue({
+          code: 'custom',
+          path: [`h${j + 1}`],
+          message: 'H1–H4 ranges must not overlap',
+        });
+      }
+    }
+  }
+}
+
+export const amneziawgObfuscationSchema = z
+  .object({
+    jc: z.number().int().min(1).max(128),
+    jmin: z.number().int().min(1).max(1_280),
+    jmax: z.number().int().min(1).max(1_280),
+    s1: z.number().int().min(0).max(150),
+    s2: z.number().int().min(0).max(150),
+    s3: z.number().int().min(0).max(150),
+    s4: z.number().int().min(0).max(150),
+    h1: amneziawgHeaderSchema,
+    h2: amneziawgHeaderSchema,
+    h3: amneziawgHeaderSchema,
+    h4: amneziawgHeaderSchema,
+    i1: amneziawgCpsSchema.min(1),
+    i2: amneziawgCpsSchema.nullable().optional(),
+    i3: amneziawgCpsSchema.nullable().optional(),
+    i4: amneziawgCpsSchema.nullable().optional(),
+    i5: amneziawgCpsSchema.nullable().optional(),
+  })
+  .strict()
+  .superRefine(refineAmneziawgObfuscation);
+export type AmneziawgObfuscation = z.infer<typeof amneziawgObfuscationSchema>;
+
+export const amneziawgInboundSettingsSchema = z
+  .object({
+    ...inboundListenCommonFields,
+    address: wireguardAddressSchema.default('10.67.0.1/24'),
+    mtu: z.number().int().min(576).max(9_000).optional().default(1_420),
+    privateKey: wireguardKeySchema.optional(),
+    publicKey: wireguardKeySchema.optional(),
+    jc: z.number().int().min(1).max(128).optional(),
+    jmin: z.number().int().min(1).max(1_280).optional(),
+    jmax: z.number().int().min(1).max(1_280).optional(),
+    s1: z.number().int().min(0).max(150).optional(),
+    s2: z.number().int().min(0).max(150).optional(),
+    s3: z.number().int().min(0).max(150).optional(),
+    s4: z.number().int().min(0).max(150).optional(),
+    h1: amneziawgHeaderSchema.optional(),
+    h2: amneziawgHeaderSchema.optional(),
+    h3: amneziawgHeaderSchema.optional(),
+    h4: amneziawgHeaderSchema.optional(),
+    i1: amneziawgCpsSchema.optional(),
+    i2: amneziawgCpsSchema.nullable().optional(),
+    i3: amneziawgCpsSchema.nullable().optional(),
+    i4: amneziawgCpsSchema.nullable().optional(),
+    i5: amneziawgCpsSchema.nullable().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.privateKey === undefined) !== (value.publicKey === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['publicKey'],
+        message: 'privateKey and publicKey must both be supplied or both omitted',
+      });
+    }
+    const obfuscationKeys = [
+      'jc',
+      'jmin',
+      'jmax',
+      's1',
+      's2',
+      's3',
+      's4',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'i1',
+    ] as const;
+    const supplied = obfuscationKeys.filter((key) => value[key] !== undefined);
+    if (supplied.length === 0) {
+      return;
+    }
+    const missing = obfuscationKeys.filter((key) => value[key] === undefined);
+    if (missing.length > 0) {
+      context.addIssue({
+        code: 'custom',
+        path: [missing[0]],
+        message: 'AmneziaWG 2.0 obfuscation fields must all be supplied together',
+      });
+      return;
+    }
+    refineAmneziawgObfuscation(
+      {
+        jmin: value.jmin as number,
+        jmax: value.jmax as number,
+        s1: value.s1 as number,
+        s2: value.s2 as number,
+        h1: value.h1 as string,
+        h2: value.h2 as string,
+        h3: value.h3 as string,
+        h4: value.h4 as string,
+      },
+      context,
+    );
+  });
+export type AmneziawgInboundSettings = z.infer<typeof amneziawgInboundSettingsSchema>;
+
 export const mtproxySecretModeSchema = z.enum(['CLASSIC', 'SECURE', 'TLS']);
 export type MtproxySecretMode = z.infer<typeof mtproxySecretModeSchema>;
 
@@ -1518,6 +1692,13 @@ export const createInboundSchema = z.discriminatedUnion('protocol', [
       settings: mtproxyInboundSettingsSchema,
     })
     .strict(),
+  z
+    .object({
+      ...createInboundCommonFields,
+      protocol: z.literal('AMNEZIAWG'),
+      settings: amneziawgInboundSettingsSchema,
+    })
+    .strict(),
 ]);
 export type CreateInbound = z.infer<typeof createInboundSchema>;
 
@@ -1538,6 +1719,7 @@ export const updateInboundSchema = z
         shadowsocksInboundSettingsSchema,
         wireguardInboundSettingsSchema,
         mtproxyInboundSettingsSchema,
+        amneziawgInboundSettingsSchema,
       ])
       .optional(),
   })
@@ -1757,6 +1939,33 @@ export const wireguardInboundPublicConfigSchema = z
   .strict();
 export type WireguardInboundPublicConfig = z.infer<typeof wireguardInboundPublicConfigSchema>;
 
+export const amneziawgInboundPublicConfigSchema = z
+  .object({
+    address: wireguardAddressSchema,
+    mtu: z.number().int().min(576).max(9_000),
+    privateKeyPresent: z.boolean(),
+    publicKeyPresent: z.boolean(),
+    jc: z.number().int().min(1).max(128),
+    jmin: z.number().int().min(1).max(1_280),
+    jmax: z.number().int().min(1).max(1_280),
+    s1: z.number().int().min(0).max(150),
+    s2: z.number().int().min(0).max(150),
+    s3: z.number().int().min(0).max(150),
+    s4: z.number().int().min(0).max(150),
+    h1: amneziawgHeaderSchema,
+    h2: amneziawgHeaderSchema,
+    h3: amneziawgHeaderSchema,
+    h4: amneziawgHeaderSchema,
+    i1: amneziawgCpsSchema.min(1),
+    i2: amneziawgCpsSchema.nullable(),
+    i3: amneziawgCpsSchema.nullable(),
+    i4: amneziawgCpsSchema.nullable(),
+    i5: amneziawgCpsSchema.nullable(),
+  })
+  .strict()
+  .superRefine(refineAmneziawgObfuscation);
+export type AmneziawgInboundPublicConfig = z.infer<typeof amneziawgInboundPublicConfigSchema>;
+
 export const mtproxyInboundPublicConfigSchema = z
   .object({
     secretMode: mtproxySecretModeSchema,
@@ -1869,6 +2078,13 @@ export const inboundResultSchema = z.discriminatedUnion('protocol', [
       ...inboundResultCommonFields,
       protocol: z.literal('MTPROXY'),
       settings: mtproxyInboundPublicConfigSchema.extend(inboundListenPublicFields),
+    })
+    .strict(),
+  z
+    .object({
+      ...inboundResultCommonFields,
+      protocol: z.literal('AMNEZIAWG'),
+      settings: amneziawgInboundPublicConfigSchema.extend(inboundListenPublicFields),
     })
     .strict(),
 ]);
@@ -2059,6 +2275,15 @@ export const wireguardLinkSchema = wireguardLinkBaseSchema.extend({
 export const wireguardXrayLinkSchema = wireguardLinkBaseSchema.extend({
   protocol: z.literal('WIREGUARD_XRAY'),
 });
+export const amneziawgLinkSchema = z
+  .object({
+    assignmentId: idSchema,
+    credentialVersion: z.number().int().positive(),
+    protocol: z.literal('AMNEZIAWG'),
+    uri: z.string().startsWith('awg://'),
+    generatedAt: isoDateTimeSchema,
+  })
+  .strict();
 
 export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   hysteria2LinkSchema,
@@ -2073,6 +2298,7 @@ export const inboundLinkSchema = z.discriminatedUnion('protocol', [
   wireguardLinkSchema,
   wireguardXrayLinkSchema,
   mtproxyLinkSchema,
+  amneziawgLinkSchema,
 ]);
 export type InboundLinkResult = z.infer<typeof inboundLinkSchema>;
 
@@ -2113,6 +2339,7 @@ export const subscriptionInfoSchema = z
     colorProfile: z.string().max(65_536).nullable(),
     showTrafficLimits: z.boolean(),
     subscriptionUrl: z.url(),
+    amneziawgUrl: z.url(),
     formats: z.array(subscriptionFormatSchema).length(SUBSCRIPTION_FORMATS.length),
     formatUrls: z
       .object({
@@ -2310,6 +2537,27 @@ export type WireguardXraySubscriptionEndpoint = z.infer<
   typeof wireguardXraySubscriptionEndpointSchema
 >;
 
+export const amneziawgSubscriptionEndpointSchema = wireguardSubscriptionEndpointBaseSchema.extend({
+  protocol: z.literal('AMNEZIAWG'),
+  jc: z.number().int().min(1).max(128),
+  jmin: z.number().int().min(1).max(1_280),
+  jmax: z.number().int().min(1).max(1_280),
+  s1: z.number().int().min(0).max(150),
+  s2: z.number().int().min(0).max(150),
+  s3: z.number().int().min(0).max(150),
+  s4: z.number().int().min(0).max(150),
+  h1: amneziawgHeaderSchema,
+  h2: amneziawgHeaderSchema,
+  h3: amneziawgHeaderSchema,
+  h4: amneziawgHeaderSchema,
+  i1: amneziawgCpsSchema.min(1),
+  i2: amneziawgCpsSchema.nullable(),
+  i3: amneziawgCpsSchema.nullable(),
+  i4: amneziawgCpsSchema.nullable(),
+  i5: amneziawgCpsSchema.nullable(),
+});
+export type AmneziawgSubscriptionEndpoint = z.infer<typeof amneziawgSubscriptionEndpointSchema>;
+
 export const subscriptionEndpointSchema = z.discriminatedUnion('protocol', [
   hysteria2SubscriptionEndpointSchema,
   vlessRealitySubscriptionEndpointSchema,
@@ -2322,6 +2570,7 @@ export const subscriptionEndpointSchema = z.discriminatedUnion('protocol', [
   shadowsocksXraySubscriptionEndpointSchema,
   wireguardSubscriptionEndpointSchema,
   wireguardXraySubscriptionEndpointSchema,
+  amneziawgSubscriptionEndpointSchema,
 ]);
 export type SubscriptionEndpoint = z.infer<typeof subscriptionEndpointSchema>;
 
@@ -2603,9 +2852,11 @@ export const systemSettingsReadOnlySchema = z
     xrayWgPort: z.number().int().min(1).max(65_535),
     mtproxyPortMin: z.number().int().min(1).max(65_535),
     mtproxyPortMax: z.number().int().min(1).max(65_535),
+    amneziawgPort: z.number().int().min(1).max(65_535),
     singBoxEnabled: z.boolean(),
     xrayEnabled: z.boolean(),
     mtproxyEnabled: z.boolean(),
+    amneziawgEnabled: z.boolean(),
     tlsCertificatePath: z.string().nullable(),
     tlsKeyPath: z.string().nullable(),
     telegramEnvConfigured: z.boolean(),

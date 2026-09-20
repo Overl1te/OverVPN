@@ -118,6 +118,13 @@ export function buildSubscriptionUrl(
   return buildSubscriptionPublicUrl(baseUrl, token);
 }
 
+export function buildAmneziawgSubscriptionUrl(
+  token: string,
+  baseUrl: string = typeof window !== 'undefined' ? window.location.origin : '',
+): string {
+  return `${buildSubscriptionUrl(token, baseUrl).replace(/\/+$/, '')}/amneziawg`;
+}
+
 export type SubscriptionClientLink = {
   id: 'happ' | 'hiddify' | 'clash' | 'v2rayng' | 'singbox';
   href: string;

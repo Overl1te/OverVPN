@@ -60,6 +60,7 @@ describe('subscription information', () => {
       colorProfile: null,
       showTrafficLimits: true,
       subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
+      amneziawgUrl: `https://vpn.example.com/api/sub/${TOKEN}/amneziawg`,
       formats: ['sing-box', 'links', 'clash'],
       formatUrls: {
         singBox: `https://vpn.example.com/api/sub/${TOKEN}?format=sing-box`,
@@ -231,10 +232,9 @@ describe('SubscriptionsService access enforcement', () => {
   ])('does not build usable credentials for $label users', async (testCase) => {
     testCase.mutate(currentUser!);
 
-    const access = await service.profile(
-      TOKEN,
-      new Date('2026-01-01T00:00:00.000Z'),
-    );
+    const access = await service.profile(TOKEN, {
+      now: new Date('2026-01-01T00:00:00.000Z'),
+    });
 
     expect(access).toMatchObject({
       kind: 'inactive',

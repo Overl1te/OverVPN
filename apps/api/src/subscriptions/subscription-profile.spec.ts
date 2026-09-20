@@ -1,6 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import type { SecretEncryptionService } from '../auth/auth-crypto';
 import {
+  AmneziawgSubscriptionAdapter,
   Hysteria2SubscriptionAdapter,
   ShadowsocksSubscriptionAdapter,
   ShadowsocksXraySubscriptionAdapter,
@@ -16,6 +17,7 @@ import {
   renderClashProfile,
   renderLinkList,
   renderSingBoxProfile,
+  renderAmneziawgNativeSubscription,
   type SubscriptionProfileUser,
 } from './subscription-profile';
 
@@ -34,6 +36,7 @@ function createBuilder(
     new ShadowsocksXraySubscriptionAdapter(encryption),
     new WireguardSubscriptionAdapter(encryption),
     new WireguardXraySubscriptionAdapter(encryption),
+    new AmneziawgSubscriptionAdapter(encryption),
   );
 }
 
@@ -467,6 +470,110 @@ describe('SubscriptionProfileBuilder', () => {
     expect(renderLinkList(mixedProfile)).not.toContain('tg://proxy');
     expect(renderClashProfile(mixedProfile)).not.toContain('mtproxy');
     expect(renderSingBoxProfile(mixedProfile)).not.toContain('mtproxy');
+  });
+
+  it('keeps AmneziaWG off the default subscription and on the dedicated profile', () => {
+    const peerPrivate = Buffer.alloc(32, 1).toString('base64');
+    const peerPublic = Buffer.alloc(32, 2).toString('base64');
+    const serverPublic = Buffer.alloc(32, 3).toString('base64');
+    const encryption = {
+      decrypt: jest.fn((payload: string) => {
+        if (payload === 'v1:credential-envelope') {
+          return JSON.stringify({
+            version: 1,
+            password: 'p@ssword /?# ü',
+          });
+        }
+        if (payload === 'inbound-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            obfsPassword: 'obfs &/secret',
+          });
+        }
+        if (payload === 'v1:awg-credential') {
+          return JSON.stringify({
+            version: 1,
+            privateKey: peerPrivate,
+            publicKey: peerPublic,
+            address: '10.67.0.2/32',
+          });
+        }
+        if (payload === 'v1:awg-secret-envelope') {
+          return JSON.stringify({
+            version: 1,
+            privateKey: Buffer.alloc(32, 4).toString('base64'),
+            publicKey: serverPublic,
+          });
+        }
+        throw new Error('Unknown encrypted fixture');
+      }),
+    };
+    const mixedBuilder = createBuilder(
+      encryption as unknown as SecretEncryptionService,
+    );
+    const base = profileUser();
+    const user: SubscriptionProfileUser = {
+      ...base,
+      inboundAssignments: [
+        ...base.inboundAssignments,
+        {
+          id: 'assignment-awg',
+          credentialEncrypted: 'v1:awg-credential',
+          inbound: {
+            id: 'inbound-awg',
+            tag: 'Edge_AWG',
+            protocol: 'AMNEZIAWG',
+            publicHost: 'vpn.example.com',
+            publicPort: 51822,
+            listenPort: 51822,
+            displayNameTemplate: null,
+            config: {
+              address: '10.67.0.1/24',
+              mtu: 1420,
+              privateKeyPresent: true,
+              publicKeyPresent: true,
+              jc: 4,
+              jmin: 40,
+              jmax: 90,
+              s1: 20,
+              s2: 30,
+              s3: 10,
+              s4: 8,
+              h1: '1',
+              h2: '2',
+              h3: '3',
+              h4: '4',
+              i1: '<r 128>',
+              i2: null,
+              i3: null,
+              i4: null,
+              i5: null,
+            },
+            secretDataEncrypted: 'v1:awg-secret-envelope',
+          },
+        },
+      ],
+    };
+
+    const vpnProfile = mixedBuilder.build(user);
+    expect(vpnProfile.endpoints.map((endpoint) => endpoint.protocol)).toEqual([
+      'HYSTERIA2',
+    ]);
+    expect(renderLinkList(vpnProfile)).not.toContain('awg://');
+    expect(renderClashProfile(vpnProfile)).not.toContain('amnezia-wg-option');
+
+    const awgProfile = mixedBuilder.build(user, 'amneziawg');
+    expect(awgProfile.endpoints.map((endpoint) => endpoint.protocol)).toEqual([
+      'AMNEZIAWG',
+    ]);
+    const native = renderAmneziawgNativeSubscription(awgProfile);
+    expect(native).toContain('[Interface]');
+    expect(native).toContain(`PrivateKey = ${peerPrivate}`);
+    expect(native).toContain(`PublicKey = ${serverPublic}`);
+    expect(native).toContain('Jc = 4');
+    expect(native).toContain('I1 = <r 128>');
+    expect(native).not.toContain('awg://');
+    expect(native).not.toContain('hysteria2://');
   });
 
   it('builds VLESS_GRPC_TLS and VLESS_TCP_TLS share links and sing-box outbounds', () => {

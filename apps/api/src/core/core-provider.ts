@@ -10,6 +10,7 @@ import type {
   VlessTcpTlsPublicConfig,
   VlessXhttpTlsPublicConfig,
   WireguardInboundPublicConfig,
+  AmneziawgInboundPublicConfig,
 } from '@overvpn/shared/schemas';
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -180,6 +181,13 @@ export interface DesiredWireguardInbound extends DesiredInboundBase {
   assignments: Array<DesiredAssignment & { credential: WireguardCredential }>;
 }
 
+export interface DesiredAmneziawgInbound extends DesiredInboundBase {
+  protocol: 'AMNEZIAWG';
+  config: AmneziawgInboundPublicConfig;
+  secrets: WireguardInboundSecrets;
+  assignments: Array<DesiredAssignment & { credential: WireguardCredential }>;
+}
+
 export interface DesiredMtproxyInbound extends DesiredInboundBase {
   protocol: 'MTPROXY';
   config: MtproxyInboundPublicConfig;
@@ -197,6 +205,7 @@ export type DesiredInbound =
   | DesiredTrojanTlsInbound
   | DesiredShadowsocksXrayInbound
   | DesiredWireguardInbound
+  | DesiredAmneziawgInbound
   | DesiredMtproxyInbound;
 
 export interface CoreDesiredState {

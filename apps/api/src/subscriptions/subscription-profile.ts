@@ -20,8 +20,10 @@ import type {
   VlessXhttpTlsSubscriptionEndpoint,
   WireguardSubscriptionEndpoint,
   WireguardXraySubscriptionEndpoint,
+  AmneziawgSubscriptionEndpoint,
 } from '@overvpn/shared/schemas';
 import {
+  amneziawgInboundPublicConfigSchema,
   hysteria2InboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
   trojanInboundPublicConfigSchema,
@@ -52,6 +54,7 @@ import { buildVlessGrpcTlsUri } from '../inbounds/vless-grpc-tls-domain';
 import { buildVlessUri } from '../inbounds/vless-reality-domain';
 import { buildVlessTcpTlsUri } from '../inbounds/vless-tcp-tls-domain';
 import { buildVlessXhttpTlsUri } from '../inbounds/vless-xhttp-tls-domain';
+import { buildAmneziawgUri } from '../inbounds/amneziawg-domain';
 import { buildWireguardUri } from '../inbounds/wireguard-domain';
 
 export interface SubscriptionInboundRecord {
@@ -102,6 +105,18 @@ interface SubscriptionProtocolAdapter {
     tag: string,
     displayName: string,
   ): SubscriptionEndpoint;
+}
+
+export type SubscriptionProfileKind = 'vpn' | 'amneziawg';
+
+function includeProtocolInProfile(
+  protocol: InboundProtocol,
+  kind: SubscriptionProfileKind,
+): boolean {
+  if (kind === 'amneziawg') {
+    return protocol === 'AMNEZIAWG';
+  }
+  return protocol !== 'AMNEZIAWG';
 }
 
 @Injectable()
@@ -541,6 +556,75 @@ export class WireguardXraySubscriptionAdapter extends WireguardSubscriptionAdapt
 }
 
 @Injectable()
+export class AmneziawgSubscriptionAdapter implements SubscriptionProtocolAdapter {
+  readonly protocol = 'AMNEZIAWG' as const;
+
+  constructor(private readonly encryption: SecretEncryptionService) {}
+
+  build(
+    assignment: SubscriptionAssignmentRecord,
+    user: SubscriptionProfileUser,
+    tag: string,
+    displayName: string,
+  ): AmneziawgSubscriptionEndpoint {
+    const inbound = assignment.inbound;
+    const config = amneziawgInboundPublicConfigSchema.safeParse(inbound.config);
+    if (
+      !config.success ||
+      !inbound.publicHost ||
+      !inbound.secretDataEncrypted
+    ) {
+      throw unavailable();
+    }
+    const secrets = parseEncryptedObject(
+      this.encryption,
+      inbound.secretDataEncrypted,
+    );
+    const credential = parseEncryptedObject(
+      this.encryption,
+      assignment.credentialEncrypted,
+    );
+    if (
+      typeof secrets.publicKey !== 'string' ||
+      typeof credential.privateKey !== 'string' ||
+      typeof credential.publicKey !== 'string' ||
+      typeof credential.address !== 'string'
+    ) {
+      throw unavailable();
+    }
+    void user;
+    return {
+      protocol: 'AMNEZIAWG',
+      tag,
+      displayName,
+      server: inbound.publicHost,
+      port: inbound.publicPort ?? inbound.listenPort,
+      privateKey: credential.privateKey,
+      publicKey: credential.publicKey,
+      serverPublicKey: secrets.publicKey,
+      address: credential.address,
+      mtu: config.data.mtu,
+      jc: config.data.jc,
+      jmin: config.data.jmin,
+      jmax: config.data.jmax,
+      s1: config.data.s1,
+      s2: config.data.s2,
+      s3: config.data.s3,
+      s4: config.data.s4,
+      h1: config.data.h1,
+      h2: config.data.h2,
+      h3: config.data.h3,
+      h4: config.data.h4,
+      i1: config.data.i1,
+      i2: config.data.i2,
+      i3: config.data.i3,
+      i4: config.data.i4,
+      i5: config.data.i5,
+    };
+  }
+}
+
+@Injectable()
 export class SubscriptionProfileBuilder {
   private readonly adapters: ReadonlyMap<
     InboundProtocol,
@@ -559,6 +643,7 @@ export class SubscriptionProfileBuilder {
     shadowsocksXray: ShadowsocksXraySubscriptionAdapter,
     wireguard: WireguardSubscriptionAdapter,
     wireguardXray: WireguardXraySubscriptionAdapter,
+    amneziawg: AmneziawgSubscriptionAdapter,
   ) {
     this.adapters = new Map<InboundProtocol, SubscriptionProtocolAdapter>([
       [hysteria2.protocol, hysteria2],
@@ -572,10 +657,14 @@ export class SubscriptionProfileBuilder {
       [shadowsocksXray.protocol, shadowsocksXray],
       [wireguard.protocol, wireguard],
       [wireguardXray.protocol, wireguardXray],
+      [amneziawg.protocol, amneziawg],
     ]);
   }
 
-  build(user: SubscriptionProfileUser): SubscriptionProfileDescriptor {
+  build(
+    user: SubscriptionProfileUser,
+    kind: SubscriptionProfileKind = 'vpn',
+  ): SubscriptionProfileDescriptor {
     const tagAllocator = new DeterministicTagAllocator();
     const brandingContext = {
       username: user.username,
@@ -592,7 +681,7 @@ export class SubscriptionProfileBuilder {
       .sort(compareAssignments)
       .flatMap((assignment) => {
         const adapter = this.adapters.get(assignment.inbound.protocol);
-        if (!adapter) {
+        if (!adapter || !includeProtocolInProfile(adapter.protocol, kind)) {
           return [];
         }
         const tag = tagAllocator.allocate(
@@ -679,16 +768,20 @@ export function renderSingBoxProfile(
       (
         endpoint,
       ): endpoint is
-        WireguardSubscriptionEndpoint | WireguardXraySubscriptionEndpoint =>
+        | WireguardSubscriptionEndpoint
+        | WireguardXraySubscriptionEndpoint
+        | AmneziawgSubscriptionEndpoint =>
         endpoint.protocol === 'WIREGUARD' ||
-        endpoint.protocol === 'WIREGUARD_XRAY',
+        endpoint.protocol === 'WIREGUARD_XRAY' ||
+        endpoint.protocol === 'AMNEZIAWG',
     )
     .map(renderSingBoxWireguardEndpoint);
   const proxyOutbounds = singBoxEndpoints
     .filter(
       (endpoint) =>
         endpoint.protocol !== 'WIREGUARD' &&
-        endpoint.protocol !== 'WIREGUARD_XRAY',
+        endpoint.protocol !== 'WIREGUARD_XRAY' &&
+        endpoint.protocol !== 'AMNEZIAWG',
     )
     .map(renderSingBoxOutbound);
 
@@ -894,7 +987,8 @@ function renderSingBoxOutbound(
   }
   if (
     endpoint.protocol === 'WIREGUARD' ||
-    endpoint.protocol === 'WIREGUARD_XRAY'
+    endpoint.protocol === 'WIREGUARD_XRAY' ||
+    endpoint.protocol === 'AMNEZIAWG'
   ) {
     throw new Error('WireGuard must be rendered as a sing-box endpoint');
   }
@@ -909,9 +1003,12 @@ function renderSingBoxOutbound(
 }
 
 function renderSingBoxWireguardEndpoint(
-  endpoint: WireguardSubscriptionEndpoint | WireguardXraySubscriptionEndpoint,
+  endpoint:
+    | WireguardSubscriptionEndpoint
+    | WireguardXraySubscriptionEndpoint
+    | AmneziawgSubscriptionEndpoint,
 ): Record<string, unknown> {
-  return {
+  const rendered: Record<string, unknown> = {
     type: 'wireguard',
     tag: endpoint.displayName,
     system: false,
@@ -928,6 +1025,25 @@ function renderSingBoxWireguardEndpoint(
       },
     ],
   };
+  if (endpoint.protocol === 'AMNEZIAWG') {
+    rendered.jc = endpoint.jc;
+    rendered.jmin = endpoint.jmin;
+    rendered.jmax = endpoint.jmax;
+    rendered.s1 = endpoint.s1;
+    rendered.s2 = endpoint.s2;
+    rendered.s3 = endpoint.s3;
+    rendered.s4 = endpoint.s4;
+    rendered.h1 = endpoint.h1;
+    rendered.h2 = endpoint.h2;
+    rendered.h3 = endpoint.h3;
+    rendered.h4 = endpoint.h4;
+    rendered.i1 = endpoint.i1;
+    if (endpoint.i2) rendered.i2 = endpoint.i2;
+    if (endpoint.i3) rendered.i3 = endpoint.i3;
+    if (endpoint.i4) rendered.i4 = endpoint.i4;
+    if (endpoint.i5) rendered.i5 = endpoint.i5;
+  }
+  return rendered;
 }
 
 export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
@@ -1014,6 +1130,34 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
         label: endpoint.displayName,
       });
     }
+    if (endpoint.protocol === 'AMNEZIAWG') {
+      return buildAmneziawgUri({
+        privateKey: endpoint.privateKey,
+        publicKey: endpoint.publicKey,
+        serverPublicKey: endpoint.serverPublicKey,
+        address: endpoint.address,
+        host: endpoint.server,
+        port: endpoint.port,
+        mtu: endpoint.mtu,
+        jc: endpoint.jc,
+        jmin: endpoint.jmin,
+        jmax: endpoint.jmax,
+        s1: endpoint.s1,
+        s2: endpoint.s2,
+        s3: endpoint.s3,
+        s4: endpoint.s4,
+        h1: endpoint.h1,
+        h2: endpoint.h2,
+        h3: endpoint.h3,
+        h4: endpoint.h4,
+        i1: endpoint.i1,
+        i2: endpoint.i2,
+        i3: endpoint.i3,
+        i4: endpoint.i4,
+        i5: endpoint.i5,
+        label: endpoint.displayName,
+      });
+    }
     return buildShadowsocksUri({
       method: endpoint.method,
       password: endpoint.password,
@@ -1023,6 +1167,60 @@ export function renderLinkList(profile: SubscriptionProfileDescriptor): string {
     });
   });
   return `${links.join('\n')}\n`;
+}
+
+/** Native AmneziaWG configs for Amnezia VPN (not Happ/Hiddify URI lists). */
+export function renderAmneziawgNativeSubscription(
+  profile: SubscriptionProfileDescriptor,
+): string {
+  const blocks = profile.endpoints.flatMap((endpoint) =>
+    endpoint.protocol === 'AMNEZIAWG' ? [renderAmneziawgConf(endpoint)] : [],
+  );
+  return blocks.length === 0 ? '' : `${blocks.join('\n\n')}\n`;
+}
+
+function renderAmneziawgConf(endpoint: AmneziawgSubscriptionEndpoint): string {
+  const lines = [
+    `# ${endpoint.displayName}`,
+    '[Interface]',
+    `PrivateKey = ${endpoint.privateKey}`,
+    `Address = ${endpoint.address}`,
+    `MTU = ${endpoint.mtu}`,
+    'DNS = 1.1.1.1, 8.8.8.8',
+    `Jc = ${endpoint.jc}`,
+    `Jmin = ${endpoint.jmin}`,
+    `Jmax = ${endpoint.jmax}`,
+    `S1 = ${endpoint.s1}`,
+    `S2 = ${endpoint.s2}`,
+    `S3 = ${endpoint.s3}`,
+    `S4 = ${endpoint.s4}`,
+    `H1 = ${endpoint.h1}`,
+    `H2 = ${endpoint.h2}`,
+    `H3 = ${endpoint.h3}`,
+    `H4 = ${endpoint.h4}`,
+    `I1 = ${endpoint.i1}`,
+  ];
+  if (endpoint.i2) {
+    lines.push(`I2 = ${endpoint.i2}`);
+  }
+  if (endpoint.i3) {
+    lines.push(`I3 = ${endpoint.i3}`);
+  }
+  if (endpoint.i4) {
+    lines.push(`I4 = ${endpoint.i4}`);
+  }
+  if (endpoint.i5) {
+    lines.push(`I5 = ${endpoint.i5}`);
+  }
+  lines.push(
+    '',
+    '[Peer]',
+    `PublicKey = ${endpoint.serverPublicKey}`,
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    `Endpoint = ${endpoint.server}:${endpoint.port}`,
+    'PersistentKeepalive = 25',
+  );
+  return lines.join('\n');
 }
 
 export function renderClashProfile(
@@ -1171,6 +1369,39 @@ export function renderClashProfile(
             'public-key': endpoint.serverPublicKey,
             mtu: endpoint.mtu,
             udp: true,
+          },
+        ];
+      }
+      if (endpoint.protocol === 'AMNEZIAWG') {
+        return [
+          {
+            name: endpoint.displayName,
+            type: 'wireguard',
+            server: endpoint.server,
+            port: endpoint.port,
+            ip: endpoint.address.replace('/32', ''),
+            'private-key': endpoint.privateKey,
+            'public-key': endpoint.serverPublicKey,
+            mtu: endpoint.mtu,
+            udp: true,
+            'amnezia-wg-option': {
+              jc: endpoint.jc,
+              jmin: endpoint.jmin,
+              jmax: endpoint.jmax,
+              s1: endpoint.s1,
+              s2: endpoint.s2,
+              s3: endpoint.s3,
+              s4: endpoint.s4,
+              h1: endpoint.h1,
+              h2: endpoint.h2,
+              h3: endpoint.h3,
+              h4: endpoint.h4,
+              ...(endpoint.i1 ? { i1: endpoint.i1 } : {}),
+              ...(endpoint.i2 ? { i2: endpoint.i2 } : {}),
+              ...(endpoint.i3 ? { i3: endpoint.i3 } : {}),
+              ...(endpoint.i4 ? { i4: endpoint.i4 } : {}),
+              ...(endpoint.i5 ? { i5: endpoint.i5 } : {}),
+            },
           },
         ];
       }

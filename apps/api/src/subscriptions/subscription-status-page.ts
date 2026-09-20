@@ -15,6 +15,8 @@ type StatusPageCopy = {
   links: string;
   clash: string;
   singBox: string;
+  amneziawg: string;
+  copyAmneziawg: string;
   hintBefore: string;
   hintAfter: string;
   quota: string;
@@ -43,6 +45,8 @@ const UI = {
     links: 'Links',
     clash: 'Clash',
     singBox: 'sing-box',
+    amneziawg: 'Amnezia VPN',
+    copyAmneziawg: 'Copy AmneziaWG URL',
     hintBefore: 'Apps also read machine status at',
     hintAfter:
       '. Use the format links above if your client needs an explicit profile.',
@@ -61,6 +65,8 @@ const UI = {
     links: 'Ссылки',
     clash: 'Clash',
     singBox: 'sing-box',
+    amneziawg: 'Amnezia VPN',
+    copyAmneziawg: 'Копировать URL AmneziaWG',
     hintBefore: 'Клиенты также читают машинный статус по',
     hintAfter:
       '. Используйте ссылки форматов выше, если клиенту нужен явный профиль.',
@@ -276,6 +282,7 @@ export function renderSubscriptionStatusPage(
       )
     : '—';
   const subUrl = escapeHtml(info.subscriptionUrl);
+  const amneziawgUrl = escapeHtml(info.amneziawgUrl);
   const linksUrl = escapeHtml(info.formatUrls.links);
   const clashUrl = escapeHtml(info.formatUrls.clash);
   const singBoxUrl = escapeHtml(info.formatUrls.singBox);
@@ -521,8 +528,12 @@ export function renderSubscriptionStatusPage(
         <a class="btn" href="${linksUrl}" data-i18n="links">${escapeHtml(copy.links)}</a>
         <a class="btn" href="${clashUrl}" data-i18n="clash">${escapeHtml(copy.clash)}</a>
         <a class="btn" href="${singBoxUrl}" data-i18n="singBox">${escapeHtml(copy.singBox)}</a>
+        <button class="btn" type="button" id="copy-awg" data-i18n="copyAmneziawg">${escapeHtml(copy.copyAmneziawg)}</button>
+        <a class="btn" href="${amneziawgUrl}" data-i18n="amneziawg">${escapeHtml(copy.amneziawg)}</a>
       </div>
       <code>${subUrl}</code>
+      <p class="hint" style="margin-top:0.5rem"><span data-i18n="amneziawg">${escapeHtml(copy.amneziawg)}</span></p>
+      <code>${amneziawgUrl}</code>
       <p class="hint"><span data-i18n="hintBefore">${escapeHtml(copy.hintBefore)}</span> <code style="display:inline;padding:0.1rem 0.35rem">/info</code><span data-i18n="hintAfter">${escapeHtml(copy.hintAfter)}</span></p>
       <div class="actions" style="margin-top:0.85rem">
         <a class="btn" href="${happ}">Happ</a>
@@ -538,6 +549,7 @@ export function renderSubscriptionStatusPage(
       var STORAGE_KEY = 'overvpn.sub.locale';
       var packs = ${i18nJson};
       var subUrl = ${JSON.stringify(info.subscriptionUrl)};
+      var amneziawgUrl = ${JSON.stringify(info.amneziawgUrl)};
       var current = document.documentElement.lang === 'en' ? 'en' : 'ru';
 
       function supported(locale) {
@@ -624,6 +636,28 @@ export function renderSubscriptionStatusPage(
           }
         });
       }
+
+      var copyAwgBtn = document.getElementById('copy-awg');
+      if (copyAwgBtn) {
+        copyAwgBtn.addEventListener('click', function () {
+          var label = packs[current] ? packs[current].copyAmneziawg : 'Copy AmneziaWG URL';
+          var done = packs[current] ? packs[current].copied : 'Copied';
+          var reset = function () {
+            copyAwgBtn.textContent = label;
+          };
+          var showDone = function () {
+            copyAwgBtn.textContent = done;
+            setTimeout(reset, 1400);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(amneziawgUrl).then(showDone).catch(function () {
+              reset();
+            });
+          } else {
+            reset();
+          }
+        });
+      }
     })();
   </script>
 </body>
@@ -631,7 +665,7 @@ export function renderSubscriptionStatusPage(
 }
 
 const VPN_CLIENT_UA =
-  /(?:mihomo|clash|stash|flclash|v2rayn|v2rayng|v2raytun|shadowrocket|surge|happ|hiddify|nekoray|nekobox|streisand|sing-box|sfa|sfm|sfi)/i;
+  /(?:mihomo|clash|stash|flclash|v2rayn|v2rayng|v2raytun|shadowrocket|surge|happ|hiddify|nekoray|nekobox|streisand|sing-box|sfa|sfm|sfi|amnezia)/i;
 
 /**
  * Browsers get the HTML status page; VPN clients and explicit ?format= keep profiles.

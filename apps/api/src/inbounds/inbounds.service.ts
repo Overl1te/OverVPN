@@ -50,6 +50,10 @@ import type {
 } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 import {
+  buildAmneziawgUri,
+  createAmneziawgCredential,
+} from './amneziawg-domain';
+import {
   buildHysteria2Uri,
   createCredential,
   normalizeHysteria2Password,
@@ -58,6 +62,7 @@ import {
   buildInboundStorage,
   encryptableSecrets,
   isInboundSecretBundle,
+  parseAmneziawgPublicConfig,
   parseHysteria2PublicConfig,
   parseMtproxyPublicConfig,
   parseShadowsocksPublicConfig,
@@ -129,9 +134,11 @@ export class InboundsService {
   private readonly xrayWgPort: number;
   private readonly mtproxyPortMin: number;
   private readonly mtproxyPortMax: number;
+  private readonly amneziawgPort: number;
   private readonly singBoxEnabled: boolean;
   private readonly xrayEnabled: boolean;
   private readonly mtproxyEnabled: boolean;
+  private readonly amneziawgEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -145,6 +152,7 @@ export class InboundsService {
       SING_BOX: config.get('SING_BOX_CONFIG_PATH', { infer: true }),
       XRAY: config.get('XRAY_CONFIG_PATH', { infer: true }),
       MTPROXY: config.get('MTPROXY_CONFIG_PATH', { infer: true }),
+      AMNEZIAWG: config.get('AMNEZIAWG_CONFIG_PATH', { infer: true }),
     };
     this.binaryPath = config.get('SING_BOX_BINARY_PATH', { infer: true });
     this.processTimeoutMs = config.get('SING_BOX_PROCESS_TIMEOUT_MS', {
@@ -165,9 +173,11 @@ export class InboundsService {
     this.xrayWgPort = config.get('XRAY_WG_PORT', { infer: true });
     this.mtproxyPortMin = config.get('MTPROXY_PORT_MIN', { infer: true });
     this.mtproxyPortMax = config.get('MTPROXY_PORT_MAX', { infer: true });
+    this.amneziawgPort = config.get('AMNEZIAWG_PORT', { infer: true });
     this.singBoxEnabled = config.get('SING_BOX_ENABLED', { infer: true });
     this.xrayEnabled = config.get('XRAY_ENABLED', { infer: true });
     this.mtproxyEnabled = config.get('MTPROXY_ENABLED', { infer: true });
+    this.amneziawgEnabled = config.get('AMNEZIAWG_ENABLED', { infer: true });
   }
 
   async list(query: InboundListQuery): Promise<{
@@ -1043,6 +1053,37 @@ export class InboundsService {
           label,
         });
         protocol = inbound.protocol;
+      } else if (inbound.protocol === 'AMNEZIAWG') {
+        const publicConfig = parseAmneziawgPublicConfig(inbound.config);
+        const wgSecrets = secrets as WireguardInboundSecrets;
+        const wgCredential = credential as WireguardCredential;
+        uri = buildAmneziawgUri({
+          privateKey: wgCredential.privateKey,
+          publicKey: wgCredential.publicKey,
+          serverPublicKey: wgSecrets.publicKey,
+          address: wgCredential.address,
+          host,
+          port,
+          mtu: publicConfig.mtu,
+          jc: publicConfig.jc,
+          jmin: publicConfig.jmin,
+          jmax: publicConfig.jmax,
+          s1: publicConfig.s1,
+          s2: publicConfig.s2,
+          s3: publicConfig.s3,
+          s4: publicConfig.s4,
+          h1: publicConfig.h1,
+          h2: publicConfig.h2,
+          h3: publicConfig.h3,
+          h4: publicConfig.h4,
+          i1: publicConfig.i1,
+          i2: publicConfig.i2,
+          i3: publicConfig.i3,
+          i4: publicConfig.i4,
+          i5: publicConfig.i5,
+          label,
+        });
+        protocol = 'AMNEZIAWG';
       } else if (inbound.protocol === 'MTPROXY') {
         const publicConfig = parseMtproxyPublicConfig(inbound.config);
         uri = buildMtproxyUri({
@@ -1165,6 +1206,7 @@ export class InboundsService {
       xrayWgPort: this.xrayWgPort,
       mtproxyPortMin: this.mtproxyPortMin,
       mtproxyPortMax: this.mtproxyPortMax,
+      amneziawgPort: this.amneziawgPort,
     };
   }
 
@@ -1194,6 +1236,15 @@ export class InboundsService {
           'MTProxy is disabled on this install. Enable it with: overvpn enable-core mtproxy',
         messageRu:
           'MTProxy отключён на этой установке. Включите: overvpn enable-core mtproxy',
+      });
+    }
+    if (engine === 'AMNEZIAWG' && !this.amneziawgEnabled) {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'amneziawg_disabled',
+        message:
+          'AmneziaWG is disabled on this install. Enable it with: overvpn enable-core amneziawg',
+        messageRu:
+          'AmneziaWG отключён на этой установке. Включите: overvpn enable-core amneziawg',
       });
     }
   }
@@ -1397,6 +1448,11 @@ export class InboundsService {
         this.parseWireguardPublicConfig(inbound).address,
       );
     }
+    if (inbound.protocol === 'AMNEZIAWG') {
+      return createAmneziawgCredential(
+        this.parseAmneziawgPublicConfig(inbound).address,
+      );
+    }
     if (inbound.protocol === 'MTPROXY') {
       return createMtproxyCredential(input.password);
     }
@@ -1411,7 +1467,8 @@ export class InboundsService {
         inbound.protocol === 'SHADOWSOCKS' ||
         inbound.protocol === 'SHADOWSOCKS_XRAY' ||
         inbound.protocol === 'WIREGUARD' ||
-        inbound.protocol === 'WIREGUARD_XRAY'
+        inbound.protocol === 'WIREGUARD_XRAY' ||
+        inbound.protocol === 'AMNEZIAWG'
       ) {
         throw new ApiException(
           'INTERNAL_ERROR',
@@ -1470,7 +1527,11 @@ export class InboundsService {
         }
         return parsed;
       }
-      if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+      if (
+        protocol === 'WIREGUARD' ||
+        protocol === 'WIREGUARD_XRAY' ||
+        protocol === 'AMNEZIAWG'
+      ) {
         if (
           !('privateKey' in parsed) ||
           !('publicKey' in parsed) ||
@@ -1698,6 +1759,16 @@ export class InboundsService {
         },
       };
     }
+    if (inbound.protocol === 'AMNEZIAWG') {
+      return {
+        ...common,
+        protocol: 'AMNEZIAWG',
+        settings: {
+          ...this.parseAmneziawgPublicConfig(inbound),
+          ...listen,
+        },
+      };
+    }
     if (inbound.protocol === 'MTPROXY') {
       return {
         ...common,
@@ -1765,6 +1836,17 @@ export class InboundsService {
   private parseWireguardPublicConfig(inbound: Inbound) {
     try {
       return parseWireguardPublicConfig(inbound.config);
+    } catch {
+      throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
+        reason: 'inbound_settings_migration_required',
+        inboundId: inbound.id,
+      });
+    }
+  }
+
+  private parseAmneziawgPublicConfig(inbound: Inbound) {
+    try {
+      return parseAmneziawgPublicConfig(inbound.config);
     } catch {
       throw new ApiException('CONFLICT', HttpStatus.CONFLICT, {
         reason: 'inbound_settings_migration_required',
@@ -1855,6 +1937,9 @@ export class InboundsService {
       inbound.protocol === 'WIREGUARD_XRAY'
     ) {
       return this.parseWireguardPublicConfig(inbound);
+    }
+    if (inbound.protocol === 'AMNEZIAWG') {
+      return this.parseAmneziawgPublicConfig(inbound);
     }
     if (inbound.protocol === 'MTPROXY') {
       return this.parseMtproxyPublicConfig(inbound);

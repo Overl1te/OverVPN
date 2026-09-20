@@ -36,6 +36,7 @@ enum CoreEngine {
   SING_BOX
   XRAY
   MTPROXY
+  AMNEZIAWG
 }
 
 enum InboundProtocol {
@@ -51,6 +52,7 @@ enum InboundProtocol {
   SHADOWSOCKS_XRAY
   WIREGUARD_XRAY
   MTPROXY
+  AMNEZIAWG
 }
 
 enum ResetStrategy {

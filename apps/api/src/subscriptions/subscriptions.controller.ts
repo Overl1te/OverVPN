@@ -33,7 +33,10 @@ import {
   encodeHappBase64Value,
   prependHappLinksMeta,
 } from './happ-subscription-meta';
-import { SubscriptionProfileBuilder } from './subscription-profile';
+import {
+  renderAmneziawgNativeSubscription,
+  SubscriptionProfileBuilder,
+} from './subscription-profile';
 import { SubscriptionRateLimitGuard } from './subscription-rate-limit';
 import {
   prefersSubscriptionHtmlPage,
@@ -112,6 +115,12 @@ class SubscriptionInfoDto implements SubscriptionInfo {
   showTrafficLimits!: boolean;
   @ApiProperty({ format: 'uri' })
   subscriptionUrl!: string;
+  @ApiProperty({
+    format: 'uri',
+    description:
+      'Amnezia VPN URL: AWG-only native configs. Not included in Happ/Hiddify downloads.',
+  })
+  amneziawgUrl!: string;
   @ApiProperty({ enum: SUBSCRIPTION_FORMATS, isArray: true })
   formats!: SubscriptionFormat[];
   @ApiProperty({ type: SubscriptionFormatUrlsDto })
@@ -343,6 +352,63 @@ export class SubscriptionsController {
     return rendered.body;
   }
 
+  @Get(':token/amneziawg')
+  @ApiOperation({
+    summary: 'Download AmneziaWG configs for Amnezia VPN',
+    description:
+      'Same token as the main subscription, but only AmneziaWG 2.0 native configs. Happ/Hiddify keep using the main URL without awg:// lines.',
+  })
+  @ApiParam({
+    name: 'token',
+    description: 'Opaque 32-byte base64url subscription token.',
+    schema: {
+      type: 'string',
+      pattern: '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$',
+    },
+  })
+  @ApiProduces('text/plain', 'text/html')
+  @ApiResponse({
+    status: 200,
+    description:
+      'AmneziaWG Interface/Peer configs (text/plain) or HTML status for browsers.',
+  })
+  async amneziawgProfile(
+    @Param('token') token: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<string> {
+    const accept = request.headers.accept;
+    const userAgent = request.headers['user-agent'];
+    if (prefersSubscriptionHtmlPage(undefined, accept, userAgent)) {
+      const info = await this.subscriptions.info(token);
+      setSubscriptionHeaders(response, info, true);
+      response.type('text/html; charset=utf-8');
+      return renderSubscriptionStatusPage(
+        info,
+        headerValue(request.headers['accept-language']),
+      );
+    }
+
+    const access = await this.subscriptions.profile(token, {
+      kind: 'amneziawg',
+    });
+    setSubscriptionHeaders(response, access.info);
+    if (access.kind === 'inactive') {
+      throw new ApiException('SUBSCRIPTION_INACTIVE', HttpStatus.FORBIDDEN);
+    }
+    if (access.kind === 'empty') {
+      throw new ApiException('SUBSCRIPTION_EMPTY', HttpStatus.CONFLICT);
+    }
+
+    const body = renderAmneziawgNativeSubscription(access.profile);
+    response.type('text/plain; charset=utf-8');
+    response.setHeader(
+      'Content-Disposition',
+      contentDisposition(access.info.username, 'conf'),
+    );
+    return body;
+  }
+
   @Get(':token/info')
   @ApiOperation({
     summary: 'Read public subscription status and usage',
@@ -542,7 +608,7 @@ function setSubscriptionHeaders(
 
 function contentDisposition(
   username: string,
-  extension: 'json' | 'txt' | 'yaml',
+  extension: 'json' | 'txt' | 'yaml' | 'conf',
 ): string {
   const safeName =
     username

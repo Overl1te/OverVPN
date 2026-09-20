@@ -38,6 +38,7 @@ GHCR_API_IMAGE="ghcr.io/overl1te/overvpn-api"
 GHCR_WEB_IMAGE="ghcr.io/overl1te/overvpn-web"
 GHCR_AGENT_IMAGE="ghcr.io/overl1te/overvpn-agent"
 GHCR_MTPROXY_IMAGE="ghcr.io/overl1te/overvpn-mtproxy"
+GHCR_AMNEZIAWG_IMAGE="ghcr.io/overl1te/overvpn-amneziawg"
 DEFAULT_POSTGRES_IMAGE="postgres:18-alpine"
 DEFAULT_REDIS_IMAGE="redis:8-alpine"
 BUSYBOX_IMAGE="busybox:1.37"
@@ -45,7 +46,7 @@ CLI_LANG="${OVERVPN_CLI_LANG:-en}"
 
 readonly SINGBOX_PROTOCOLS="HYSTERIA2,VLESS_REALITY,TROJAN,SHADOWSOCKS,WIREGUARD"
 readonly XRAY_PROTOCOLS="VLESS_XHTTP_TLS,VLESS_GRPC_TLS,VLESS_TCP_TLS,TROJAN_TLS,SHADOWSOCKS_XRAY,WIREGUARD_XRAY"
-readonly ALL_PROTOCOLS="${SINGBOX_PROTOCOLS},${XRAY_PROTOCOLS},MTPROXY"
+readonly ALL_PROTOCOLS="${SINGBOX_PROTOCOLS},${XRAY_PROTOCOLS},MTPROXY,AMNEZIAWG"
 
 # TUI drawing (MTProxyMax-style console screens)
 readonly BOX_TL='╔' BOX_TR='╗' BOX_BL='╚' BOX_BR='╝'
@@ -1181,6 +1182,7 @@ protocol_engine() {
     HYSTERIA2|VLESS_REALITY|TROJAN|SHADOWSOCKS|WIREGUARD) printf 'singbox' ;;
     VLESS_XHTTP_TLS|VLESS_GRPC_TLS|VLESS_TCP_TLS|TROJAN_TLS|SHADOWSOCKS_XRAY|WIREGUARD_XRAY) printf 'xray' ;;
     MTPROXY) printf 'mtproxy' ;;
+    AMNEZIAWG) printf 'amneziawg' ;;
     *) return 1 ;;
   esac
 }
@@ -1199,6 +1201,7 @@ protocol_port_var() {
     SHADOWSOCKS_XRAY) printf 'CFG_XRAY_SS_PORT' ;;
     WIREGUARD_XRAY) printf 'CFG_XRAY_WG_PORT' ;;
     MTPROXY) printf 'CFG_MTPROXY_PORT_MIN' ;;
+    AMNEZIAWG) printf 'CFG_AMNEZIAWG_PORT' ;;
     *) return 1 ;;
   esac
 }
@@ -1212,7 +1215,7 @@ protocol_default_port() {
       WIREGUARD) printf '38443' ;; VLESS_XHTTP_TLS) printf '35443' ;;
       VLESS_GRPC_TLS) printf '35444' ;; VLESS_TCP_TLS) printf '35445' ;;
       TROJAN_TLS) printf '35446' ;; SHADOWSOCKS_XRAY) printf '35447' ;;
-      WIREGUARD_XRAY) printf '39443' ;; MTPROXY) printf '36001' ;;
+      WIREGUARD_XRAY) printf '39443' ;; MTPROXY) printf '36001' ;; AMNEZIAWG) printf '39444' ;;
     esac
   else
     case "$protocol" in
@@ -1221,7 +1224,7 @@ protocol_default_port() {
       WIREGUARD) printf '51820' ;; VLESS_XHTTP_TLS) printf '8443' ;;
       VLESS_GRPC_TLS) printf '8446' ;; VLESS_TCP_TLS) printf '8447' ;;
       TROJAN_TLS) printf '8448' ;; SHADOWSOCKS_XRAY) printf '8449' ;;
-      WIREGUARD_XRAY) printf '51821' ;; MTPROXY) printf '10001' ;;
+      WIREGUARD_XRAY) printf '51821' ;; MTPROXY) printf '10001' ;; AMNEZIAWG) printf '51822' ;;
     esac
   fi
 }
@@ -1262,9 +1265,11 @@ derive_enabled_cores() {
   CFG_SING_BOX_ENABLED="false"
   CFG_XRAY_ENABLED="false"
   CFG_MTPROXY_ENABLED="false"
+  CFG_AMNEZIAWG_ENABLED="false"
   [[ ",$cores," == *,singbox,* ]] && CFG_SING_BOX_ENABLED="true"
   [[ ",$cores," == *,xray,* ]] && CFG_XRAY_ENABLED="true"
   [[ ",$cores," == *,mtproxy,* ]] && CFG_MTPROXY_ENABLED="true"
+  [[ ",$cores," == *,amneziawg,* ]] && CFG_AMNEZIAWG_ENABLED="true"
 }
 
 set_protocol_port() {
@@ -1308,6 +1313,7 @@ protocols_for_cores() {
       singbox) result="${result:+${result},}${SINGBOX_PROTOCOLS}" ;;
       xray) result="${result:+${result},}${XRAY_PROTOCOLS}" ;;
       mtproxy) result="${result:+${result},}MTPROXY" ;;
+      amneziawg) result="${result:+${result},}AMNEZIAWG" ;;
       *) colorized_echo red "Unknown core: $core" >&2; exit 1 ;;
     esac
   done
@@ -1357,7 +1363,7 @@ prompt_install_depth() {
 
 prompt_detailed_protocols() {
   local protocol selected="" heading
-  for heading in "SING_BOX:${SINGBOX_PROTOCOLS}" "XRAY:${XRAY_PROTOCOLS}" "MTPROXY:MTPROXY"; do
+  for heading in "SING_BOX:${SINGBOX_PROTOCOLS}" "XRAY:${XRAY_PROTOCOLS}" "MTPROXY:MTPROXY" "AMNEZIAWG:AMNEZIAWG"; do
     colorized_echo cyan "${heading%%:*}"
     IFS=',' read -ra _group <<<"${heading#*:}"
     for protocol in "${_group[@]}"; do
@@ -1931,6 +1937,8 @@ remove_overvpn_images() {
     [[ -n "$img" ]] && images+=("$img")
     img="$(get_env_var MTPROXY_IMAGE "$ENV_FILE" 2>/dev/null || true)"
     [[ -n "$img" ]] && images+=("$img")
+    img="$(get_env_var AMNEZIAWG_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+    [[ -n "$img" ]] && images+=("$img")
     img="$(get_env_var AGENT_IMAGE "$ENV_FILE" 2>/dev/null || true)"
     [[ -n "$img" ]] && images+=("$img")
   fi
@@ -1984,6 +1992,24 @@ mtproxy_enabled() {
   esac
 }
 
+amneziawg_image_ref() {
+  local image
+  image="$(get_env_var AMNEZIAWG_IMAGE "$ENV_FILE" 2>/dev/null || true)"
+  if [[ -z "$image" ]]; then
+    image="${GHCR_AMNEZIAWG_IMAGE}:latest"
+  fi
+  printf '%s\n' "$image"
+}
+
+amneziawg_enabled() {
+  local value
+  value="$(get_env_var AMNEZIAWG_ENABLED "$ENV_FILE" 2>/dev/null || true)"
+  case "${value:-true}" in
+    true|1|yes|YES|True) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 assert_api_image_has_xray() {
   local image=$1
   colorized_echo blue "$(cli_t checking_api_image)"
@@ -2004,12 +2030,23 @@ assert_mtproxy_image() {
   fi
 }
 
+assert_amneziawg_image() {
+  local image=$1
+  colorized_echo blue "Checking AmneziaWG image..."
+  if ! docker run --rm --entrypoint /bin/sh "$image" -c \
+    'test -x /usr/local/bin/amneziawg-go && test -x /usr/local/bin/awg && test -f /opt/overvpn-amneziawg/supervisor.py && command -v python3 >/dev/null'; then
+    colorized_echo red "Image $image is missing AmneziaWG runtime. Retry with: sudo overvpn install --build"
+    exit 1
+  fi
+}
+
 core_enabled() {
   local core=$1 key value
   case "$core" in
     singbox) key="SING_BOX_ENABLED" ;;
     xray) key="XRAY_ENABLED" ;;
     mtproxy) key="MTPROXY_ENABLED" ;;
+    amneziawg) key="AMNEZIAWG_ENABLED" ;;
     *) return 1 ;;
   esac
   value="$(get_env_var "$key" "$ENV_FILE" 2>/dev/null || true)"
@@ -2018,15 +2055,15 @@ core_enabled() {
 
 compose_up() {
   local do_build=${1:-false}
-  local enable_mtproxy="false"
   if mtproxy_enabled; then
-    enable_mtproxy="true"
-  fi
-
-  if [[ "$enable_mtproxy" == "true" ]]; then
     colorized_echo blue "$(cli_t building_mtproxy_image)"
     compose build core-mtproxy
     assert_mtproxy_image "$(mtproxy_image_ref)"
+  fi
+  if amneziawg_enabled; then
+    colorized_echo blue "Building AmneziaWG image..."
+    compose build core-amneziawg
+    assert_amneziawg_image "$(amneziawg_image_ref)"
   fi
 
   if [[ "$do_build" == "true" ]]; then
@@ -2034,10 +2071,9 @@ compose_up() {
     compose up -d --build
   else
     colorized_echo blue "$(cli_t pulling_images)"
-    # Pull active profiles but skip mtproxy (built above / optional GHCR).
     local profiles
     profiles="$(get_env_var COMPOSE_PROFILES "$ENV_FILE" 2>/dev/null || true)"
-    profiles="$(printf '%s' "$profiles" | sed -E 's/(^|,)mtproxy(,|$)/\1/g; s/,,+/,/g; s/^,//; s/,$//')"
+    profiles="$(printf '%s' "$profiles" | sed -E 's/(^|,)(mtproxy|amneziawg)(,|$)/\1/g; s/,,+/,/g; s/^,//; s/,$//')"
     COMPOSE_PROFILES="$profiles" compose pull
     if core_enabled xray; then
       assert_api_image_has_xray "$(api_image_ref)"
@@ -2045,7 +2081,6 @@ compose_up() {
     colorized_echo blue "$(cli_t starting_containers)"
     compose up -d --pull missing
   fi
-  # Oneshot init does not re-run on plain `up`; force it so management APIs are present.
   colorized_echo blue "$(cli_t refreshing_core_config)"
   if core_enabled singbox; then
     compose up -d --force-recreate --no-deps core-config-init
@@ -2055,9 +2090,13 @@ compose_up() {
     compose up -d --force-recreate --no-deps core-xray-config-init
     compose up -d --force-recreate --no-deps core-xray
   fi
-  if [[ "$enable_mtproxy" == "true" ]]; then
+  if mtproxy_enabled; then
     compose up -d --force-recreate --no-deps core-mtproxy-config-init
     compose up -d --force-recreate --no-deps core-mtproxy
+  fi
+  if amneziawg_enabled; then
+    compose up -d --force-recreate --no-deps core-amneziawg-config-init
+    compose up -d --force-recreate --no-deps core-amneziawg
   fi
   if with_proxy_enabled || is_proxy_host; then
     compose up -d --force-recreate --no-deps agent || true
@@ -2426,7 +2465,7 @@ configure_firewall() {
     port="${!var:-$(get_env_var "${var#CFG_}" "$ENV_FILE" 2>/dev/null || true)}"
     [[ -z "$port" ]] && continue
     transport="tcp"
-    case "$protocol" in HYSTERIA2|WIREGUARD|WIREGUARD_XRAY) transport="udp" ;; esac
+    case "$protocol" in HYSTERIA2|WIREGUARD|WIREGUARD_XRAY|AMNEZIAWG) transport="udp" ;; esac
     if [[ "$protocol" == "MTPROXY" ]]; then
       ufw allow "${port}:$(get_env_var MTPROXY_PORT_MAX "$ENV_FILE")/tcp" >/dev/null 2>&1 || true
     else
@@ -3213,9 +3252,11 @@ generate_env() {
   set_env_var "XRAY_WG_PORT" "$CFG_XRAY_WG_PORT"
   set_env_var "MTPROXY_PORT_MIN" "$CFG_MTPROXY_PORT_MIN"
   set_env_var "MTPROXY_PORT_MAX" "$CFG_MTPROXY_PORT_MAX"
+  set_env_var "AMNEZIAWG_PORT" "${CFG_AMNEZIAWG_PORT:-51822}"
   set_env_var "SING_BOX_ENABLED" "$CFG_SING_BOX_ENABLED"
   set_env_var "XRAY_ENABLED" "$CFG_XRAY_ENABLED"
   set_env_var "MTPROXY_ENABLED" "$CFG_MTPROXY_ENABLED"
+  set_env_var "AMNEZIAWG_ENABLED" "${CFG_AMNEZIAWG_ENABLED:-true}"
   set_env_var "CREATE_DEFAULT_INBOUNDS" "$CFG_CREATE_DEFAULT_INBOUNDS"
   set_env_var "ONBOARDING_TOUR" "${CFG_ONBOARDING_TOUR:-true}"
   set_env_var "UFW_ENABLED" "${CFG_USE_UFW:-true}"
@@ -3231,14 +3272,17 @@ generate_env() {
     [[ "${CFG_SING_BOX_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},singbox"
     [[ "${CFG_XRAY_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},xray"
     [[ "${CFG_MTPROXY_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},mtproxy"
+    [[ "${CFG_AMNEZIAWG_ENABLED:-true}" == "true" ]] && compose_profiles="${compose_profiles},amneziawg"
   else
     # Panel-only: disable local data plane.
     set_env_var "SING_BOX_ENABLED" "false"
     set_env_var "XRAY_ENABLED" "false"
     set_env_var "MTPROXY_ENABLED" "false"
+    set_env_var "AMNEZIAWG_ENABLED" "false"
   fi
   set_env_var "COMPOSE_PROFILES" "$compose_profiles"
   set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
+  set_env_var "AMNEZIAWG_IMAGE" "${GHCR_AMNEZIAWG_IMAGE}:${image_tag}"
   set_env_var "API_IMAGE" "${GHCR_API_IMAGE}:${image_tag}"
   set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
   set_env_var "AGENT_IMAGE" "${GHCR_AGENT_IMAGE}:${image_tag}"
@@ -3342,6 +3386,7 @@ UFW_ENABLED=${CFG_USE_UFW:-true}
 SING_BOX_ENABLED=${CFG_SING_BOX_ENABLED}
 XRAY_ENABLED=${CFG_XRAY_ENABLED}
 MTPROXY_ENABLED=${CFG_MTPROXY_ENABLED:-true}
+AMNEZIAWG_ENABLED=${CFG_AMNEZIAWG_ENABLED:-true}
 ONBOARDING_TOUR=${CFG_ONBOARDING_TOUR:-true}
 CLI_LANG=${CLI_LANG}
 EOF
@@ -3445,8 +3490,8 @@ Usage:
   ${APP_NAME} install [options]
   ${APP_NAME} install-proxy --panel-url <url> --token <token> --node-id <id> [options]
   ${APP_NAME} up | down | restart | status | logs [service] | update | check-update | uninstall
-  ${APP_NAME} enable-core <singbox|xray|mtproxy>
-  ${APP_NAME} disable-core <singbox|xray|mtproxy>
+  ${APP_NAME} enable-core <singbox|xray|mtproxy|amneziawg>
+  ${APP_NAME} disable-core <singbox|xray|mtproxy|amneziawg>
   ${APP_NAME} info | edit | bootstrap | nginx | config | install-script
 
 Config (domains, nginx, certificates):
@@ -3845,6 +3890,7 @@ enabled_profiles_from_env() {
     core_enabled singbox && profiles="${profiles},singbox"
     core_enabled xray && profiles="${profiles},xray"
     core_enabled mtproxy && profiles="${profiles},mtproxy"
+    core_enabled amneziawg && profiles="${profiles},amneziawg"
   fi
   printf '%s' "$profiles"
 }
@@ -3854,6 +3900,7 @@ core_protocols() {
     singbox) printf '%s' "$SINGBOX_PROTOCOLS" ;;
     xray) printf '%s' "$XRAY_PROTOCOLS" ;;
     mtproxy) printf 'MTPROXY' ;;
+    amneziawg) printf 'AMNEZIAWG' ;;
   esac
 }
 
@@ -3884,7 +3931,9 @@ cmd_enable_core() {
     singbox) key="SING_BOX_ENABLED" ;;
     xray) key="XRAY_ENABLED" ;;
     mtproxy) key="MTPROXY_ENABLED" ;;
-    *) colorized_echo red "Core must be singbox, xray, or mtproxy"; exit 1 ;;
+    amneziawg) key="AMNEZIAWG_ENABLED" ;;
+    *) colorized_echo red "Core must be singbox, xray, mtproxy, or amneziawg"; exit 1 ;;
+  esac
   esac
   set_env_var "$key" "true"
   update_core_protocol_lists "$core" true
@@ -3899,6 +3948,7 @@ cmd_enable_core() {
     singbox) compose up -d core-config-init core ;;
     xray) compose up -d core-xray-config-init core-xray ;;
     mtproxy) compose up -d core-mtproxy-config-init core-mtproxy ;;
+    amneziawg) compose up -d core-amneziawg-config-init core-amneziawg ;;
   esac
   colorized_echo green "Core enabled: $core"
 }
@@ -3911,7 +3961,8 @@ cmd_disable_core() {
     singbox) key="SING_BOX_ENABLED"; services="core core-config-init" ;;
     xray) key="XRAY_ENABLED"; services="core-xray core-xray-config-init" ;;
     mtproxy) key="MTPROXY_ENABLED"; services="core-mtproxy core-mtproxy-config-init" ;;
-    *) colorized_echo red "Core must be singbox, xray, or mtproxy"; exit 1 ;;
+    amneziawg) key="AMNEZIAWG_ENABLED"; services="core-amneziawg core-amneziawg-config-init" ;;
+    *) colorized_echo red "Core must be singbox, xray, mtproxy, or amneziawg"; exit 1 ;;
   esac
   colorized_echo yellow "Disable/remove inbounds for $core in the admin panel before disabling this core."
   compose stop $services >/dev/null 2>&1 || true
@@ -3989,6 +4040,7 @@ cmd_update() {
     set_env_var "WEB_IMAGE" "${GHCR_WEB_IMAGE}:${image_tag}"
     set_env_var "AGENT_IMAGE" "${GHCR_AGENT_IMAGE}:${image_tag}"
     set_env_var "MTPROXY_IMAGE" "${GHCR_MTPROXY_IMAGE}:${image_tag}"
+    set_env_var "AMNEZIAWG_IMAGE" "${GHCR_AMNEZIAWG_IMAGE}:${image_tag}"
   fi
 
   # Proxy hosts: ensure LE FILES TLS before force-recreating cores (avoids crash-loop on missing pem).

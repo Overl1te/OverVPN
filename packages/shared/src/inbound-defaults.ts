@@ -1,5 +1,6 @@
 import type { InboundProtocol } from './constants.js';
 import type {
+  AmneziawgInboundSettings,
   Hysteria2InboundSettings,
   MtproxyInboundSettings,
   ShadowsocksInboundSettings,
@@ -38,6 +39,8 @@ export type InboundDefaultsContext = {
   xraySsPort?: number;
   /** Published Xray WireGuard UDP port. */
   xrayWgPort?: number;
+  /** Published AmneziaWG 2.0 UDP port. */
+  amneziawgPort?: number;
   /** First published MTProxy TCP port (compose MTPROXY_PORT_MIN). */
   mtproxyPortMin?: number;
   /** Last published MTProxy TCP port (compose MTPROXY_PORT_MAX). */
@@ -77,6 +80,7 @@ export type PublishedPortContext = Pick<
   | 'xrayTrojanPort'
   | 'xraySsPort'
   | 'xrayWgPort'
+  | 'amneziawgPort'
   | 'mtproxyPortMin'
   | 'mtproxyPortMax'
 >;
@@ -109,6 +113,8 @@ export function publishedListenPortForProtocol(
       return context.xraySsPort ?? 8449;
     case 'WIREGUARD_XRAY':
       return context.xrayWgPort ?? 51_821;
+    case 'AMNEZIAWG':
+      return context.amneziawgPort ?? 51_822;
     case 'MTPROXY':
       return context.mtproxyPortMin ?? 10_001;
   }
@@ -131,7 +137,10 @@ export function isPublishedMtproxyPort(listenPort: number, context: PublishedPor
 export function publishedTransportForProtocol(
   protocol: InboundProtocol,
 ): InboundPublishedTransport {
-  return protocol === 'HYSTERIA2' || protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY'
+  return protocol === 'HYSTERIA2' ||
+    protocol === 'WIREGUARD' ||
+    protocol === 'WIREGUARD_XRAY' ||
+    protocol === 'AMNEZIAWG'
     ? 'udp'
     : 'tcp';
 }
@@ -253,6 +262,7 @@ export function buildDefaultInboundSettings(
   | TrojanTlsInboundSettings
   | ShadowsocksInboundSettings
   | WireguardInboundSettings
+  | AmneziawgInboundSettings
   | MtproxyInboundSettings {
   const publicHost = overrides?.publicHost ?? context.publicHost;
   const common = listenFields(protocol, { ...context, publicHost }, overrides);
@@ -311,6 +321,12 @@ export function buildDefaultInboundSettings(
       return {
         ...common,
         address: '10.66.0.1/24',
+        mtu: 1420,
+      };
+    case 'AMNEZIAWG':
+      return {
+        ...common,
+        address: '10.67.0.1/24',
         mtu: 1420,
       };
     case 'VLESS_XHTTP_TLS': {

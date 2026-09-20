@@ -22,6 +22,7 @@ import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../infrastructure/infrastructure.module';
 import {
   SubscriptionProfileBuilder,
+  type SubscriptionProfileKind,
   type SubscriptionProfileUser,
 } from './subscription-profile';
 
@@ -165,8 +166,13 @@ export class SubscriptionsService {
 
   async profile(
     token: string,
-    now = new Date(),
+    options: {
+      kind?: SubscriptionProfileKind;
+      now?: Date;
+    } = {},
   ): Promise<SubscriptionProfileAccess> {
+    const kind = options.kind ?? 'vpn';
+    const now = options.now ?? new Date();
     const user = await this.loadProfile(token);
     const info = buildSubscriptionInfo(
       user,
@@ -179,7 +185,7 @@ export class SubscriptionsService {
       return { kind: 'inactive', info };
     }
 
-    const profile = this.profiles.build(toProfileUser(user));
+    const profile = this.profiles.build(toProfileUser(user), kind);
     if (profile.endpoints.length === 0) {
       return { kind: 'empty', info };
     }
@@ -289,6 +295,7 @@ export function buildSubscriptionInfo(
     colorProfile: source.plan?.subscriptionColorProfile ?? null,
     showTrafficLimits: source.plan?.subscriptionShowTrafficLimits ?? true,
     subscriptionUrl,
+    amneziawgUrl: `${subscriptionUrl.replace(/\/+$/, '')}/amneziawg`,
     formats: [...SUBSCRIPTION_FORMATS],
     formatUrls: {
       singBox: `${subscriptionUrl}?format=sing-box`,

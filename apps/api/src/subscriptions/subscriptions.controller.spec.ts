@@ -44,6 +44,7 @@ describe('SubscriptionsController', () => {
     colorProfile: null,
     showTrafficLimits: true,
     subscriptionUrl: `https://vpn.example.com/api/sub/${TOKEN}`,
+    amneziawgUrl: `https://vpn.example.com/api/sub/${TOKEN}/amneziawg`,
     formats: ['sing-box', 'links', 'clash'],
     formatUrls: {
       singBox: `https://vpn.example.com/api/sub/${TOKEN}?format=sing-box`,
@@ -146,6 +147,71 @@ describe('SubscriptionsController', () => {
       'overvpn-alice.txt',
     );
     expect(builder.render).toHaveBeenCalledWith('links', profile);
+  });
+
+  it('serves AmneziaWG native configs on a dedicated path', async () => {
+    const awgProfile = {
+      title: 'OverVPN - alice',
+      identity: 'alice-id',
+      username: 'alice',
+      endpoints: [
+        {
+          protocol: 'AMNEZIAWG' as const,
+          tag: 'awg-edge',
+          displayName: 'alice-id - awg',
+          server: 'vpn.example.com',
+          port: 51822,
+          privateKey: Buffer.alloc(32, 1).toString('base64'),
+          publicKey: Buffer.alloc(32, 2).toString('base64'),
+          serverPublicKey: Buffer.alloc(32, 3).toString('base64'),
+          address: '10.67.0.2/32',
+          mtu: 1420,
+          jc: 4,
+          jmin: 40,
+          jmax: 90,
+          s1: 20,
+          s2: 30,
+          s3: 10,
+          s4: 8,
+          h1: '1',
+          h2: '2',
+          h3: '3',
+          h4: '4',
+          i1: '<r 128>',
+          i2: null,
+          i3: null,
+          i4: null,
+          i5: null,
+        },
+      ],
+    };
+    builder.render.mockClear();
+    service.profile.mockResolvedValueOnce({
+      kind: 'ready',
+      info,
+      profile: awgProfile,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get(`/api/sub/${TOKEN}/amneziawg`)
+      .set('User-Agent', 'AmneziaVPN/4.8')
+      .expect(200);
+
+    expect(service.profile).toHaveBeenCalledWith(TOKEN, {
+      kind: 'amneziawg',
+    });
+    expect(response.headers['content-type']).toMatch(
+      /^text\/plain; charset=utf-8/,
+    );
+    expect(response.headers['content-disposition']).toContain(
+      'overvpn-alice.conf',
+    );
+    expect(response.text).toContain('[Interface]');
+    expect(response.text).toContain('Jc = 4');
+    expect(response.text).toContain('I1 = <r 128>');
+    expect(response.text).toContain('Endpoint = vpn.example.com:51822');
+    expect(response.text).not.toContain('awg://');
+    expect(builder.render).not.toHaveBeenCalled();
   });
 
   it('emits Happ advanced headers and body meta when configured', async () => {
@@ -287,6 +353,7 @@ describe('subscription HTML preference', () => {
     [undefined, 'text/html', 'Mozilla/5.0', true],
     [undefined, '*/*', 'Mozilla/5.0', true],
     [undefined, '*/*', 'Mihomo/1.0', false],
+    [undefined, '*/*', 'AmneziaVPN/4.8', false],
     ['links', 'text/html', 'Mozilla/5.0', false],
     [undefined, undefined, undefined, false],
   ] as const)(

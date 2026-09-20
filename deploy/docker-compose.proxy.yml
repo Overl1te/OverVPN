@@ -6,11 +6,11 @@
 # Profiles (COMPOSE_PROFILES in .env):
 #   panel                 — postgres / redis / migrate / api / web
 #   proxy                 — agent (this file)
-#   singbox|xray|mtproxy  — VPN cores (docker-compose.yml)
+#   singbox|xray|mtproxy|amneziawg  — VPN cores (docker-compose.yml)
 #   tools                 — bootstrap-admin
 #
-# Co-located: COMPOSE_PROFILES=panel,proxy,singbox,xray,mtproxy
-# Remote proxy: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy
+# Co-located: COMPOSE_PROFILES=panel,proxy,singbox,xray,mtproxy,amneziawg
+# Remote proxy: COMPOSE_PROFILES=proxy,singbox,xray,mtproxy,amneziawg
 # Panel only:   COMPOSE_PROFILES=panel
 
 x-logging: &default-logging
@@ -63,6 +63,13 @@ x-agent-environment: &agent-environment
   MTPROXY_PID_PATH: /var/lib/overvpn/mtproxy-reload/mtproxy.pid
   MTPROXY_HEARTBEAT_PATH: /var/lib/overvpn/mtproxy-reload/heartbeat
   MTPROXY_RUNTIME_STATS_PATH: /var/lib/overvpn/mtproxy-reload/runtime-stats.json
+  AMNEZIAWG_CONFIG_PATH: /var/lib/amneziawg/config.json
+  AMNEZIAWG_LAST_KNOWN_GOOD_PATH: /var/lib/amneziawg/config.last-known-good.json
+  AMNEZIAWG_RELOAD_REQUEST_PATH: /var/lib/overvpn/amneziawg-reload/request
+  AMNEZIAWG_RELOAD_ACK_PATH: /var/lib/overvpn/amneziawg-reload/ack
+  AMNEZIAWG_PID_PATH: /var/lib/overvpn/amneziawg-reload/amneziawg.pid
+  AMNEZIAWG_HEARTBEAT_PATH: /var/lib/overvpn/amneziawg-reload/heartbeat
+  AMNEZIAWG_RUNTIME_STATS_PATH: /var/lib/overvpn/amneziawg-reload/runtime-stats.json
 
 services:
   agent:
@@ -86,6 +93,9 @@ services:
       core-mtproxy:
         condition: service_healthy
         required: false
+      core-amneziawg:
+        condition: service_healthy
+        required: false
     volumes:
       - agent_state:/var/lib/overvpn/agent
       - singbox_config:/var/lib/sing-box
@@ -99,6 +109,9 @@ services:
       - mtproxy_config:/var/lib/mtproxy
       - mtproxy_reload:/var/lib/overvpn/mtproxy-reload
       - mtproxy_state:/var/lib/mtproxy-state
+      - amneziawg_config:/var/lib/amneziawg
+      - amneziawg_reload:/var/lib/overvpn/amneziawg-reload
+      - amneziawg_state:/var/lib/amneziawg-state
       - ../logs/agent:/var/log/overvpn
       # Host procfs for CPU/RAM/NIC in heartbeat (same pattern as panel api).
       - /proc:/host/proc:ro

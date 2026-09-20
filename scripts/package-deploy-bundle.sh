@@ -17,6 +17,7 @@ tar -czf "$OUT" \
   deploy/sing-box \
   deploy/xray \
   deploy/mtproxy \
+  deploy/amneziawg \
   deploy/proxy
 
 printf 'Created %s\n' "$OUT"

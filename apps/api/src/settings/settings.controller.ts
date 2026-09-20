@@ -69,11 +69,15 @@ class SystemSettingsReadOnlyDto {
   @ApiProperty()
   mtproxyPortMax!: number;
   @ApiProperty()
+  amneziawgPort!: number;
+  @ApiProperty()
   singBoxEnabled!: boolean;
   @ApiProperty()
   xrayEnabled!: boolean;
   @ApiProperty()
   mtproxyEnabled!: boolean;
+  @ApiProperty()
+  amneziawgEnabled!: boolean;
   @ApiPropertyOptional({ nullable: true })
   tlsCertificatePath!: string | null;
   @ApiPropertyOptional({ nullable: true })

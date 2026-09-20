@@ -118,6 +118,8 @@ describe('SettingsService', () => {
     expect(initial.readOnly.singBoxEnabled).toBe(true);
     expect(initial.readOnly.xrayEnabled).toBe(true);
     expect(initial.readOnly.mtproxyEnabled).toBe(true);
+    expect(initial.readOnly.amneziawgPort).toBe(51822);
+    expect(initial.readOnly.amneziawgEnabled).toBe(true);
     expect(initial.readOnly.tlsCertificatePath).toBeNull();
     expect(initial.readOnly.tlsKeyPath).toBeNull();
     expect(initial).not.toHaveProperty('telegramBotToken');
@@ -265,9 +267,11 @@ function testConfig(
     XRAY_WG_PORT: 51821,
     MTPROXY_PORT_MIN: 10001,
     MTPROXY_PORT_MAX: 10016,
+    AMNEZIAWG_PORT: 51822,
     SING_BOX_ENABLED: true,
     XRAY_ENABLED: true,
     MTPROXY_ENABLED: true,
+    AMNEZIAWG_ENABLED: true,
     SECRETS_MASTER_KEY:
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     ...overrides,

@@ -31,6 +31,7 @@ const info: SubscriptionInfo = {
   colorProfile: null,
   showTrafficLimits: true,
   subscriptionUrl: 'https://sub.example.com/api/sub/token',
+  amneziawgUrl: 'https://sub.example.com/api/sub/token/amneziawg',
   formats: ['sing-box', 'links', 'clash'],
   formatUrls: {
     singBox: 'https://sub.example.com/api/sub/token?format=sing-box',
@@ -72,6 +73,8 @@ describe('renderSubscriptionStatusPage', () => {
     expect(html).toContain('Active');
     expect(html).toContain('Unlimited');
     expect(html).toContain('Copy URL');
+    expect(html).toContain('https://sub.example.com/api/sub/token/amneziawg');
+    expect(html).toContain('Amnezia VPN');
   });
 
   it('embeds both locale packs for client switching', () => {

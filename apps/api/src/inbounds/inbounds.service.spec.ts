@@ -14,7 +14,9 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     SING_BOX_CONFIG_PATH: '/tmp/config.json',
     XRAY_CONFIG_PATH: '/tmp/xray/config.json',
     MTPROXY_CONFIG_PATH: '/tmp/mtproxy/config.json',
+    AMNEZIAWG_CONFIG_PATH: '/tmp/amneziawg/config.json',
     MTPROXY_ENABLED: true,
+    AMNEZIAWG_ENABLED: true,
     SING_BOX_ENABLED: true,
     XRAY_ENABLED: true,
     SING_BOX_BINARY_PATH: '/usr/bin/sing-box',
@@ -32,6 +34,7 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     XRAY_WG_PORT: 51821,
     MTPROXY_PORT_MIN: 10001,
     MTPROXY_PORT_MAX: 10016,
+    AMNEZIAWG_PORT: 51822,
     ...overrides,
   };
   return {

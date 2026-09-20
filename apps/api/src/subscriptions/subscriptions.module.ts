@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import {
+  AmneziawgSubscriptionAdapter,
   Hysteria2SubscriptionAdapter,
   ShadowsocksSubscriptionAdapter,
   ShadowsocksXraySubscriptionAdapter,
@@ -37,6 +38,7 @@ import { SubscriptionsService } from './subscriptions.service';
     ShadowsocksXraySubscriptionAdapter,
     WireguardSubscriptionAdapter,
     WireguardXraySubscriptionAdapter,
+    AmneziawgSubscriptionAdapter,
     SubscriptionProfileBuilder,
     SubscriptionRateLimitStore,
     SubscriptionRateLimiter,

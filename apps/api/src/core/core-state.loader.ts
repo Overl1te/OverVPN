@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { CoreEngine } from '@overvpn/shared/constants';
 import {
+  amneziawgInboundPublicConfigSchema,
   hysteria2InboundPublicConfigSchema,
   mtproxyInboundPublicConfigSchema,
   shadowsocksInboundPublicConfigSchema,
@@ -352,6 +353,21 @@ export class CoreStateLoader {
         });
         continue;
       }
+      if (inbound.protocol === 'AMNEZIAWG') {
+        desiredInbounds.push({
+          ...base,
+          protocol: 'AMNEZIAWG',
+          config: amneziawgInboundPublicConfigSchema.parse(inbound.config),
+          secrets: this.decryptWireguardSecrets(
+            inbound.id,
+            inbound.secretDataEncrypted,
+          ),
+          assignments: assignments as Array<
+            (typeof assignments)[number] & { credential: WireguardCredential }
+          >,
+        });
+        continue;
+      }
       if (inbound.protocol === 'MTPROXY') {
         desiredInbounds.push({
           ...base,
@@ -537,7 +553,11 @@ export class CoreStateLoader {
       ) {
         return vlessCredentialSchema.parse(parsed);
       }
-      if (protocol === 'WIREGUARD' || protocol === 'WIREGUARD_XRAY') {
+      if (
+        protocol === 'WIREGUARD' ||
+        protocol === 'WIREGUARD_XRAY' ||
+        protocol === 'AMNEZIAWG'
+      ) {
         return wireguardCredentialSchema.parse(parsed);
       }
       return passwordCredentialSchema.parse(parsed);

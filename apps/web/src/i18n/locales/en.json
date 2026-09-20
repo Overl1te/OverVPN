@@ -308,6 +308,10 @@
     "speedLimit": "Speed limit",
     "resetStrategy": "Reset strategy",
     "subscription": "Subscription",
+    "amneziawgSubscription": "AmneziaWG (Amnezia VPN)",
+    "amneziawgSubscriptionHint": "Separate URL for Amnezia VPN. Happ/Hiddify keep using the main subscription — it does not include AWG.",
+    "copyAmneziawg": "Copy AmneziaWG URL",
+    "showAmneziawgQr": "AmneziaWG QR",
     "subscriptionLoading": "Loading subscription URL…",
     "subscriptionFormats": "Formats",
     "formatLinks": "Links",
@@ -464,7 +468,8 @@
       "TROJAN_TLS": "Trojan TLS (Xray)",
       "SHADOWSOCKS_XRAY": "Shadowsocks (Xray)",
       "WIREGUARD_XRAY": "WireGuard (Xray)",
-      "MTPROXY": "MTProxy"
+      "MTPROXY": "MTProxy",
+      "AMNEZIAWG": "AmneziaWG 2.0"
     },
     "inboundProtocol": {
       "HYSTERIA2": "Hysteria2",
@@ -478,12 +483,14 @@
       "TROJAN_TLS": "Trojan TLS (Xray)",
       "SHADOWSOCKS_XRAY": "Shadowsocks (Xray)",
       "WIREGUARD_XRAY": "WireGuard (Xray)",
-      "MTPROXY": "MTProxy"
+      "MTPROXY": "MTProxy",
+      "AMNEZIAWG": "AmneziaWG 2.0"
     },
     "coreEngine": {
       "SING_BOX": "sing-box",
       "XRAY": "Xray",
-      "MTPROXY": "MTProxy"
+      "MTPROXY": "MTProxy",
+      "AMNEZIAWG": "AmneziaWG"
     },
     "workerName": {
       "traffic-collector": "Traffic collector",
@@ -612,11 +619,28 @@
     "shadowsocksPassword": "Password",
     "wireguardAddress": "Server address CIDR",
     "wireguardMtu": "MTU",
+    "amneziawgJc": "Junk packets (Jc)",
+    "amneziawgJmin": "Junk min size (Jmin)",
+    "amneziawgJmax": "Junk max size (Jmax)",
+    "amneziawgS1": "Init padding (S1)",
+    "amneziawgS2": "Response padding (S2)",
+    "amneziawgS3": "Cookie padding (S3)",
+    "amneziawgS4": "Transport padding (S4)",
+    "amneziawgH1": "Init header (H1)",
+    "amneziawgH2": "Response header (H2)",
+    "amneziawgH3": "Cookie header (H3)",
+    "amneziawgH4": "Transport header (H4)",
+    "amneziawgI1": "CPS I1",
+    "amneziawgI2": "CPS I2",
+    "amneziawgI3": "CPS I3",
+    "amneziawgI4": "CPS I4",
+    "amneziawgI5": "CPS I5",
     "credential": "Credential",
     "engine": "Core engine",
     "engineGroupSingBox": "sing-box",
     "engineGroupXray": "Xray",
     "engineGroupMtproxy": "MTProxy",
+    "engineGroupAmneziawg": "AmneziaWG",
     "engineDisabled": "core disabled — run overvpn enable-core",
     "protocolFilteredByProxy": "List is limited to protocols enabled on the selected proxy",
     "protocolNoneForProxy": "No protocols available on this proxy — enable them on the proxy card",

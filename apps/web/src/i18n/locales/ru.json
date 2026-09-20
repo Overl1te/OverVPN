@@ -308,6 +308,10 @@
     "speedLimit": "Лимит скорости",
     "resetStrategy": "Стратегия сброса",
     "subscription": "Подписка",
+    "amneziawgSubscription": "AmneziaWG (Amnezia VPN)",
+    "amneziawgSubscriptionHint": "Отдельный URL для Amnezia VPN. Happ/Hiddify остаются на основной подписке — AWG туда не входит.",
+    "copyAmneziawg": "Копировать URL AmneziaWG",
+    "showAmneziawgQr": "QR AmneziaWG",
     "subscriptionLoading": "Загрузка URL подписки…",
     "subscriptionFormats": "Форматы",
     "formatLinks": "Links",
@@ -464,7 +468,8 @@
       "TROJAN_TLS": "Trojan TLS (Xray)",
       "SHADOWSOCKS_XRAY": "Shadowsocks (Xray)",
       "WIREGUARD_XRAY": "WireGuard (Xray)",
-      "MTPROXY": "MTProxy"
+      "MTPROXY": "MTProxy",
+      "AMNEZIAWG": "AmneziaWG 2.0"
     },
     "inboundProtocol": {
       "HYSTERIA2": "Hysteria2",
@@ -478,12 +483,14 @@
       "TROJAN_TLS": "Trojan TLS (Xray)",
       "SHADOWSOCKS_XRAY": "Shadowsocks (Xray)",
       "WIREGUARD_XRAY": "WireGuard (Xray)",
-      "MTPROXY": "MTProxy"
+      "MTPROXY": "MTProxy",
+      "AMNEZIAWG": "AmneziaWG 2.0"
     },
     "coreEngine": {
       "SING_BOX": "sing-box",
       "XRAY": "Xray",
-      "MTPROXY": "MTProxy"
+      "MTPROXY": "MTProxy",
+      "AMNEZIAWG": "AmneziaWG"
     },
     "workerName": {
       "traffic-collector": "Сборщик трафика",
@@ -612,11 +619,28 @@
     "shadowsocksPassword": "Пароль",
     "wireguardAddress": "CIDR-адрес сервера",
     "wireguardMtu": "MTU",
+    "amneziawgJc": "Мусорные пакеты (Jc)",
+    "amneziawgJmin": "Мин. размер мусора (Jmin)",
+    "amneziawgJmax": "Макс. размер мусора (Jmax)",
+    "amneziawgS1": "Padding init (S1)",
+    "amneziawgS2": "Padding response (S2)",
+    "amneziawgS3": "Padding cookie (S3)",
+    "amneziawgS4": "Padding transport (S4)",
+    "amneziawgH1": "Заголовок init (H1)",
+    "amneziawgH2": "Заголовок response (H2)",
+    "amneziawgH3": "Заголовок cookie (H3)",
+    "amneziawgH4": "Заголовок transport (H4)",
+    "amneziawgI1": "CPS I1",
+    "amneziawgI2": "CPS I2",
+    "amneziawgI3": "CPS I3",
+    "amneziawgI4": "CPS I4",
+    "amneziawgI5": "CPS I5",
     "credential": "Учётные данные",
     "engine": "Ядро",
     "engineGroupSingBox": "sing-box",
     "engineGroupXray": "Xray",
     "engineGroupMtproxy": "MTProxy",
+    "engineGroupAmneziawg": "AmneziaWG",
     "engineDisabled": "ядро выключено — overvpn enable-core",
     "protocolFilteredByProxy": "Список ограничен протоколами, включёнными на выбранном прокси",
     "protocolNoneForProxy": "На этом прокси нет доступных протоколов — отметьте их в карточке прокси",

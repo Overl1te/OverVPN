@@ -415,6 +415,71 @@ export const environmentSchema = z
       .min(1)
       .max(300)
       .default(30),
+    AMNEZIAWG_ENABLED: booleanFromEnvironment.default(true),
+    AMNEZIAWG_CONFIG_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/amneziawg/config.json'),
+    AMNEZIAWG_LAST_KNOWN_GOOD_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/amneziawg/config.last-known-good.json'),
+    AMNEZIAWG_RELOAD_REQUEST_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/amneziawg-reload/request'),
+    AMNEZIAWG_RELOAD_ACK_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/amneziawg-reload/ack'),
+    AMNEZIAWG_PID_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/amneziawg-reload/amneziawg.pid'),
+    AMNEZIAWG_HEARTBEAT_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/amneziawg-reload/heartbeat'),
+    AMNEZIAWG_HEARTBEAT_MAX_AGE_SECONDS: z.coerce
+      .number()
+      .min(1)
+      .max(300)
+      .default(15),
+    AMNEZIAWG_PORT: z.coerce.number().int().min(1).max(65_535).default(51_822),
+    AMNEZIAWG_PROCESS_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(15_000),
+    AMNEZIAWG_RELOAD_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(20_000),
+    AMNEZIAWG_HEALTH_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(60_000)
+      .default(5_000),
+    AMNEZIAWG_RUNTIME_STATS_PATH: z
+      .string()
+      .trim()
+      .min(1)
+      .default('/var/lib/overvpn/amneziawg-reload/runtime-stats.json'),
+    AMNEZIAWG_RUNTIME_STATS_MAX_AGE_SECONDS: z.coerce
+      .number()
+      .min(1)
+      .max(300)
+      .default(30),
     /** Published UDP port for Hysteria2 (compose → host). */
     SING_BOX_UDP_PORT: z.coerce.number().int().min(1).max(65_535).default(443),
     /** Published TCP port for VLESS Reality (compose → host). */

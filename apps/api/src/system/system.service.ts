@@ -38,6 +38,7 @@ const ENABLE_CORE_COMMAND: Record<CoreEngine, string> = {
   SING_BOX: 'overvpn enable-core singbox',
   XRAY: 'overvpn enable-core xray',
   MTPROXY: 'overvpn enable-core mtproxy',
+  AMNEZIAWG: 'overvpn enable-core amneziawg',
 };
 
 @Injectable()
@@ -46,6 +47,7 @@ export class SystemService {
   private readonly singBoxEnabled: boolean;
   private readonly xrayEnabled: boolean;
   private readonly mtproxyEnabled: boolean;
+  private readonly amneziawgEnabled: boolean;
   private readonly publishedPorts: {
     singBoxUdpPort: number;
     singBoxTcpPort: number;
@@ -60,6 +62,7 @@ export class SystemService {
     xrayWgPort: number;
     mtproxyPortMin: number;
     mtproxyPortMax: number;
+    amneziawgPort: number;
   };
 
   constructor(
@@ -75,6 +78,7 @@ export class SystemService {
     this.singBoxEnabled = config.get('SING_BOX_ENABLED', { infer: true });
     this.xrayEnabled = config.get('XRAY_ENABLED', { infer: true });
     this.mtproxyEnabled = config.get('MTPROXY_ENABLED', { infer: true });
+    this.amneziawgEnabled = config.get('AMNEZIAWG_ENABLED', { infer: true });
     this.publishedPorts = {
       singBoxUdpPort: config.get('SING_BOX_UDP_PORT', { infer: true }),
       singBoxTcpPort: config.get('SING_BOX_TCP_PORT', { infer: true }),
@@ -89,6 +93,7 @@ export class SystemService {
       xrayWgPort: config.get('XRAY_WG_PORT', { infer: true }),
       mtproxyPortMin: config.get('MTPROXY_PORT_MIN', { infer: true }),
       mtproxyPortMax: config.get('MTPROXY_PORT_MAX', { infer: true }),
+      amneziawgPort: config.get('AMNEZIAWG_PORT', { infer: true }),
     };
   }
 
@@ -335,6 +340,8 @@ export class SystemService {
         return this.xrayEnabled;
       case 'MTPROXY':
         return this.mtproxyEnabled;
+      case 'AMNEZIAWG':
+        return this.amneziawgEnabled;
     }
   }
 }
