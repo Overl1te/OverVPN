@@ -2922,6 +2922,25 @@ vpn_tls_cert_files_present() {
   [[ -f "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}" && -f "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}" ]]
 }
 
+# Let's Encrypt will not issue for IP identifiers. sing-box Hy2/Trojan still need TLS files.
+ensure_self_signed_vpn_tls() {
+  local host=${1:-}
+  [[ -n "$host" ]] || return 1
+  mkdir -p "$VPN_CERT_HOST_DIR"
+  if vpn_tls_cert_files_present; then
+    return 0
+  fi
+  colorized_echo blue "Generating self-signed VPN TLS certificate for ${host}…"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+    -days 825 -nodes \
+    -keyout "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}" \
+    -out "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}" \
+    -subj "/CN=${host}" \
+    -addext "subjectAltName=IP:${host}"
+  chmod 644 "${VPN_CERT_HOST_DIR}/${VPN_CERT_NAME}"
+  chmod 640 "${VPN_CERT_HOST_DIR}/${VPN_KEY_NAME}"
+}
+
 ensure_certbot_pkg() {
   if need_cmd certbot; then
     return 0
@@ -3007,6 +3026,13 @@ ensure_proxy_vpn_tls() {
   email="$(resolve_proxy_vpn_email)"
 
   if ! is_tls_hostname "$vpn_host"; then
+    if [[ "$vpn_host" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+      ensure_self_signed_vpn_tls "$vpn_host" || true
+      if [[ -f "$ENV_FILE" ]] && vpn_tls_cert_files_present; then
+        set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+        set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
+      fi
+    fi
     if vpn_tls_cert_files_present; then
       return 0
     fi
@@ -3410,6 +3436,9 @@ generate_env() {
       CFG_XRAY_LISTEN_PORT="9443"
       set_env_var "XRAY_LISTEN_PORT" "$CFG_XRAY_LISTEN_PORT"
     fi
+    ensure_self_signed_vpn_tls "$ip"
+    set_env_var "VPN_TLS_CERTIFICATE_PATH" "$VPN_CERT_CONTAINER_PATH"
+    set_env_var "VPN_TLS_KEY_PATH" "$VPN_KEY_CONTAINER_PATH"
   fi
 
   # Agent→panel URL (compose network for co-located; remote set by install-proxy).

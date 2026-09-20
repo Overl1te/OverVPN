@@ -981,6 +981,15 @@ export const hysteria2TlsAcmeInputSchema = z
         message: 'ZeroSSL requires email or externalAccount',
       });
     }
+    value.domains.forEach((domain, index) => {
+      if (isLiteralIpHost(domain)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['domains', index],
+          message: "Let's Encrypt ACME cannot issue certificates for IP addresses; use FILES TLS",
+        });
+      }
+    });
   });
 
 export const hysteria2TlsInputSchema = z.discriminatedUnion('mode', [
@@ -2983,22 +2992,35 @@ function validateUserStatusReason(
   }
 }
 
-function isSingBoxHost(value: string): boolean {
-  if (value.includes(':')) {
-    if (!/^[0-9a-f:.]+$/i.test(value)) {
+export function isLiteralIpHost(value: string): boolean {
+  const host = value.trim();
+  if (!host) {
+    return false;
+  }
+  if (host.includes(':')) {
+    const bare = host.replace(/^\[|\]$/g, '');
+    if (!/^[0-9a-f:.]+$/i.test(bare)) {
       return false;
     }
     try {
-      const url = new URL(`http://[${value}]/`);
+      const url = new URL(`http://[${bare}]/`);
       return url.hostname.length > 2;
     } catch {
       return false;
     }
   }
-  const parts = value.split('.');
-  if (parts.every((part) => /^\d+$/.test(part)) && parts.length === 4) {
-    return parts.every((part) => Number(part) >= 0 && Number(part) <= 255);
+  const parts = host.split('.');
+  return (
+    parts.length === 4 &&
+    parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+  );
+}
+
+function isSingBoxHost(value: string): boolean {
+  if (isLiteralIpHost(value)) {
+    return true;
   }
+  const parts = value.split('.');
   return parts.every(
     (part) =>
       part.length >= 1 &&

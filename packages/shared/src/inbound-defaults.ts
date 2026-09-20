@@ -67,6 +67,32 @@ const XRAY_FILES_TLS_PROTOCOLS = new Set<InboundProtocol>([
   'TROJAN_TLS',
 ]);
 
+const SING_BOX_PATH_TLS_PROTOCOLS = new Set<InboundProtocol>(['HYSTERIA2', 'TROJAN']);
+
+function isIpPublicHost(host: string): boolean {
+  const value = host.trim();
+  if (!value) {
+    return false;
+  }
+  if (value.includes(':')) {
+    const bare = value.replace(/^\[|\]$/g, '');
+    if (!/^[0-9a-f:.]+$/i.test(bare)) {
+      return false;
+    }
+    try {
+      const url = new URL(`http://[${bare}]/`);
+      return url.hostname.length > 2;
+    } catch {
+      return false;
+    }
+  }
+  const parts = value.split('.');
+  return (
+    parts.length === 4 &&
+    parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+  );
+}
+
 export type PublishedPortContext = Pick<
   InboundDefaultsContext,
   | 'singBoxUdpPort'
@@ -150,7 +176,7 @@ type FilesTlsDefaults = Extract<Hysteria2InboundSettings['tls'], { mode: 'FILES'
 
 export function defaultAcmeEmail(publicHost: string): string | undefined {
   const host = publicHost.trim();
-  if (!host || host.includes('@') || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+  if (!host || host.includes('@') || isIpPublicHost(host)) {
     return undefined;
   }
   return `admin@${host}`;
@@ -165,7 +191,7 @@ function commonTlsFields(publicHost: string) {
     curvePreferences: [],
     kernelTx: false,
     kernelRx: false,
-    clientInsecure: false,
+    clientInsecure: isIpPublicHost(publicHost),
   };
 }
 
@@ -216,6 +242,11 @@ function buildDefaultTls(
   const keyPath = context.tlsKeyPath?.trim();
   if (certificatePath && keyPath) {
     return buildFilesTls(publicHost, certificatePath, keyPath);
+  }
+  if (isIpPublicHost(publicHost)) {
+    throw new Error(
+      "IP public hosts cannot use Let's Encrypt ACME; provide VPN TLS certificate files",
+    );
   }
   return buildAcmeTls(publicHost, context);
 }
@@ -449,8 +480,9 @@ export function applyVpnPublicHostFallback(
 }
 
 /**
- * Fills missing Xray FILES TLS cert paths from install env defaults.
- * Does not override explicit paths or inline PEM.
+ * Fills missing FILES TLS cert paths from install env defaults.
+ * For IP public hosts, also converts sing-box ACME (Let's Encrypt) to FILES —
+ * LE will not issue certificates for IP identifiers.
  */
 export function applyVpnTlsPathsFallback(
   body: unknown,
@@ -463,10 +495,13 @@ export function applyVpnTlsPathsFallback(
     return body;
   }
   const record = body as Record<string, unknown>;
-  if (
-    typeof record.protocol !== 'string' ||
-    !XRAY_FILES_TLS_PROTOCOLS.has(record.protocol as InboundProtocol)
-  ) {
+  if (typeof record.protocol !== 'string') {
+    return body;
+  }
+  const protocol = record.protocol as InboundProtocol;
+  const isXrayFiles = XRAY_FILES_TLS_PROTOCOLS.has(protocol);
+  const isSingBoxTls = SING_BOX_PATH_TLS_PROTOCOLS.has(protocol);
+  if (!isXrayFiles && !isSingBoxTls) {
     return body;
   }
   const settings = record.settings;
@@ -474,11 +509,21 @@ export function applyVpnTlsPathsFallback(
     return body;
   }
   const settingsRecord = { ...(settings as Record<string, unknown>) };
+  const publicHost =
+    typeof settingsRecord.publicHost === 'string' ? settingsRecord.publicHost.trim() : '';
+  const ipHost = isIpPublicHost(publicHost);
   const tls = settingsRecord.tls;
   const tlsRecord: Record<string, unknown> =
     typeof tls === 'object' && tls !== null
       ? { ...(tls as Record<string, unknown>) }
       : { mode: 'FILES' };
+
+  if (isSingBoxTls && ipHost && tlsRecord.mode === 'ACME') {
+    const converted = buildFilesTls(publicHost, cert, key);
+    settingsRecord.tls = converted;
+    return { ...record, settings: settingsRecord };
+  }
+
   if (tlsRecord.mode !== undefined && tlsRecord.mode !== 'FILES') {
     return body;
   }
@@ -492,6 +537,11 @@ export function applyVpnTlsPathsFallback(
     typeof tlsRecord.certificatePath === 'string' && tlsRecord.certificatePath.trim();
   const hasKeyPath = typeof tlsRecord.keyPath === 'string' && tlsRecord.keyPath.trim();
   if (hasCertPath && hasKeyPath) {
+    if (ipHost) {
+      tlsRecord.clientInsecure = true;
+      settingsRecord.tls = tlsRecord;
+      return { ...record, settings: settingsRecord };
+    }
     return body;
   }
   tlsRecord.mode = 'FILES';
@@ -502,11 +552,12 @@ export function applyVpnTlsPathsFallback(
     tlsRecord.keyPath = key;
   }
   if (typeof tlsRecord.sni !== 'string' || !tlsRecord.sni.trim()) {
-    const publicHost =
-      typeof settingsRecord.publicHost === 'string' ? settingsRecord.publicHost.trim() : '';
     if (publicHost) {
       tlsRecord.sni = publicHost;
     }
+  }
+  if (ipHost) {
+    tlsRecord.clientInsecure = true;
   }
   settingsRecord.tls = tlsRecord;
   return { ...record, settings: settingsRecord };

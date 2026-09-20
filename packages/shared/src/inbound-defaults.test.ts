@@ -86,6 +86,30 @@ describe('buildDefaultInboundSettings', () => {
     assert.equal(settings.publicHost, 'vpn.host.test');
   });
 
+  it('uses FILES TLS with clientInsecure for IP public hosts when cert paths exist', () => {
+    const settings = buildDefaultInboundSettings('HYSTERIA2', {
+      publicHost: '45.88.15.78',
+      tlsCertificatePath: '/var/lib/sing-box-certs/vpn-fullchain.pem',
+      tlsKeyPath: '/var/lib/sing-box-certs/vpn-privkey.pem',
+    }) as Hysteria2InboundSettings;
+    assert.equal(settings.tls.mode, 'FILES');
+    assert.equal(settings.tls.clientInsecure, true);
+    assert.equal(settings.tls.sni, '45.88.15.78');
+    if (settings.tls.mode === 'FILES') {
+      assert.equal(settings.tls.certificatePath, '/var/lib/sing-box-certs/vpn-fullchain.pem');
+    }
+  });
+
+  it('refuses ACME defaults for an IP public host without certificate files', () => {
+    assert.throws(
+      () =>
+        buildDefaultInboundSettings('TROJAN', {
+          publicHost: '45.88.15.78',
+        }),
+      /IP public hosts cannot use/,
+    );
+  });
+
   it("sets a default Let's Encrypt contact email from the public host", () => {
     const settings = buildDefaultInboundSettings('HYSTERIA2', {
       publicHost: 'vpn.example.org',
@@ -284,5 +308,37 @@ describe('applyVpnTlsPathsFallback', () => {
       '/var/lib/sing-box-certs/vpn-privkey.pem',
     );
     assert.deepEqual(patched, body);
+  });
+
+  it('converts sing-box ACME on an IP host to FILES when cert paths exist', () => {
+    const patched = applyVpnTlsPathsFallback(
+      {
+        tag: 'hy2-ip',
+        protocol: 'HYSTERIA2',
+        settings: {
+          listenHost: '0.0.0.0',
+          listenPort: 443,
+          publicHost: '45.88.15.78',
+          enabled: true,
+          tls: {
+            mode: 'ACME',
+            sni: '45.88.15.78',
+            domains: ['45.88.15.78'],
+            dataDirectory: '/var/lib/sing-box-state/acme',
+            provider: 'letsencrypt',
+          },
+        },
+      },
+      '/var/lib/sing-box-certs/vpn-fullchain.pem',
+      '/var/lib/sing-box-certs/vpn-privkey.pem',
+    ) as {
+      settings: {
+        tls: { mode: string; clientInsecure: boolean; certificatePath: string };
+      };
+    };
+
+    assert.equal(patched.settings.tls.mode, 'FILES');
+    assert.equal(patched.settings.tls.clientInsecure, true);
+    assert.equal(patched.settings.tls.certificatePath, '/var/lib/sing-box-certs/vpn-fullchain.pem');
   });
 });
