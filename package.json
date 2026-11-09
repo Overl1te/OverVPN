@@ -33,9 +33,9 @@
     "docs:preview": "pnpm docs:build && npx --yes serve docs-dist -l 4173"
   },
   "devDependencies": {
-    "pagefind": "^1.3.0",
-    "prettier": "^3.9.5",
-    "turbo": "^2.10.4",
+    "pagefind": "^1.6.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.10",
     "typescript": "^6.0.3"
   }
 }
